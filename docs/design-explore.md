@@ -75,4 +75,4 @@ Write down for each row of the tables: keep Cur, A, B or C. That list is the bri
 
 ## Picked (2026-10-31): Cockpit layout
 
-Shell A, Workbench A, REST B; Dashboard, Explorer, Git, Terminal stay Cur. Selecting the `Cockpit` layout in Settings applies these (`packages/ui/src/design-picks.ts`); with `dev:design` the switcher still overrides per view. Unpicked variants stay in the code and are listed as tested in `TESTED_DESIGNS`.
+Shell A, Workbench A, REST B; Dashboard, Explorer, Git, Terminal stay Cur. Implemented (2026-11-01) as the Bridge layout (id `cockpit`): the views switch on `useBridge()` (`packages/ui/src/bridge.ts`); they are no longer design variants, and the unpicked variants were removed from the code.

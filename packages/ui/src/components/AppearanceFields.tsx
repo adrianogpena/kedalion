@@ -1,5 +1,5 @@
 import { effectiveKind, familySibling, PALETTES, resolvePalette, type ThemeKind, type ThemePreference, type ThemeSettings, ZOOM_LEVELS } from '@kedalion/server-core/palettes';
-import { DEFAULT_LAYOUT, hasLabelledMenu, ICON_SET_IDS, LAYOUTS, resolveLayout, supportsDock } from '@kedalion/server-core/layouts';
+import { DEFAULT_LAYOUT, hasLabelledMenu, ICON_SET_IDS, LAYOUTS, resolveLayout, SELECTABLE_LAYOUT_IDS, supportsDock } from '@kedalion/server-core/layouts';
 import { isDesktop } from '../api';
 import { t, tryT } from '../i18n';
 import { SettingItem } from './SettingFields';
@@ -71,7 +71,7 @@ export function LayoutField({ value, onChange }: Props) {
       <label className="field">
         <span className="mono-label">{t('theme.layout')}</span>
         <select value={current.id} onChange={(e) => onChange({ layout: e.target.value })}>
-          {LAYOUTS.map((l) => <option key={l.id} value={l.id}>{tryT(`layout.${l.id}`) ?? l.label}</option>)}
+          {LAYOUTS.filter((l) => SELECTABLE_LAYOUT_IDS.includes(l.id) || l.id === current.id).map((l) => <option key={l.id} value={l.id}>{tryT(`layout.${l.id}`) ?? l.label}</option>)}
         </select>
       </label>
     </SettingItem>

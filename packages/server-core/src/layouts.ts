@@ -76,7 +76,7 @@ export const LAYOUTS: readonly Layout[] = [
   { id: 'islands', label: 'Islands', icons: 'original', structure: { ...ORIGINAL_STRUCTURE, sidebarMode: 'collapsed', sidebarBrand: false, statusBar: true } },
   { id: 'modeline', label: 'Modeline', icons: 'original', structure: { ...ORIGINAL_STRUCTURE, sidebarBrand: false, tabBarPosition: 'bottom' } },
   { id: 'ribbon', label: 'Ribbon', icons: 'atom', structure: { ...ORIGINAL_STRUCTURE, navPlacement: 'header', navFooter: 'none' } },
-  { id: 'cockpit', label: 'Cockpit', icons: 'atom', structure: { ...ORIGINAL_STRUCTURE, navPlacement: 'header', navFooter: 'none' } },
+  { id: 'cockpit', label: 'Bridge', icons: 'atom', structure: { ...ORIGINAL_STRUCTURE, navPlacement: 'header', navFooter: 'none' } },
   {
     id: 'ledger', label: 'Ledger', icons: 'original',
     structure: { ...ORIGINAL_STRUCTURE, navFooter: 'none', navPlacement: 'header', tabBarPosition: 'top' },
@@ -84,6 +84,9 @@ export const LAYOUTS: readonly Layout[] = [
   // Files-first: labelled sectioned sidebar (mainMenu 'icons' still collapses it), coloured Atom icons, tools in a status row.
   { id: 'atlas', label: 'Atlas', icons: 'atom', structure: { ...ORIGINAL_STRUCTURE, sidebarMode: 'expanded', sidebarBrand: false, navFooter: 'none' } },
 ];
+
+/** Layouts offered in Settings; the others stay defined (for building new layouts) but are not listed. */
+export const SELECTABLE_LAYOUT_IDS: readonly string[] = ['ribbon', 'cockpit'];
 
 export const ICON_SET_IDS: readonly string[] = ['original', 'material', 'atom'];
 

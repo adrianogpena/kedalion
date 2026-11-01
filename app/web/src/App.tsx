@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PALETTES } from '@kedalion/server-core/palettes';
-import { CommandPalette, DialogHost, detectLanguage, effectiveKeys, ErrorBanner, GLOBAL, AppFrame, IconButton, isDesktop, KeybindingProvider, LayoutProvider, type PaletteItem, popOut, popoutView, usePopouts,setFileAssociations, setLanguage, setViewTitle, Sidebar, Spinner, titleWithBadge, ToastProvider, type ApiError, errorMessage, errorOf, useToast, useAsync, useCommand, useCommandPalette, useHashRoute, useHeartbeat, useKeybindings, useRunCommand, useTheme, useTitleBadge,useViewTitle,useZen, useZoom, DesignSwitcher, useDesign, CommandBar, ActivityStrip, LayoutPresetRow, InspectorToggle, ShellInspector } from '@kedalion/ui';
+import { CommandPalette, DialogHost, detectLanguage, effectiveKeys, ErrorBanner, GLOBAL, AppFrame, IconButton, isDesktop, KeybindingProvider, LayoutProvider, type PaletteItem, popOut, popoutView, usePopouts,setFileAssociations, setLanguage, setViewTitle, Sidebar, Spinner, titleWithBadge, ToastProvider, type ApiError, errorMessage, errorOf, useToast, useAsync, useCommand, useCommandPalette, useHashRoute, useHeartbeat, useKeybindings, useRunCommand, useTheme, useTitleBadge,useViewTitle,useZen, useZoom, DesignSwitcher, useBridge, CommandBar, ActivityStrip } from '@kedalion/ui';
 import { EditorOptionsContext } from '@kedalion/editor/options';
 import { APP } from '../../app';
 import { api, type Settings } from './api';
@@ -79,8 +79,7 @@ function Main({ settings, setSettings, screen, go, overlay, setOverlay }: MainPr
   const [stopped, setStopped] = useState(false);
   useHeartbeat();
   const palette = useCommandPalette();
-  const shellDesign = useDesign('shell', settings.layout);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const shellBridge = useBridge(settings.layout);
 
   const { kind } = useTheme(settings);
   useZoom(settings.zoom);
@@ -225,8 +224,8 @@ function Main({ settings, setSettings, screen, go, overlay, setOverlay }: MainPr
   );
   const popoutTools = viewSettingsSection(screen) ? gear : undefined;
 
-  const variant = inPopout ? 'current' : shellDesign;
-  const sidebarNode = inPopout ? undefined : <Sidebar name={APP.name} sections={sections} current={screen} onSelect={goView} footer={variant === 'c' ? <><InspectorToggle open={inspectorOpen} onToggle={() => setInspectorOpen((o) => !o)} />{footer}</> : footer} popped={popped as ReadonlySet<ScreenId>} poppedHint={t('window.poppedHint')} />;
+  const bridge = shellBridge && !inPopout;
+  const sidebarNode = inPopout ? undefined : <Sidebar name={APP.name} sections={sections} current={screen} onSelect={goView} footer={footer} popped={popped as ReadonlySet<ScreenId>} poppedHint={t('window.poppedHint')} />;
   const mainNode = (
     <main className="main">
       <div className="main-view" hidden={!!overlay}>{views.render(screen, { settings, onSave: save, go: go as (id: string) => void })}</div>
@@ -235,12 +234,12 @@ function Main({ settings, setSettings, screen, go, overlay, setOverlay }: MainPr
       )}
     </main>
   );
-  const frameSidebar = variant === 'a'
+  const frameSidebar = bridge
     ? <CommandBar name={APP.name} items={navItems.map((i) => ({ id: i.id, label: views.label(i.id), icon: i.icon }))} current={screen} onSelect={(id) => goView(id as ScreenId)} onSearch={() => palette.setOpen(true)} tools={footer} />
-    : variant === 'b' ? <div className="design-b-head">{sidebarNode}<LayoutPresetRow /></div> : sidebarNode;
-  const frameBody = variant === 'a'
+    : sidebarNode;
+  const frameBody = bridge
     ? <div className="design-a-body">{mainNode}<ActivityStrip /></div>
-    : variant === 'c' ? <div className="design-c-body">{mainNode}{inspectorOpen && <ShellInspector onClose={() => setInspectorOpen(false)} />}</div> : mainNode;
+    : mainNode;
 
   return (
     <LayoutProvider layout={settings.layout} icons={settings.icons} mainMenu={settings.mainMenu} dock={settings.dock}>

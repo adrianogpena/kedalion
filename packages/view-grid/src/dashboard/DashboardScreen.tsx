@@ -1,5 +1,5 @@
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
-import { addItem, Button, ContextMenu, Empty, PageHead, PanelGrid, sameItems, t, useCommand, useDesign, useDialogs, useViewSidePanel, validConfig, ViewSidePanel,type ContextMenuItem, type GridItem, type PanelConfig } from '@kedalion/ui';
+import { addItem, Button, ContextMenu, Empty, PageHead, PanelGrid, sameItems, t, useCommand, useDialogs, useViewSidePanel, validConfig, ViewSidePanel,type ContextMenuItem, type GridItem, type PanelConfig } from '@kedalion/ui';
 import { ConfigDialog } from '../ConfigForm';
 import { ConnectionsDialog } from '../connections/ConnectionsDialog';
 import { tKey } from '../i18n';
@@ -11,9 +11,6 @@ import { PanelHost } from '../PanelHost';
 import { activeLayout, itemFromPreset, layoutsOrDefault, MAX_LAYOUTS, MAX_NAME, MAX_PRESETS, newLayoutId, newPresetId, presetFromItem, validDashboardPresets, type DashboardLayouts, type DashboardPreset } from './model';
 import '../grid.css';
 import './dashboard.css';
-import { DashboardA } from './design/A';
-import { DashboardB } from './design/B';
-import { DashboardC } from './design/C';
 
 /** The slice of the app settings the screen reads and writes. */
 export interface DashboardViewSettings {
@@ -49,7 +46,6 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
   const [menuAt, setMenuAt] = useState<{ x: number; y: number; id: string } | null>(null);
   const { confirm, prompt, choose, element } = useDialogs();
   const side = useViewSidePanel('dashboard');
-  const design = useDesign('dashboard');
 
   const current = activeLayout(state);
   setDashboardItems(state.layouts.flatMap((l) => (l.id === current.id ? items : l.items)));
@@ -223,12 +219,7 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
             <p>{tKey('dash.empty.body')}</p>
             <Button icon="plus" variant="primary" onClick={() => setCreating(true)} disabled={!canAdd}>{tKey('grid.add')}</Button>
           </Empty>
-        ) : (() => {
-          const renderPanel = (item: GridItem) => {
-            const kind = kindOf(item.kind);
-            return kind ? <PanelHost kind={kind} item={item} onConfigure={fieldsOf(kind).length > 0 ? () => setConfiguring(item.id) : undefined} side={side} setConfig={(config) => setItemConfig(item.id, config)} /> : null;
-          };
-          const grid = (
+        ) : (
           <PanelGrid
             items={items}
             defs={defs}
@@ -255,13 +246,7 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
             itemMenu={itemMenu}
             onChange={change}
           />
-          );
-          const dp = { items, defs, renderPanel, grid, onAdd: () => setCreating(true) };
-          if (design === 'a') return <DashboardA {...dp} />;
-          if (design === 'b') return <DashboardB {...dp} />;
-          if (design === 'c') return <DashboardC {...dp} />;
-          return grid;
-        })()}
+        )}
       </div>
       </ViewSidePanel>
       {connecting && <ConnectionsDialog onClose={() => setConnecting(false)} />}

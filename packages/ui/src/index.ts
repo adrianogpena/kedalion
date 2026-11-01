@@ -65,4 +65,4 @@ export * from './views';
 export * from './design';
 export * from './design-shell';
 export * from './components/Inspector';
-export * from './design-picks';
+export * from './bridge';

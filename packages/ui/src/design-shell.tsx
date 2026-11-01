@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react';
 import './design-shell.css';
-import { Button, IconButton } from './components/Button';
-import { Inspector, InspectorRow } from './components/Inspector';
+import { Button } from './components/Button';
 import { BrandMark } from './components/ui';
 import type { IconName } from './icons';
 
-/** Design preview, shell variants. Placeholder controls have no handlers; only A's search and chips and C's toggle work. */
+/** Design preview, shell variants. Placeholder controls have no handlers; only the search and chips work. */
 
 export interface CommandBarItem { id: string; label: string; icon: IconName }
 
@@ -41,38 +40,3 @@ export function ActivityStrip() {
   );
 }
 
-/** Variant B: layout-preset row under the ribbon. Render only. */
-export function LayoutPresetRow() {
-  return (
-    <div className="design-presets">
-      <Button size="sm">Layout: Review ▾</Button>
-      <span className="design-presets-sep" />
-      <Button size="sm" variant="ghost" pressed>Review</Button>
-      <Button size="sm" variant="ghost">Debug</Button>
-      <Button size="sm" variant="ghost">Focus</Button>
-      <span className="design-presets-spacer" />
-      <Button size="sm" icon="plus">+ pane</Button>
-    </div>
-  );
-}
-
-/** Variant C: header toggle for the inspector. */
-export function InspectorToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  return <IconButton icon="panel-right" label={open ? 'Hide inspector' : 'Show inspector'} pressed={open} onClick={onToggle} />;
-}
-
-/** Variant C: the inspector with placeholder content. */
-export function ShellInspector({ onClose }: { onClose: () => void }) {
-  return (
-    <Inspector
-      title="KEDALION-123"
-      subtitle="Ticket"
-      onClose={onClose}
-      actions={<><Button size="sm" variant="primary">Open</Button><Button size="sm">Branch</Button><Button size="sm">Log</Button></>}
-    >
-      <InspectorRow label="Status">In review</InspectorRow>
-      <InspectorRow label="Branch">feature/KEDALION-123</InspectorRow>
-      <InspectorRow label="PR">#482 · 2 approvals</InspectorRow>
-    </Inspector>
-  );
-}

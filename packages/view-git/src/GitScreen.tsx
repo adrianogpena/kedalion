@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { DiffMode, DiffViewHandle } from '@kedalion/editor';
 import type { GitFile, GitRepoInfo, GitStatus } from '@kedalion/server-core/protocol';
-import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useDesign, useFileIconVersion,useRovingList, useToast, useViewLink, useViewRequest } from '@kedalion/ui';
+import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLink, useViewRequest } from '@kedalion/ui';
 import { type GitProject as Project, gitApi as api } from './client';
 import { gitCommands } from './commands';
 import { t } from './i18n';
 import type { GitSection, GitViewSettings, GitViewState } from './settings';
 import { type ChangeFolder, changeTree, folderPaths } from './git/change-tree';
 import { type GitDiffSource, GitDiffPane } from './git/GitDiffPane';
-import { GitDesign } from './design/GitDesign';
 import { HistoryPanel } from './git/HistoryPanel';
 import './git.css';
 
@@ -363,7 +362,6 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
   };
 
   const project = projects?.find((p) => p.id === root);
-  const design = useDesign('git');
   const sidebar = (
     <div className="xp-pane">
       <ProjectPicker projects={projects ?? []} current={project} onPick={pick} onReorder={reorderProjects} actions={actions} />
@@ -433,15 +431,5 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
       </div>
     </Explorer>
   );
-  if (design === 'current') return screen;
-  return (
-    <GitDesign
-      variant={design}
-      project={project?.name}
-      branch={status?.branch}
-      selection={selected ? { path: selected.file.path, commit: selected.commit, status: selected.commit === undefined ? selected.file.worktree : selected.file.status } : undefined}
-    >
-      {screen}
-    </GitDesign>
-  );
+  return screen;
 }

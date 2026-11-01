@@ -15,7 +15,7 @@ import {
   useCommand,
   useShortcutTip,
   useDebouncedSave,
-  useDesign,
+  useBridge,
   useDialogs,
   useViewToast,
 } from '@kedalion/ui';
@@ -39,7 +39,7 @@ const DEFAULT_MAIN: [number, number] = [0.3, 0.7];
 const commandById = (id: string) => workbenchCommands().find((c) => c.id === id)!;
 
 export function WorkbenchScreen({ settings, onSave, client }: { settings: WorkbenchViewSettings; onSave: (patch: Partial<WorkbenchViewSettings>) => void; client: WorkbenchClient }) {
-  const design = useDesign('workbench');
+  const bridge = useBridge();
   const [state, setState] = useState<WorkbenchSettings>(() => withWorkbenchDefaults(settings.workbench));
   const [query, setQuery] = useState('');
   const [docError, setDocError] = useState<ApiError>();
@@ -358,16 +358,13 @@ ${sql}` : sql);
   );
   const managingEl = managing && <Connections client={client} onClose={() => setManaging(false)} onChanged={connections.reload} />;
 
-  if (design !== 'current') {
+  if (bridge) {
     return (
       <WorkbenchDesign
-        variant={design}
         dialogs={dialogs}
         bar={bar}
         banners={banners}
         schema={schemaEl}
-        editor={editorEl}
-        results={resultsEl}
         split={split(editorEl, resultsEl)}
         steps={stepsEl}
         history={historyEl}
@@ -377,13 +374,6 @@ ${sql}` : sql);
         onSource={changeSource}
         onRun={run}
         busy={busy}
-        info={{
-          source: connection?.name ?? t('workbench.source.demo'),
-          state: status?.connected ? (status.pending ? 'Transaction pending' : 'Connected') : 'Not connected',
-          rows: tableRows.length,
-          selected: selection.length,
-          problems: lintErrors,
-        }}
       />
     );
   }

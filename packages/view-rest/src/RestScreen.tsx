@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { RestDesign } from './design/RestDesign';
 import { draftToSpec, hasAuthHeader, type HttpRequestDraft, type ImportedRequest, RequestEditor, ResponseView, toCurl } from '@kedalion/editor';
 import type { HttpResponseInfo, RestEnvVar } from '@kedalion/server-core/protocol';
-import { type ApiError, Button, dialogs, ErrorBanner, errorOf, IconButton, PageHead, SplitView, useAsync, useCommand, useDebouncedSave, useDesign, useDialogs, useShortcutTip, useViewRequest } from '@kedalion/ui';
+import { type ApiError, Button, dialogs, ErrorBanner, errorOf, IconButton, PageHead, SplitView, useAsync, useCommand, useBridge, useDebouncedSave, useDialogs, useShortcutTip, useViewRequest } from '@kedalion/ui';
 import { restCommands } from './commands';
 import { restApi as api } from './client';
 import type { RestSettings, RestViewSettings, SavedRequest } from './settings';
@@ -32,7 +32,7 @@ function uniqueName(name: string, taken: Set<string>): string {
 const DEFAULT_MAIN: [number, number] = [0.5, 0.5];
 
 export function RestScreen({ settings, onSave }: { settings: RestViewSettings; onSave: (patch: Partial<RestViewSettings>) => void }) {
-  const design = useDesign('rest');
+  const bridge = useBridge();
   const saved = useAsync(() => api.requests(), []);
   const { confirm, prompt, element } = useDialogs();
   const [state, setState] = useState<RestSettings>(settings.rest ?? {});
@@ -321,35 +321,8 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
     </>
   );
 
-  if (design !== 'current') {
-    const label = (r: { id: string; title?: string; draft: HttpRequestDraft }) => r.title || r.draft.url || r.draft.method;
-    return (
-      <RestDesign
-        variant={design}
-        actions={actions}
-        banners={banners}
-        list={list}
-        tabBar={tabBar}
-        request={request}
-        response={response_}
-        split={split(request, response_)}
-        history={history}
-        dialogs={dialogsEl}
-        chips={tabs.map((x) => ({ id: x.id, label: label(x), active: x.id === tab.id }))}
-        onChip={restTabs.activate}
-        onNew={restTabs.newTab}
-        onSend={send}
-        onCancel={cancel}
-        sending={sending}
-        info={{
-          method: draft.method,
-          url: draft.url,
-          headers: draft.headers.length,
-          env: activeEnv?.name ?? 'None',
-          timing: response ? `${response.ms} ms / ${response.totalMs} ms` : '-',
-        }}
-      />
-    );
+  if (bridge) {
+    return <RestDesign actions={actions} banners={banners} list={list} tabBar={tabBar} request={request} response={response_} history={history} dialogs={dialogsEl} />;
   }
 
   return (
