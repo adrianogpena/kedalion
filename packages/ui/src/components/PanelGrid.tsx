@@ -108,7 +108,7 @@ export function PanelGrid({ items, defs, render, actions, itemMenu, onChange }: 
         {known.map((item) => {
           const def = defs.find((d) => d.id === item.kind)!;
           return (
-            <div key={item.id}>
+            <div key={item.id} data-link-scope={`panel:${item.kind}`}>
               <PanelFrame
                 title={item.title ?? def.title}
                 icon={<Icon name={item.icon ?? def.icon} />}

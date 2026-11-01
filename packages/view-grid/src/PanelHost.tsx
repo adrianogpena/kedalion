@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, errorMessage, errorOf, Icon, PanelBanner, PanelLoading, PanelNotice, validConfig, type ApiError, type GridItem } from '@kedalion/ui';
+import { Button, errorMessage, errorOf, Icon, PanelBanner, PanelLoading, PanelNotice, validConfig, type ApiError, type GridItem, type SidePanelContent } from '@kedalion/ui';
 import { tKey } from './i18n';
 import { fieldsOf, onRefreshRequest, type AnyPanelKind, type PanelSide } from './panel';
 
@@ -60,12 +60,30 @@ export function PanelHost({ kind, item, onConfigure, side, setConfig }: {
   const config = useMemo(() => validConfig(fieldsOf(kind), item.config), [kind, item.config]);
   const size = { w: item.w, h: item.h };
   const configure = onConfigure ?? noop;
-  const extra = { side, setConfig };
+  const scoped = useMemo(() => (side ? scopedSide(side, kind.kind) : undefined), [side, kind.kind]);
+  const extra = { side: scoped, setConfig };
   if (!kind.load) return <Rendered kind={kind} id={item.id} config={config} data={undefined} size={size} refresh={noop} configure={configure} {...extra} />;
   return <Loaded kind={kind} id={item.id} config={config} size={size} configure={configure} {...extra} />;
 }
 
 const noop = () => {};
+
+/** The panel's side API with every tab wrapped in the panel's link scope, so links in the side content follow its setting. */
+function scopedSide(side: PanelSide, kindId: string): PanelSide {
+  const wrap = (content: SidePanelContent): SidePanelContent => ({
+    ...content,
+    tabs: content.tabs.map((tab) => ({
+      ...tab,
+      render: () => <div data-link-scope={`panel:${kindId}`} style={{ display: 'contents' }}>{tab.render()}</div>,
+    })),
+  });
+  return {
+    open: (content, tab) => side.open(wrap(content), tab),
+    push: (content, tab) => side.push(wrap(content), tab),
+    close: () => side.close(),
+    isOpen: (id) => side.isOpen(id),
+  };
+}
 
 interface HostProps {
   kind: AnyPanelKind;

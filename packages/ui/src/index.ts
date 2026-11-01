@@ -2,6 +2,8 @@ export * from './components/AppearanceFields';
 export * from './components/Breadcrumbs';
 export * from './components/CommandPalette';
 export * from './components/ContextMenu';
+export * from './components/LinkContextMenu';
+export * from './links';
 export * from './components/DataTable';
 export * from './components/Explorer';
 export * from './components/JsonTree';

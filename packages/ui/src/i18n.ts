@@ -579,6 +579,9 @@ const baseEn = {
   'settings.git.diffMode.hint': 'How the Git screen shows changes: side by side or inline.',
   'git.split': 'Side by side',
   'git.inline': 'Inline',
+  'link.openInternal': 'Open in Kedalion browser',
+  'link.openExternal': 'Open in default browser',
+  'link.copy': 'Copy link address',
 };
 
 export type BaseKey = keyof typeof baseEn;
@@ -1163,6 +1166,9 @@ const basePtBR: Messages<typeof baseEn> = {
   'settings.git.diffMode.hint': 'Como a tela Git mostra as alterações: lado a lado ou em linha.',
   'git.split': 'Lado a lado',
   'git.inline': 'Em linha',
+  'link.openInternal': 'Abrir no navegador do Kedalion',
+  'link.openExternal': 'Abrir no navegador padrão',
+  'link.copy': 'Copiar endereço do link',
 };
 
 export const LANGUAGES = [
