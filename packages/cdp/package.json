@@ -1,0 +1,14 @@
+{
+  "name": "@kedalion/cdp",
+  "version": "0.6.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@kedalion/platform": "workspace:*",
+    "@kedalion/server-core": "workspace:*"
+  }
+}

@@ -11,7 +11,7 @@
     },
     "app": {
       "name": "@kedalion/app",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/db": "workspace:*",
         "@kedalion/editor": "workspace:*",
@@ -42,7 +42,7 @@
     },
     "packages/build": {
       "name": "@kedalion/build",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "bin": {
         "kedalion": "src/cli.ts",
       },
@@ -52,9 +52,17 @@
         "sharp": "^0.35.5",
       },
     },
+    "packages/cdp": {
+      "name": "@kedalion/cdp",
+      "version": "0.6.0",
+      "dependencies": {
+        "@kedalion/platform": "workspace:*",
+        "@kedalion/server-core": "workspace:*",
+      },
+    },
     "packages/db": {
       "name": "@kedalion/db",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/platform": "workspace:*",
         "@kedalion/server-core": "workspace:*",
@@ -64,7 +72,7 @@
     },
     "packages/editor": {
       "name": "@kedalion/editor",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.3",
         "@codemirror/commands": "^6.11.1",
@@ -108,7 +116,7 @@
     },
     "packages/platform": {
       "name": "@kedalion/platform",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/ui": "workspace:*",
         "sharp": "^0.35.5",
@@ -116,11 +124,11 @@
     },
     "packages/server-core": {
       "name": "@kedalion/server-core",
-      "version": "0.3.0",
+      "version": "0.6.0",
     },
     "packages/server-mods": {
       "name": "@kedalion/server-mods",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "7z-wasm": "^1.2.0",
         "@kedalion/platform": "workspace:*",
@@ -129,7 +137,7 @@
     },
     "packages/shell": {
       "name": "@kedalion/shell",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/platform": "workspace:*",
         "@kedalion/server-core": "workspace:*",
@@ -138,7 +146,7 @@
     },
     "packages/sql-ui": {
       "name": "@kedalion/sql-ui",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/editor": "workspace:*",
         "@kedalion/ui": "workspace:*",
@@ -156,7 +164,7 @@
     },
     "packages/terminal": {
       "name": "@kedalion/terminal",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/platform": "workspace:*",
         "@kedalion/server-core": "workspace:*",
@@ -185,7 +193,7 @@
     },
     "packages/ui": {
       "name": "@kedalion/ui",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@fontsource/geist": "^5.1.0",
         "@fontsource/geist-mono": "^5.1.0",
@@ -229,7 +237,7 @@
     },
     "packages/view-explorer": {
       "name": "@kedalion/view-explorer",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/db": "workspace:*",
         "@kedalion/editor": "workspace:*",
@@ -253,7 +261,7 @@
     },
     "packages/view-git": {
       "name": "@kedalion/view-git",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/editor": "workspace:*",
         "@kedalion/server-core": "workspace:*",
@@ -273,7 +281,7 @@
     },
     "packages/view-grid": {
       "name": "@kedalion/view-grid",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/editor": "workspace:*",
         "@kedalion/server-core": "workspace:*",
@@ -292,7 +300,7 @@
     },
     "packages/view-rest": {
       "name": "@kedalion/view-rest",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/editor": "workspace:*",
         "@kedalion/platform": "workspace:*",
@@ -313,7 +321,7 @@
     },
     "packages/view-terminal": {
       "name": "@kedalion/view-terminal",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/server-core": "workspace:*",
         "@kedalion/terminal": "workspace:*",
@@ -332,7 +340,7 @@
     },
     "packages/view-workbench": {
       "name": "@kedalion/view-workbench",
-      "version": "0.3.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kedalion/db": "workspace:*",
         "@kedalion/editor": "workspace:*",
@@ -573,6 +581,8 @@
     "@kedalion/app": ["@kedalion/app@workspace:app"],
 
     "@kedalion/build": ["@kedalion/build@workspace:packages/build"],
+
+    "@kedalion/cdp": ["@kedalion/cdp@workspace:packages/cdp"],
 
     "@kedalion/db": ["@kedalion/db@workspace:packages/db"],
 
