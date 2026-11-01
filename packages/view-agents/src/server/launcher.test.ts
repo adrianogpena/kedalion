@@ -1,4 +1,5 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
+import { claudeCommand } from './claude-command.ts';
 import { launchers } from '@kedalion/terminal/server';
 import { claudeLauncher } from './launcher.ts';
 
@@ -25,6 +26,30 @@ test('resume on the default account drops CLAUDE_CONFIG_DIR', () => {
 test('rejects unknown accounts and bad ids', () => {
   expect(reg.resolve('claude', { account: 'nope', sessionId: ID }, { shell: ['sh'] })).toBeNull();
   expect(reg.resolve('claude', { account: '.claude', sessionId: '--x' }, { shell: ['sh'] })).toBeNull();
+});
+
+const withCfg = (cfg: string | undefined) => launchers({ claude: claudeLauncher({ accounts, env: {}, cmd: 'claude', mcpConfig: () => cfg }) });
+
+test('mcpConfig adds --mcp-config before the prompt', () => {
+  const r = withCfg('/tmp/mcp.json').resolve('claude', { account: '.claude', sessionId: ID, mode: 'plan', prompt: 'go' }, { shell: ['sh'] })!;
+  expect(r.cmd).toEqual(['claude', '--session-id', ID, '--permission-mode', 'plan', '--mcp-config', '/tmp/mcp.json', '--', 'go']);
+});
+
+test('mcpConfig returning undefined leaves the argv unchanged', () => {
+  const r = withCfg(undefined).resolve('claude', { account: '.claude', sessionId: ID }, { shell: ['sh'] })!;
+  expect(r.cmd).toEqual(['claude', '--session-id', ID]);
+});
+
+test('an unsafe mcpConfig path via a .cmd base throws', () => {
+  const spy = spyOn(claudeCommand, 'argv').mockReturnValue(['cmd.exe', '/c', 'claude.cmd']);
+  try {
+    const run = (cfg: string) => () =>
+      launchers({ claude: claudeLauncher({ accounts, env: {}, mcpConfig: () => cfg }) }).resolve('claude', { account: '.claude', sessionId: ID }, { shell: ['sh'] });
+    expect(run('C:/a&b/mcp.json')).toThrow();
+    expect(run('C:/ok/mcp.json')()!.cmd).toContain('C:/ok/mcp.json');
+  } finally {
+    spy.mockRestore();
+  }
 });
 
 test('mode comes before the user args and the prompt follows --', () => {

@@ -118,9 +118,9 @@ export interface AgentsServerViewOptions {
 export type { AgentsFrame };
 
 /** The `claude` terminal launcher for `terminalServerView({ launchers: launchers({ claude: agentsLauncher() }) })`; same `home` as the view. */
-export function agentsLauncher(opts: Pick<AgentsServerViewOptions, 'home'> & { env?: Record<string, string | undefined>; cmd?: string } = {}) {
+export function agentsLauncher(opts: Pick<AgentsServerViewOptions, 'home'> & { env?: Record<string, string | undefined>; cmd?: string; mcpConfig?: () => string | undefined } = {}) {
   const home = opts.home ?? homedir();
-  return claudeLauncher({ accounts: () => detectAccounts(home), env: opts.env, cmd: opts.cmd });
+  return claudeLauncher({ accounts: () => detectAccounts(home), env: opts.env, cmd: opts.cmd, mcpConfig: opts.mcpConfig });
 }
 
 /** Server half of the Agents view: accounts, sessions with live status, and a socket pushing changes. */
