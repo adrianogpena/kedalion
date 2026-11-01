@@ -60,21 +60,36 @@ function setFind(view: EditorView, state: FindState) {
 }
 
 function reveal(view: EditorView, m: Match) {
-  const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, m.from, m.to)).scrollIntoView();
-  view.dispatch(tr.setMeta('addToHistory', false));
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, m.from, m.to)).setMeta('addToHistory', false));
+  // The view is not focused (the find input is), so ProseMirror's own scroll does not run: scroll the match itself.
+  const at = view.domAtPos(m.from);
+  const el = at.node.nodeType === 1 ? (at.node as HTMLElement) : at.node.parentElement;
+  el?.scrollIntoView({ block: 'center', inline: 'nearest' });
 }
 
-/** Find bar of the rich pane: searches only the document, not the page. */
-export function FindBar({ view, onClose }: { view: EditorView; onClose(): void }) {
+/** The selected text when it is a short single line; seeds the find query. */
+export function selectedText(view: EditorView): string {
+  const { from, to, empty } = view.state.selection;
+  if (empty || to - from > 200) return '';
+  const text = view.state.doc.textBetween(from, to, '\n');
+  return text.includes('\n') ? '' : text.trim();
+}
+
+/** Find bar of the rich pane: searches only the document, not the page. `seed` changes on every Ctrl+F. */
+export function FindBar({ view, seed, onClose }: { view: EditorView; seed: string; onClose(): void }) {
   const input = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(seed);
   const [current, setCurrent] = useState(-1);
   const matches = useMemo(() => findMatches(view.state.doc, query), [view, query, view.state.doc]);
 
   useEffect(() => {
+    if (seed) {
+      setQuery(seed);
+      setCurrent(-1);
+    }
     input.current?.focus();
     input.current?.select();
-  }, []);
+  }, [seed]);
 
   useEffect(() => {
     setFind(view, { query, current });

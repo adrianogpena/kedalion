@@ -14,7 +14,7 @@ import { htmlView, imageView, refreshHtml, userEditPlugin } from './base';
 import { type RichApi, type RichCommandId, type RichHost, runRichCommand } from './commands';
 import { FEATURES } from './features';
 import { EXTERNAL_META, frontmatterYaml, richValue, splitFrontmatter } from './frontmatter';
-import { FindBar, findPlugin } from './find';
+import { FindBar, findPlugin, selectedText } from './find';
 import { refreshLineNumbers } from './lineNumbers';
 
 export interface RichMarkdownHandle {
@@ -67,6 +67,7 @@ export const RichMarkdown = forwardRef<RichMarkdownHandle, RichMarkdownProps>(fu
   const [api, setApi] = useState<RichApi | null>(null);
   const [front, setFront] = useState(() => splitFrontmatter(value).front);
   const [finding, setFinding] = useState(false);
+  const [seed, setSeed] = useState('');
   const latest = useRef({ value, onChange, host });
   latest.current = { value, onChange, host };
   /** The text last parsed or emitted, the text the document was parsed from, its frontmatter and that parsed document. */
@@ -194,10 +195,11 @@ export const RichMarkdown = forwardRef<RichMarkdownHandle, RichMarkdownProps>(fu
         if (!api || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'f') return;
         e.preventDefault();
         e.stopPropagation();
+        setSeed(selectedText(api.view));
         setFinding(true);
       }}
     >
-      {api && finding && <FindBar view={api.view} onClose={() => { setFinding(false); api.view.focus(); }} />}
+      {api && finding && <FindBar view={api.view} seed={seed} onClose={() => { setFinding(false); api.view.focus(); }} />}
       {api && FEATURES.map((f, i) => {
         const Overlay = f.Overlay;
         return Overlay ? <Overlay key={i} api={api} /> : null;
