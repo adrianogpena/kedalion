@@ -55,10 +55,14 @@ export interface FsEntry {
   size: number;
   /** Epoch ms, rounded. */
   mtime: number;
-  /** A link whose target is outside the root (or missing); every route but list refuses it. */
+  /** A link whose target is missing; every route but list refuses it. */
   outside?: true;
-  /** What a link inside the root points to. */
+  /** What a live link points to. */
   target?: 'file' | 'dir';
+  /** A live link whose target is outside the root: readable (read routes follow it), never written through. */
+  external?: true;
+  /** Lives below an external link: readable, not writable. */
+  readOnly?: true;
   /** Matches an exclude glob; set only when the list asked for all entries. */
   excluded?: true;
 }
@@ -386,7 +390,8 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
   /** Open HTML pages by id: the page's project and folder, valid for an hour. */
   const views = new Map<string, { root: string; dir: string[]; expires: number }>();
 
-  async function locate(rootId: unknown, rel: unknown, mustExist = false) {
+  /** `readOut` lets read routes follow a link to a target outside the root; `external` then tells whether it did. */
+  async function locate(rootId: unknown, rel: unknown, mustExist = false, readOut = false) {
     const root = typeof rootId === 'string' ? (await opts.roots()).find((r) => r.id === rootId) : undefined;
     if (!root || !isAbsolute(root.path)) throw notFound('rootNotFound', 'This folder is no longer registered or no longer exists.');
     const segments = segmentsOf(rel);
@@ -396,8 +401,9 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
     });
     const abs = join(realRoot, ...segments);
     const real = await realOf(realRoot, segments, mustExist);
-    if (!inside(real, realRoot)) throw outsideRoot();
-    return { root, realRoot, segments, abs, real };
+    const external = !inside(real, realRoot);
+    if (external && !readOut) throw outsideRoot();
+    return { root, realRoot, segments, abs, real, external };
   }
 
   type Located = Awaited<ReturnType<typeof locate>>;
@@ -406,10 +412,10 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
    * The entry `loc` names itself, in its real parent folder: a link, not its target, so renaming
    * or deleting a link never touches what it points to. The parent must be inside the root too.
    */
-  async function entryPath(loc: Located): Promise<string> {
+  async function entryPath(loc: Located, readOut = false): Promise<string> {
     if (!loc.segments.length) throw badPath();
     const parent = await realOf(loc.realRoot, loc.segments.slice(0, -1), false);
-    if (!inside(parent, loc.realRoot)) throw outsideRoot();
+    if (!readOut && !inside(parent, loc.realRoot)) throw outsideRoot();
     return join(parent, loc.segments.at(-1)!);
   }
 
@@ -421,15 +427,17 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
   async function describe(path: string, name: string, realRoot: string): Promise<FsEntry | null> {
     const st = await lstat(path).catch(() => null);
     if (!st) return null;
+    const below = inside(dirname(path), realRoot) ? {} : { readOnly: true as const };
     if (!st.isSymbolicLink()) {
       const dir = st.isDirectory();
-      return { name, kind: dir ? 'dir' : 'file', size: dir ? 0 : st.size, mtime: Math.round(st.mtimeMs) };
+      return { name, kind: dir ? 'dir' : 'file', size: dir ? 0 : st.size, mtime: Math.round(st.mtimeMs), ...below };
     }
     const target = await realpath(path).catch(() => null);
-    const tst = target && inside(target, realRoot) ? await stat(target).catch(() => null) : null;
-    if (!tst) return { name, kind: 'link', size: 0, mtime: Math.round(st.mtimeMs), outside: true };
+    const tst = target ? await stat(target).catch(() => null) : null;
+    if (!target || !tst) return { name, kind: 'link', size: 0, mtime: Math.round(st.mtimeMs), outside: true, ...below };
     const dir = tst.isDirectory();
-    return { name, kind: 'link', size: dir ? 0 : tst.size, mtime: Math.round(tst.mtimeMs), target: dir ? 'dir' : 'file' };
+    const external = inside(target, realRoot) ? {} : { external: true as const };
+    return { name, kind: 'link', size: dir ? 0 : tst.size, mtime: Math.round(tst.mtimeMs), target: dir ? 'dir' : 'file', ...external, ...below };
   }
 
   async function described(path: string, name: string, realRoot: string): Promise<FsEntry> {
@@ -452,7 +460,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
   const routes: Routes = {
     'GET /api/fs/list': async ({ query }) => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       if (!(await stat(loc.real)).isDirectory()) throw notADir();
       const names = await readdir(loc.real);
       let entries = (await Promise.all(names.map((name) => describe(join(loc.real, name), name, loc.realRoot)))).filter(
@@ -472,14 +480,14 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
 
     'GET /api/fs/stat': async ({ query }) => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
-      return described(loc.segments.length ? await entryPath(loc) : loc.realRoot, basename(loc.abs), loc.realRoot);
+      const loc = await locate(root, path, true, true);
+      return described(loc.segments.length ? await entryPath(loc, true) : loc.realRoot, basename(loc.abs), loc.realRoot);
     },
 
     'GET /api/fs/info': async ({ query }): Promise<FsInfo> => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
-      const entry = loc.segments.length ? await entryPath(loc) : loc.realRoot;
+      const loc = await locate(root, path, true, true);
+      const entry = loc.segments.length ? await entryPath(loc, true) : loc.realRoot;
       const st = await lstat(entry).catch(() => {
         throw fileNotFound();
       });
@@ -492,14 +500,14 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
         created: Number.isFinite(born) && born > 0 ? born : null,
         modified: Math.round(st.mtimeMs),
         accessed: Math.round(st.atimeMs),
-        readOnly: !!loc.root.readOnly || !ownerWritable(st.mode),
+        readOnly: !!loc.root.readOnly || loc.external || !ownerWritable(st.mode),
       };
     },
 
     // Total size of a folder: running totals, then `done`. Links are counted as neither and not followed.
     'GET /api/fs/du': async ({ req, query }) => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       return ndjson(req, async (emit, signal) => {
         const totals: FsDuProgress = { files: 0, dirs: 0, bytes: 0 };
         const top = await stat(loc.real);
@@ -537,7 +545,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
 
     'GET /api/fs/hash': async ({ req, query }): Promise<FsHash> => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       if ((await stat(loc.real)).isDirectory()) throw notAFile();
       const hasher = new Bun.CryptoHasher('sha256');
       for await (const chunk of Bun.file(loc.real).stream()) {
@@ -549,7 +557,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
 
     'GET /api/fs/read': async ({ query }) => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       const st = await stat(loc.real);
       if (st.isDirectory()) throw notAFile();
       const bytes = new Uint8Array(await Bun.file(loc.real).slice(0, maxReadBytes).arrayBuffer());
@@ -559,7 +567,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
       const truncated = st.size > maxReadBytes;
       const encoding = detectEncoding(bytes, truncated);
       const text = { text: decodeText(bytes, encoding), encoding, size: st.size, mtime, truncated };
-      return loc.root.readOnly || !ownerWritable(st.mode) ? { ...text, readOnly: true } : text;
+      return loc.root.readOnly || loc.external || !ownerWritable(st.mode) ? { ...text, readOnly: true } : text;
     },
 
     'GET /api/fs/tail': async ({ query }) => {
@@ -567,7 +575,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
       const from = optionalInt(query.get('from'), 0, Number.MAX_SAFE_INTEGER);
       const max = optionalInt(query.get('max'), -Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER) ?? DEFAULT_TAIL_BYTES;
       const window = Math.min(Math.max(max, 1), MAX_TAIL_BYTES);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       const st = await stat(loc.real);
       if (st.isDirectory()) throw notAFile();
       const { size } = st;
@@ -645,14 +653,14 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
 
     'GET /api/fs/archive': async ({ query }) => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       if ((await stat(loc.real)).isDirectory()) throw notAFile();
       return listArchive(loc.real);
     },
 
     'GET /api/fs/sqlite': async ({ query }) => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       if ((await stat(loc.real)).isDirectory()) throw notAFile();
       const offset = Number(query.get('offset') ?? 0);
       try {
@@ -666,7 +674,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
 
     'GET /api/fs/raw': async ({ query }) => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       const st = await stat(loc.real);
       if (st.isDirectory()) throw notAFile();
       // `limit` returns only the first bytes (the hex view), however large the file.
@@ -687,7 +695,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
 
     'GET /api/fs/search': async ({ req, query }) => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       if (!(await stat(loc.real)).isDirectory()) throw notADir();
       const glob = query.get('glob') ? new Bun.Glob(query.get('glob')!) : null;
       const search = { q: query.get('q') ?? '', content: query.get('content') === '1', glob, exclude: parseExclude(query.get('exclude')) };
@@ -703,7 +711,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
     // Every file and folder path below `path` (excludes applied), for Quick Open and tree find.
     'GET /api/fs/names': async ({ req, query }) => {
       const { root, path } = fromQuery(query);
-      const loc = await locate(root, path, true);
+      const loc = await locate(root, path, true, true);
       if (!(await stat(loc.real)).isDirectory()) throw notADir();
       const search = { q: '', content: false, glob: null, exclude: parseExclude(query.get('exclude')) };
       return ndjson(req, async (emit, signal) => {
@@ -845,7 +853,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
       if (!validName(b.name)) throw badPath();
       const located = await Promise.all(b.paths.map((p) => locate(b.root, p, true)));
       writable(located[0]!.root);
-      const entries = await Promise.all(located.map(entryPath));
+      const entries = await Promise.all(located.map((l) => entryPath(l)));
       const parent = dirname(entries[0]!);
       if (entries.some((e) => fold(dirname(e)) !== fold(parent))) throw invalid('mixedParents', 'All items must be in the same folder.');
       const file = join(parent, b.name);
@@ -930,7 +938,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
       if (b.paths.length > MAX_PATHS) throw invalid('tooManyItems', 'Too many items at once.');
       const located = await Promise.all(b.paths.map((p) => locate(b.root, p, true)));
       writable(located[0]!.root);
-      const paths = await Promise.all(located.map(entryPath));
+      const paths = await Promise.all(located.map((l) => entryPath(l)));
       await trash(outermost(paths)).catch(fromPlatform);
       return { ok: true };
     },
@@ -957,7 +965,7 @@ export function rootedFs(opts: RootedFsOptions): RootedFs {
       } catch {
         throw invalid('badPath', 'Invalid path.');
       }
-      const loc = await locate(view.root, [...view.dir, ...segments].join('/'), true);
+      const loc = await locate(view.root, [...view.dir, ...segments].join('/'), true, true);
       if ((await stat(loc.real)).isDirectory()) throw notAFile();
       const ext = extname(loc.real).toLowerCase();
       return new Response(Bun.file(loc.real), {

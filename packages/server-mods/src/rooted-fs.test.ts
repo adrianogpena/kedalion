@@ -78,14 +78,23 @@ test('list puts folders first and marks links that leave the root', async () => 
   const { root, call } = await setup();
   symlinkSync(join(root, 'a'), join(root, 'a-link'), 'junction');
   const { entries } = (await call('GET /api/fs/list', 'root=r')) as { entries: FsEntry[] };
-  expect(entries.map(({ name, kind, outside, target }) => ({ name, kind, outside, target }))).toEqual([
-    { name: 'a', kind: 'dir', outside: undefined, target: undefined },
-    { name: 'a-link', kind: 'link', outside: undefined, target: 'dir' },
-    { name: 'link', kind: 'link', outside: true, target: undefined },
-    { name: 'top.txt', kind: 'file', outside: undefined, target: undefined },
+  expect(entries.map(({ name, kind, outside, target, external }) => ({ name, kind, outside, target, external }))).toEqual([
+    { name: 'a', kind: 'dir', outside: undefined, target: undefined, external: undefined },
+    { name: 'a-link', kind: 'link', outside: undefined, target: 'dir', external: undefined },
+    { name: 'link', kind: 'link', outside: undefined, target: 'dir', external: true },
+    { name: 'top.txt', kind: 'file', outside: undefined, target: undefined, external: undefined },
   ]);
   expect(entries[3]).toMatchObject({ size: 3, mtime: expect.any(Number) });
   expect(await call('GET /api/fs/stat', 'root=r&path=a/b.txt')).toEqual({ name: 'b.txt', kind: 'file', size: 17, mtime: OLD.getTime() });
+});
+
+test('read routes follow a link out of the root, read-only; writes are refused', async () => {
+  const { call } = await setup();
+  const { entries } = (await call('GET /api/fs/list', 'root=r&path=link')) as { entries: FsEntry[] };
+  expect(entries).toEqual([expect.objectContaining({ name: 'secret.txt', kind: 'file', readOnly: true })]);
+  expect(await call('GET /api/fs/read', 'root=r&path=link/secret.txt')).toMatchObject({ text: 'secret', readOnly: true });
+  expect(await call('GET /api/fs/stat', 'root=r&path=link/secret.txt')).toMatchObject({ name: 'secret.txt', readOnly: true });
+  await expect(call('POST /api/fs/create', { root: 'r', path: 'link/new.txt', kind: 'file' })).rejects.toMatchObject({ code: 'outsideRoot' });
 });
 
 test('read gives text, truncated text or binary', async () => {
@@ -261,8 +270,10 @@ test('every route refuses escapes', async () => {
     ['link/secret.txt', 'outsideRoot'],
   ] as const) {
     const q = `root=r&path=${encodeURIComponent(rel)}`;
-    for (const key of ['GET /api/fs/list', 'GET /api/fs/stat', 'GET /api/fs/read', 'GET /api/fs/raw', 'GET /api/fs/search']) {
-      expect(await fail(key, q)).toMatchObject({ code });
+    if (code === 'badPath') {
+      for (const key of ['GET /api/fs/list', 'GET /api/fs/stat', 'GET /api/fs/read', 'GET /api/fs/raw', 'GET /api/fs/search']) {
+        expect(await fail(key, q)).toMatchObject({ code });
+      }
     }
     expect(await fail('POST /api/fs/write', { root: 'r', path: rel, text: 'x' })).toMatchObject({ code });
     expect(await fail('POST /api/fs/create', { root: 'r', path: rel, kind: 'file' })).toMatchObject({ code });
@@ -357,7 +368,7 @@ test('tail clamps max, refuses bad input, outside paths and binary files', async
   await writeFile(join(root, 'b.bin'), Buffer.from([1, 0, 2]));
   expect(await fail('GET /api/fs/tail', 'root=r&path=x.log&from=1.5')).toMatchObject({ code: 'badRequest' });
   expect(await fail('GET /api/fs/tail', 'root=r&path=x.log&max=abc')).toMatchObject({ code: 'badRequest' });
-  expect(await fail('GET /api/fs/tail', 'root=r&path=link/secret.txt')).toMatchObject({ code: 'outsideRoot' });
+  expect(await call('GET /api/fs/tail', 'root=r&path=link/secret.txt')).toMatchObject({ partial: 'secret' });
   expect(await fail('GET /api/fs/tail', 'root=r&path=b.bin')).toMatchObject({ code: 'notText' });
   expect(await call('GET /api/fs/tail', 'root=r&path=x.log&max=999999999')).toMatchObject({ text: 'abc\n' });
   expect(await call('GET /api/fs/tail', 'root=r&path=x.log&max=0')).toMatchObject({ size: 4 });
@@ -496,7 +507,7 @@ test('info describes a file, a folder and the root; refuses escapes', async () =
   expect(await call('GET /api/fs/info', 'root=r&path=a')).toMatchObject({ type: 'dir', size: 0 });
   expect(await call('GET /api/fs/info', 'root=ro&path=')).toMatchObject({ fullPath: realRoot, readOnly: true });
   expect(await fail('GET /api/fs/info', 'root=r&path=../x')).toMatchObject({ code: 'badPath' });
-  expect(await fail('GET /api/fs/info', 'root=r&path=link/secret.txt')).toMatchObject({ code: 'outsideRoot' });
+  expect(await call('GET /api/fs/info', 'root=r&path=link/secret.txt')).toMatchObject({ name: 'secret.txt', readOnly: true });
 });
 
 test('du totals files, folders and bytes and skips links', async () => {

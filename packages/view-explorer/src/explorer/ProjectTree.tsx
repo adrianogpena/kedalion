@@ -36,6 +36,8 @@ interface Node {
   name: string;
   kind: FsEntry['kind'];
   outside?: boolean;
+  external?: boolean;
+  readOnly?: boolean;
   target?: FsEntry['target'];
   excluded?: true;
   /** Files shown under this file (file nesting); they are in the same folder on disk. */
@@ -43,6 +45,10 @@ interface Node {
 }
 
 const isRoot = (node: Node) => node.path === '';
+/** Nothing may be done to the entry itself: its link target is missing, or it is below an external link. */
+const locked = (node: Node) => !!node.outside || !!node.readOnly;
+/** Nothing may be written into or through the entry, nor its path handed to the server (reveal, open with, editors). */
+const sealed = (node: Node) => locked(node) || !!node.external;
 const isDir = (node: Node) => node.kind === 'dir' || node.target === 'dir';
 /** Drops paths that sit under another path of the list (deleting the folder removes them). */
 const topPaths = (paths: string[]) => {
@@ -229,6 +235,8 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
       name: e.name,
       kind: e.kind,
       outside: e.outside,
+      external: e.external,
+      readOnly: e.readOnly,
       target: e.target,
       excluded: e.excluded,
     }));
@@ -258,6 +266,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
   };
 
   const iconOf = (n: Node) => {
+    if (n.external) return 'link';
     if (!isDir(n)) return fileIconOf(n.name).icon;
     return n.kind === 'link' ? 'folder-link' : folderIconOf(n.name, folderFiles.current.get(nodeId(project.id, n.path)));
   };
@@ -294,7 +303,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
   useEffect(() => refreshGit(), [project.id, gitOn.current]);
 
   const decorationOf = (n: Node) => {
-    if (!git || n.outside || isRoot(n)) return undefined;
+    if (!git || sealed(n) || isRoot(n)) return undefined;
     const file = git.files.get(n.path);
     if (file) return { className: `git-${file.tone}`, badge: file.letter };
     if (isIgnored(git, n.path)) return { className: 'git-ignored' };
@@ -371,7 +380,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
   const labelOf = (paths: string[]) => (paths.length === 1 ? relPath.basename(paths[0]!) : t('explorer.items', { count: paths.length }));
 
   const create = (kind: 'file' | 'dir', node: Node) => {
-    if (node.outside) return;
+    if (sealed(node)) return;
     const dir = isDir(node) ? node.path : relPath.dirname(node.path);
     expand(nodeId(project.id, dir));
     setCreating({ dir, kind });
@@ -397,7 +406,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
 
   const rename = (node: Node, name: string) =>
     run(async () => {
-      if (isRoot(node) || node.outside) return;
+      if (isRoot(node) || locked(node)) return;
       const to = relPath.join(relPath.dirname(node.path), name);
       await api.fsRename(project.id, node.path, name);
       onMoved(project.id, node.path, to);
@@ -405,7 +414,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
       record({ kind: 'rename', project: project.id, moves: [{ from: node.path, to }] }, name);
     });
 
-  const actionable = (nodes: Node[]) => nodes.filter((n) => !isRoot(n) && !n.outside);
+  const actionable = (nodes: Node[]) => nodes.filter((n) => !isRoot(n) && !locked(n));
 
   const remove = (nodes: Node[]) =>
     run(async () => {
@@ -556,7 +565,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
   const paste = (node: Node) =>
     run(async () => {
       const clip = clipboard.current;
-      if (!clip || node.outside) return;
+      if (!clip || sealed(node)) return;
       const dir = isDir(node) ? node.path : relPath.dirname(node.path);
       if (clip.mode === 'copy') return copyInto(clip.paths, dir);
       await moveInto(clip.paths.filter((from) => relPath.dirname(from) !== dir && !relPath.isUnder(dir, from)), dir);
@@ -602,7 +611,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
    */
   const dropFiles = (data: DataTransfer, target: Node) => {
     const entries = entriesOf(data);
-    if (target.outside || !entries.length) return;
+    if (sealed(target) || !entries.length) return;
     void run(async () => {
       const dir = target.path;
       const fold = /Windows|Mac/.test(navigator.userAgent) ? (n: string) => n.toLowerCase() : (n: string) => n;
@@ -683,7 +692,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
 
   // The OS fetches a dragged-out file by URL with no headers; the link is made on pointer down so it is there at dragstart.
   const prepareDragOut = (node: Node) => {
-    if (isDir(node) || node.outside) return;
+    if (isDir(node) || sealed(node)) return;
     const id = nodeId(project.id, node.path);
     api.fsDownloadTicket(project.id, node.path).then(
       ({ ticket, name }) => (outLink.current = { id, name, url: `${window.location.origin}/api/fs/download?t=${ticket}`, at: Date.now() }),
@@ -698,7 +707,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
 
   const drop = (dragged: Node[], target: Node, copy: boolean) =>
     run(async () => {
-      if (target.outside) return;
+      if (sealed(target)) return;
       const nodes = actionable(dragged).filter((n) => !relPath.isUnder(target.path, n.path));
       if (copy) await copyInto(nodes.map((n) => n.path), target.path);
       else await moveInto(nodes.filter((n) => relPath.dirname(n.path) !== target.path).map((n) => n.path), target.path, true);
@@ -706,7 +715,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
 
   const selectedDir = () => {
     const picked = tree.current?.selection() ?? [];
-    return picked.length === 1 && !picked[0]!.outside ? picked[0]! : rootNode;
+    return picked.length === 1 && !sealed(picked[0]!) ? picked[0]! : rootNode;
   };
   useImperativeHandle(apiRef, () => ({
     newFile: () => void create('file', selectedDir()),
@@ -729,12 +738,13 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
   }));
 
   const menuItems = (node: Node, selection: Node[]): Array<ContextMenuItem | 'sep'> => {
-    const disabled = !!node.outside;
+    const disabled = locked(node);
+    const noPath = sealed(node);
     const item = (id: string, label: string, act: () => void, extra: Partial<ContextMenuItem> = {}): ContextMenuItem => ({ id, label, run: act, disabled, ...extra });
     const call = (job: () => Promise<unknown>) => () => void run(async () => void (await job()));
     const ref = (n: Node) => ({ project: project.id, path: n.path });
     const compressItems = (nodes: Node[]) => {
-      const ok = nodes.length > 0 && nodes.every((n) => !isRoot(n) && !n.outside) && commonParent(nodes) !== undefined;
+      const ok = nodes.length > 0 && nodes.every((n) => !isRoot(n) && !sealed(n)) && commonParent(nodes) !== undefined;
       return ok
         ? [
             item('compressZip', t('explorer.compressZip'), () => void compress(nodes, 'zip'), { icon: 'archive', disabled: false }),
@@ -743,7 +753,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
         : [];
     };
     if (selection.length > 1) {
-      const pair = selection.length === 2 && selection.every((n) => !isDir(n) && !n.outside);
+      const pair = selection.length === 2 && selection.every((n) => !isDir(n) && !sealed(n));
       return [
         ...(pair && onCompare ? [item('compareSelected', t('explorer.compareSelected'), () => onCompare(ref(selection[0]!), ref(selection[1]!)), { disabled: false }), 'sep' as const] : []),
         item('copy', t('explorer.copy'), () => stash('copy', selection), { icon: 'copy', hint: 'Ctrl+C' }),
@@ -760,11 +770,11 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
     return [
       ...(isDir(node) ? [] : [item('open', t('explorer.open'), () => open(node), { icon: 'file' })]),
       ...(isDir(node) || !onOpenFileToSide ? [] : [item('openSide', t('explorer.openSide'), () => onOpenFileToSide(project.id, node.path), { icon: 'split', hint: 'Ctrl+Enter' })]),
-      item('newFile', t('explorer.newFile'), () => void create('file', node), { icon: 'plus' }),
-      item('newDir', t('explorer.newFolder'), () => void create('dir', node), { icon: 'folder' }),
+      item('newFile', t('explorer.newFile'), () => void create('file', node), { icon: 'plus', disabled: noPath }),
+      item('newDir', t('explorer.newFolder'), () => void create('dir', node), { icon: 'folder', disabled: noPath }),
       'sep',
       ...(isRoot(node) ? [] : [item('copy', t('explorer.copy'), () => stash('copy', [node]), { icon: 'copy', hint: 'Ctrl+C' }), item('cut', t('explorer.cut'), () => stash('cut', [node]), { hint: 'Ctrl+X' })]),
-      item('paste', t('explorer.paste'), () => void paste(node), { hint: 'Ctrl+V', disabled: disabled || !clipboard.current }),
+      item('paste', t('explorer.paste'), () => void paste(node), { hint: 'Ctrl+V', disabled: noPath || !clipboard.current }),
       ...(isRoot(node)
         ? []
         : [
@@ -792,16 +802,16 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
             item('selectForCompare', t('explorer.selectForCompare'), () => onSelectForCompare(project.id, node.path)),
             'sep' as const,
           ]),
-      ...(isDir(node) && onOpenDetails ? [item('openDetails', t('explorer.openDetails'), () => onOpenDetails(project.id, node.path), { icon: 'table', disabled })] : []),
-      ...(isDir(node) ? [item('openTerminal', t('explorer.openTerminal'), () => onOpenTerminal(project.id, node.path), { icon: 'terminal', disabled })] : []),
-      item('reveal', t('explorer.reveal'), call(() => api.fsReveal(project.id, node.path))),
+      ...(isDir(node) && onOpenDetails ? [item('openDetails', t('explorer.openDetails'), () => onOpenDetails(project.id, node.path), { icon: 'table', disabled: noPath })] : []),
+      ...(isDir(node) ? [item('openTerminal', t('explorer.openTerminal'), () => onOpenTerminal(project.id, node.path), { icon: 'terminal', disabled: noPath })] : []),
+      item('reveal', t('explorer.reveal'), call(() => api.fsReveal(project.id, node.path)), { disabled: noPath }),
       ...(editors.data ?? []).map((editor) =>
         item(`editor-${editor.id}`, t('explorer.openInEditor', { editor: editor.name }), call(() => api.openInEditor(editor.id, project.id, node.path)), {
-          disabled: disabled || editor.path === null,
+          disabled: noPath || editor.path === null,
           hint: editor.path === null ? t('explorer.editorMissing') : undefined,
         }),
       ),
-      ...(isDir(node) ? [] : [item('openDefault', t('explorer.openDefault'), call(() => api.fsOpen(project.id, node.path)))]),
+      ...(isDir(node) ? [] : [item('openDefault', t('explorer.openDefault'), call(() => api.fsOpen(project.id, node.path)), { disabled: noPath })]),
       'sep' as const,
       item('properties', t('explorer.properties'), () => setProperties(node.path)),
     ];

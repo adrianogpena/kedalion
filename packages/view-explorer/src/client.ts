@@ -17,10 +17,14 @@ export interface FsEntry {
   kind: 'file' | 'dir' | 'link';
   size: number;
   mtime: number;
-  /** A link that leads out of the project folder. */
+  /** A link whose target is missing. */
   outside?: true;
-  /** What a link inside the project points to. */
+  /** What a live link points to. */
   target?: 'file' | 'dir';
+  /** A live link to a target outside the project folder: readable, never written through. */
+  external?: true;
+  /** Lives below an external link: readable, not writable. */
+  readOnly?: true;
   /** Matches an exclude glob; only listed when the tree shows excluded entries. */
   excluded?: true;
 }
