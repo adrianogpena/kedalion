@@ -50,6 +50,35 @@ export interface Settings extends BaseSettings, TerminalServerSettings, Workbenc
   /** Shortcut behavior, checked by `validGroup`. */
   keyboard?: Record<string, string | number | boolean>;
   git?: Record<string, string | number | boolean>;
+  /** Where links open (Kedalion browser or the default one), globally and per view or panel scope; checked by `validLinks`. */
+  links?: { openIn?: string; scopes?: Record<string, string> };
+}
+
+const LINK_TARGETS: readonly string[] = ['internal', 'external'];
+const LINK_SCOPE = /^(view|panel):[a-z0-9-]{1,60}$/;
+const MAX_LINK_SCOPES = 200;
+
+/** A copy of the `links` group when `openIn` and every scope fit, else null. */
+function validLinks(raw: unknown): { openIn?: string; scopes?: Record<string, string> } | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const out: { openIn?: string; scopes?: Record<string, string> } = {};
+  for (const [key, v] of Object.entries(raw)) {
+    if (key === 'openIn') {
+      if (typeof v !== 'string' || !LINK_TARGETS.includes(v)) return null;
+      out.openIn = v;
+    } else if (key === 'scopes') {
+      if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+      const entries = Object.entries(v);
+      if (entries.length > MAX_LINK_SCOPES) return null;
+      const scopes: Record<string, string> = {};
+      for (const [scope, target] of entries) {
+        if (!LINK_SCOPE.test(scope) || typeof target !== 'string' || !LINK_TARGETS.includes(target)) return null;
+        scopes[scope] = target;
+      }
+      out.scopes = scopes;
+    } else return null;
+  }
+  return out;
 }
 
 const MAX_TABS_LAYOUT_BYTES = 64 * 1024;
@@ -120,6 +149,8 @@ const settings = settingsStore<Settings>({
     if (general) next.general = general;
     const keyboard = validGroup(patch.keyboard, KEYBOARD_SPEC);
     if (keyboard) next.keyboard = keyboard;
+    const links = validLinks(patch.links);
+    if (links) next.links = links;
     const keybindings = validKeymap(patch.keybindings);
     if (keybindings) next.keybindings = keybindings;
     applyViewSettings(serverViews, patch, next as unknown as Record<string, unknown>);

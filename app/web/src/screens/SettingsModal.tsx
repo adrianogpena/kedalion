@@ -5,6 +5,7 @@ import { views } from '../views';
 import { api, type BackupInfo, type EditorInfo, type ImportResult, type Settings } from '../api';
 import { type MessageKey, t } from '../i18n';
 import { settingsRegistry } from '../settings';
+import { LinksSettings } from './LinksSettings';
 
 interface Props {
   settings: Settings;
@@ -195,7 +196,7 @@ export function SettingsModal({ settings, onChange, onReplace, onQuit, onClose, 
   const total = [...hits.values()].reduce((n, h) => n + h.ids.length, 0);
 
   /** Pages with an explicit `render` branch; keep in step with the switch below. */
-  const OWN_PAGES = ['general', 'appearance', 'window', 'editor', 'editor.fileTypes', 'editor.externalEditors', 'keyboard.shortcuts', 'system.updates', 'system.backup'];
+  const OWN_PAGES = ['general', 'general.links', 'appearance', 'window', 'editor', 'editor.fileTypes', 'editor.externalEditors', 'keyboard.shortcuts', 'system.updates', 'system.backup'];
 
   /** Whether the section has settings or a card of its own (else a parent lists links to its children). */
   const hasOwn = (key: string): boolean =>
@@ -204,6 +205,7 @@ export function SettingsModal({ settings, onChange, onReplace, onQuit, onClose, 
   const render = (key: string): ReactNode => {
     switch (key) {
       case 'general': return <GeneralSection settings={draft} onChange={change} onQuit={onQuit} />;
+      case 'general.links': return <LinksSettings settings={draft} onChange={change} />;
       case 'appearance':
         return (
           <>

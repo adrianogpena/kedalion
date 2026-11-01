@@ -12,7 +12,7 @@ import type { AgentsViewSettings } from '@kedalion/view-agents/web';
 import type { RestViewSettings } from '@kedalion/view-rest/web';
 import type { WorkbenchViewSettings } from '@kedalion/view-workbench/web';
 import type { CopyFormat, DbColumn, DbPlanRow, DbRunResult, DbSchema, DbSchemaTable, DbStatus, DbTableConstraint, DbTableDetails, DbTableIndex, DemoRow } from '@kedalion/sql-ui';
-import { type FileAssociation, type GitSettings, type FileSettings, type Keymap, type Language, type LogSettings, type ResultFormat, request } from '@kedalion/ui';
+import { type FileAssociation, type GitSettings, type FileSettings, type Keymap, type Language, type LinkTarget, type LogSettings, type ResultFormat, request } from '@kedalion/ui';
 
 export type { TerminalSettings };
 
@@ -50,6 +50,14 @@ export interface Settings extends ThemeSettings, TerminalViewSettings, Workbench
   keyboard?: KeyboardSettings;
   /** Git screen behavior; the server validates it. */
   git?: GitSettings;
+  /** Where links open, globally and per view or panel scope; the server validates it. */
+  links?: LinksSettings;
+}
+
+export interface LinksSettings {
+  openIn?: LinkTarget;
+  /** Scope (`view:<id>`, `panel:<kind>`) to target; a missing key follows `openIn`. */
+  scopes?: Record<string, LinkTarget>;
 }
 
 export interface AppearanceSettings {

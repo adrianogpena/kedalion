@@ -5,6 +5,8 @@ import {
   type SectionPath,
   bool,
   createSettingsRegistry,
+  DEFAULT_LINK_SETTINGS,
+  type LinkTarget,
   gitSettingDefs,
   groupField as uiGroupField,
   num,
@@ -16,6 +18,7 @@ import type { AppearanceSettings, EditorSettings, GeneralSettings, KeyboardSetti
 
 export const settingsRegistry = createSettingsRegistry<Settings>();
 registerDefaultSections(settingsRegistry);
+settingsRegistry.registerSection({ path: ['general', 'links'], order: 10, label: 'settings.section.general.links' });
 
 /** Default of a registered setting. */
 export const settingDefault = <V = unknown>(id: string): V => settingsRegistry.setting(id)!.default as V;
@@ -32,7 +35,9 @@ export const settingDefaults = <O>(prefix: string): O =>
 const general: SectionPath = ['general'];
 const editor: SectionPath = ['editor'];
 
-type Group = 'appearance' | 'editor' | 'window' | 'general' | 'keyboard';
+type Group = 'appearance' | 'editor' | 'window' | 'general' | 'keyboard' | 'links';
+
+const linksSection: SectionPath = ['general', 'links'];
 
 const groupField = (group: Group, key: string, order: number, def: Parameters<typeof uiGroupField>[3], section?: SectionPath) => uiGroupField<Settings, Group>(group, key, order, def, section);
 
@@ -69,6 +74,19 @@ settingsRegistry.registerSettings([
   groupField('general', 'browser', 115, str('')),
 
   groupField('keyboard', 'chordTimeout', 100, num(1500, 500, 10_000)),
+
+  groupField('links', 'openIn', 100, oneOf(DEFAULT_LINK_SETTINGS.openIn, ['internal', 'external']), linksSection),
+  {
+    id: 'links.scopes',
+    kind: 'custom',
+    section: linksSection,
+    order: 110,
+    label: 'settings.links.scopes',
+    description: 'settings.links.scopes.hint',
+    default: DEFAULT_LINK_SETTINGS.scopes,
+    get: (s) => s.links?.scopes ?? DEFAULT_LINK_SETTINGS.scopes,
+    set: (s, scopes) => ({ links: { ...s.links, scopes: scopes as Record<string, LinkTarget> } }),
+  },
 
   ...gitSettingDefs,
 
@@ -136,6 +154,12 @@ export const windowSettingsOf = (s: Settings): Required<WindowSettings> => ({ ..
 
 /** The keyboard settings with their defaults filled in. */
 export const keyboardSettingsOf = (s: Settings): Required<KeyboardSettings> => ({ ...settingDefaults<Required<KeyboardSettings>>('keyboard'), ...s.keyboard });
+
+/** The link routing settings with their defaults filled in. */
+export const linkSettingsOf = (s: Settings): { openIn: LinkTarget; scopes: Record<string, LinkTarget> } => ({
+  openIn: s.links?.openIn ?? settingDefault<LinkTarget>('links.openIn'),
+  scopes: s.links?.scopes ?? settingDefault<Record<string, LinkTarget>>('links.scopes'),
+});
 
 /** The settings stored in `general` (autostart and the other top-level ones are not) with their defaults filled in. */
 export const generalSettingsOf = (s: Settings): Required<GeneralSettings> => ({
