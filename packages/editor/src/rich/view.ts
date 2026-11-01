@@ -36,10 +36,32 @@ interface ZoomStore {
 }
 const stores = new WeakMap<EditorView, ZoomStore>();
 
+const WIDE_KEY = 'kedalion.md.maxView';
+
+/** The max view choice outlives the editor view (switching views recreates it) and reloads. */
+function loadWide(): { wide: boolean; restoreZoom: number } {
+  try {
+    const v = JSON.parse(localStorage.getItem(WIDE_KEY) ?? 'null');
+    if (v && v.wide === true) return { wide: true, restoreZoom: clampZoom(Number(v.restoreZoom)) };
+  } catch {
+    // storage unavailable or malformed: start without max view
+  }
+  return { wide: false, restoreZoom: 100 };
+}
+
+function saveWide(s: ZoomStore): void {
+  try {
+    localStorage.setItem(WIDE_KEY, JSON.stringify({ wide: s.wide, restoreZoom: s.restoreZoom }));
+  } catch {
+    // ignore
+  }
+}
+
 export function zoomStore(api: RichApi): ZoomStore {
   let s = stores.get(api.view);
   if (!s) {
-    s = { zoom: clampZoom(api.host.settings.zoom), wide: false, restoreZoom: 100, listeners: new Set() };
+    const w = loadWide();
+    s = { zoom: w.wide ? 100 : clampZoom(api.host.settings.zoom), wide: w.wide, restoreZoom: w.restoreZoom, listeners: new Set() };
     stores.set(api.view, s);
   }
   return s;
@@ -65,10 +87,12 @@ export function toggleWide(api: RichApi): void {
   const s = zoomStore(api);
   if (s.wide) {
     s.wide = false;
+    saveWide(s);
     setZoom(api, s.restoreZoom);
   } else {
     s.restoreZoom = s.zoom;
     s.wide = true;
+    saveWide(s);
     setZoom(api, 100);
   }
 }
