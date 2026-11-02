@@ -1,3 +1,4 @@
+import type { Emulation, InterceptRule } from '@kedalion/cdp';
 import { openExternal } from '@kedalion/platform';
 import { invalid, type Routes } from '@kedalion/server-core';
 import { normalizeAddress } from '../address.ts';
@@ -10,6 +11,7 @@ const str = (v: unknown): string => {
 };
 const ACTIONS = ['back', 'forward', 'reload', 'stop'] as const;
 const KINDS = ['console', 'network'] as const;
+const MAX_RULES = 50;
 
 export interface BrowserRouteOptions {
   service: BrowserService;
@@ -30,6 +32,16 @@ export function browserRoutes({ service, ready, issueTicket, mcpConfig }: Browse
   const kindOf = (v: unknown) => {
     if (!KINDS.includes(v as (typeof KINDS)[number])) throw bad();
     return v as (typeof KINDS)[number];
+  };
+
+  const webKind = (v: unknown): 'local' | 'session' => {
+    if (v === 'local' || v === 'session') return v;
+    throw bad();
+  };
+  const storeKind = (v: unknown): 'local' | 'session' | 'indexeddb' => (v === 'indexeddb' ? v : webKind(v));
+  const scopeOf =(v: unknown): 'page' | 'all' => {
+    if (v === 'page' || v === 'all') return v;
+    throw bad();
   };
 
   return {
@@ -98,6 +110,144 @@ export function browserRoutes({ service, ready, issueTicket, mcpConfig }: Browse
       await ready();
       logsOf(id)[kind].preserve = b.on;
       return { ok: true };
+    },
+    'GET /api/browser/cookies': async ({ query }) => {
+      const tab = str(query.get('tab'));
+      await ready();
+      return { cookies: await service.cookies(tab, scopeOf(query.get('scope'))) };
+    },
+    'POST /api/browser/cookies/delete': async ({ json }) => {
+      const b = await json<{ tab?: unknown; name?: unknown; domain?: unknown; path?: unknown }>();
+      const tab = str(b.tab);
+      if (typeof b.name !== 'string' || typeof b.domain !== 'string' || typeof b.path !== 'string' || !b.name) throw bad();
+      await ready();
+      await service.deleteCookie(tab, { name: b.name, domain: b.domain, path: b.path });
+      return { ok: true };
+    },
+    'POST /api/browser/cookies/clear': async ({ json }) => {
+      const b = await json<{ tab?: unknown; scope?: unknown }>();
+      const tab = str(b.tab);
+      await ready();
+      return { removed: await service.clearCookies(tab, scopeOf(b.scope)) };
+    },
+    'POST /api/browser/cookies/set': async ({ json }) => {
+      const b = await json<{ tab?: unknown; cookie?: Record<string, unknown> }>();
+      const tab = str(b.tab);
+      const c = b.cookie;
+      if (!c || typeof c !== 'object' || typeof c.name !== 'string' || !c.name || typeof c.value !== 'string') throw bad();
+      const optStr = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+      const sameSite = c.sameSite === 'Strict' || c.sameSite === 'Lax' || c.sameSite === 'None' ? c.sameSite : undefined;
+      const domain = optStr(c.domain);
+      const path = optStr(c.path);
+      await ready();
+      await service.setCookie(tab, {
+        name: c.name,
+        value: c.value,
+        ...(domain ? { domain } : {}),
+        ...(path ? { path } : {}),
+        ...(typeof c.expires === 'number' && Number.isFinite(c.expires) && c.expires > 0 ? { expires: c.expires } : {}),
+        httpOnly: c.httpOnly === true,
+        secure: c.secure === true,
+        ...(sameSite ? { sameSite } : {}),
+      });
+      return { ok: true };
+    },
+    'GET /api/browser/storage': async ({ query }) => {
+      const tab = str(query.get('tab'));
+      await ready();
+      return service.storage(tab);
+    },
+    'POST /api/browser/storage/set': async ({ json }) => {
+      const b = await json<{ tab?: unknown; kind?: unknown; key?: unknown; value?: unknown }>();
+      const tab = str(b.tab);
+      const kind = webKind(b.kind);
+      if (typeof b.value !== 'string') throw bad();
+      await ready();
+      await service.setStorageItem(tab, kind, str(b.key), b.value);
+      return { ok: true };
+    },
+    'POST /api/browser/storage/remove': async ({ json }) => {
+      const b = await json<{ tab?: unknown; kind?: unknown; key?: unknown }>();
+      const tab = str(b.tab);
+      const kind = storeKind(b.kind);
+      await ready();
+      await service.removeStorageItem(tab, kind, str(b.key));
+      return { ok: true };
+    },
+    'POST /api/browser/storage/clear': async ({ json }) => {
+      const b = await json<{ tab?: unknown; kind?: unknown }>();
+      const tab = str(b.tab);
+      const kind = storeKind(b.kind);
+      await ready();
+      await service.clearStorage(tab, kind);
+      return { ok: true };
+    },
+    'POST /api/browser/site-data/clear': async ({ json }) => {
+      const b = await json<{ tab?: unknown; cache?: unknown }>();
+      const tab = str(b.tab);
+      await ready();
+      await service.clearSiteData(tab, b.cache === true);
+      return { ok: true };
+    },
+    'GET /api/browser/rules': async () => {
+      await ready();
+      return { rules: service.rules() };
+    },
+    'POST /api/browser/rules': async ({ json }) => {
+      const b = await json<{ rules?: unknown }>();
+      if (!Array.isArray(b.rules) || b.rules.length > MAX_RULES) throw bad();
+      const rules: InterceptRule[] = b.rules.map((r: Record<string, unknown>) => {
+        if (!r || typeof r !== 'object' || typeof r.id !== 'string' || typeof r.pattern !== 'string' || (r.action !== 'block' && r.action !== 'mock')) throw bad();
+        const status = typeof r.status === 'number' && Number.isInteger(r.status) && r.status >= 100 && r.status <= 599 ? r.status : undefined;
+        return {
+          id: r.id,
+          enabled: r.enabled !== false,
+          pattern: r.pattern,
+          action: r.action,
+          ...(status ? { status } : {}),
+          ...(typeof r.contentType === 'string' && r.contentType ? { contentType: r.contentType } : {}),
+          ...(typeof r.body === 'string' ? { body: r.body } : {}),
+        };
+      });
+      await ready();
+      service.setRules(rules);
+      return { rules };
+    },
+    'GET /api/browser/emulation': async ({ query }) => {
+      const tab = str(query.get('tab'));
+      await ready();
+      return { emulation: service.emulation(tab) };
+    },
+    'POST /api/browser/emulation': async ({ json }) => {
+      const b = await json<{ tab?: unknown; emulation?: Record<string, unknown> }>();
+      const tab = str(b.tab);
+      const e = b.emulation;
+      if (!e || typeof e !== 'object') throw bad();
+      const dim = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= max ? v : undefined);
+      const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+      const width = dim(e.width, 10_000);
+      const height = dim(e.height, 10_000);
+      const dpr = dim(e.dpr, 10);
+      const preset = text(e.preset);
+      const userAgent = text(e.userAgent);
+      const locale = text(e.locale);
+      const timezone = text(e.timezone);
+      const emulation: Emulation = {
+        ...(preset ? { preset } : {}),
+        ...(width && height ? { width, height, dpr: dpr ?? 1, mobile: e.mobile === true } : {}),
+        ...(userAgent ? { userAgent } : {}),
+        ...(locale ? { locale } : {}),
+        ...(timezone ? { timezone } : {}),
+      };
+      await ready();
+      await service.setEmulation(tab, emulation);
+      return { emulation };
+    },
+    'POST /api/browser/network/har': async ({ json }) => {
+      const b = await json<{ tab?: unknown }>();
+      const tab = str(b.tab);
+      await ready();
+      return service.exportHar(tab);
     },
     'POST /api/browser/open-external': async ({ json }) => {
       const b = await json<{ url?: unknown }>();

@@ -5,3 +5,6 @@ export * from './logs.ts';
 export * from './screencast.ts';
 export * from './input.ts';
 export * from './page.ts';
+export * from './storage.ts';
+export * from './intercept.ts';
+export * from './emulation.ts';

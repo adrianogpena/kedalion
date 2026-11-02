@@ -22,10 +22,12 @@ export interface ViewportProps {
   loading: boolean;
   /** Client coordinates of the last left mouse release, where a select popup opens. */
   pointer: MutableRefObject<{ x: number; y: number }>;
+  /** CSS size of an emulated device; the page is then drawn at that size, centered and scrollable. */
+  device?: { w: number; h: number };
 }
 
 /** The page: a canvas painted from the screencast frames, with mouse, wheel, keyboard, IME and paste sent back as input events. */
-export function Viewport({ socket, tab, loading, pointer }: ViewportProps) {
+export function Viewport({ socket, tab, loading, pointer, device }: ViewportProps) {
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const ime = useRef<HTMLTextAreaElement>(null);
@@ -124,11 +126,12 @@ export function Viewport({ socket, tab, loading, pointer }: ViewportProps) {
   };
 
   return (
-    <div ref={box} className="browser-viewport" role="group" aria-label={t('browser.viewport')}>
+    <div ref={box} className={`browser-viewport${device ? ' device' : ''}`} role="group" aria-label={t('browser.viewport')}>
       {loading && <div className="browser-progress" role="progressbar" aria-label={t('browser.reload')} />}
       <canvas
         ref={canvas}
         className="browser-canvas"
+        style={device ? { position: 'relative', inset: 'auto', width: device.w, height: device.h, margin: '0 auto' } : undefined}
         onMouseDown={(e) => onMouse('down', e)}
         onMouseUp={(e) => onMouse('up', e)}
         onMouseMove={onMove}

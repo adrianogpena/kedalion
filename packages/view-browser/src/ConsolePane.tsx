@@ -23,13 +23,24 @@ export interface BrowserLogs {
   clear(kind: LogKind): void;
 }
 
+const PRESERVE_KEY = 'kedalion.browser.preserve';
+
+function readPreserve(): Record<LogKind, boolean> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PRESERVE_KEY) ?? '{}') as Partial<Record<LogKind, unknown>>;
+    return { console: raw.console === true, network: raw.network === true };
+  } catch {
+    return { console: false, network: false };
+  }
+}
+
 const cap = <T,>(rows: T[]): T[] => (rows.length > MAX_ROWS ? rows.slice(rows.length - MAX_ROWS) : rows);
 
 /** Console and network rows of every tab, collected from the socket so counts stay right while the dock is closed. */
 export function useBrowserLogs(socket: BrowserSocket, tab: string | undefined, url: string | undefined): BrowserLogs {
   const [consoleRows, setConsoleRows] = useState<Record<string, ConsoleEntry[]>>({});
   const [networkRows, setNetworkRows] = useState<Record<string, NetworkEntry[]>>({});
-  const [preserve, setPreserveState] = useState<Record<LogKind, boolean>>({ console: false, network: false });
+  const [preserve, setPreserveState] = useState<Record<LogKind, boolean>>(readPreserve);
   const lastUrl = useRef(new Map<string, string>());
   const preserveRef = useRef(preserve);
   preserveRef.current = preserve;
@@ -73,7 +84,14 @@ export function useBrowserLogs(socket: BrowserSocket, tab: string | undefined, u
 
   const setPreserve = useCallback(
     (kind: LogKind, on: boolean) => {
-      setPreserveState((p) => ({ ...p, [kind]: on }));
+      const next = { ...preserveRef.current, [kind]: on };
+      preserveRef.current = next;
+      setPreserveState(next);
+      try {
+        localStorage.setItem(PRESERVE_KEY, JSON.stringify(next));
+      } catch {
+        // Not remembered.
+      }
       if (tab) void request('POST', '/api/browser/logs/preserve', {}, { id: tab, kind, on }).catch(() => {});
     },
     [tab],

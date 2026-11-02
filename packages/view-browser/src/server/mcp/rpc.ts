@@ -40,7 +40,7 @@ function capContent(result: ToolResult): ToolResult {
 }
 
 /** Handles one JSON-RPC message (already parsed, or the parse failure as `undefined`). */
-export async function handleRpc(msg: unknown, tools: readonly McpTool[], ctx: () => ToolContext): Promise<RpcReply> {
+export async function handleRpc(msg: unknown, tools: readonly McpTool[], ctx: () => ToolContext, instructions?: string): Promise<RpcReply> {
   if (msg === undefined) return failure(null, PARSE_ERROR, 'Parse error');
   if (!isObject(msg) || msg.jsonrpc !== '2.0') return failure(null, INVALID_REQUEST, 'Invalid request');
   const hasId = typeof msg.id === 'string' || typeof msg.id === 'number';
@@ -59,7 +59,7 @@ export async function handleRpc(msg: unknown, tools: readonly McpTool[], ctx: ()
     case 'initialize': {
       const asked = params?.protocolVersion;
       const protocolVersion = typeof asked === 'string' && VERSIONS.includes(asked) ? asked : VERSIONS[0]!;
-      return success(id, { protocolVersion, capabilities: { tools: {} }, serverInfo: { name: SERVER_NAME, version: '1.0.0' } });
+      return success(id, { protocolVersion, capabilities: { tools: {} }, serverInfo: { name: SERVER_NAME, version: '1.0.0' }, ...(instructions ? { instructions } : {}) });
     }
     case 'ping':
       return success(id, {});
@@ -89,6 +89,8 @@ export interface McpRouteOptions {
   secret: string;
   tools: readonly McpTool[];
   context: () => ToolContext;
+  /** Shown to the client in the `initialize` reply. */
+  instructions?: string;
   /** False while the setting `browser.agentTools` is off. */
   enabled?: () => boolean | Promise<boolean>;
 }
@@ -115,7 +117,7 @@ export function mcpRoutes(opts: McpRouteOptions): Routes {
       } catch {
         msg = undefined;
       }
-      const reply = await handleRpc(msg, opts.tools, opts.context);
+      const reply = await handleRpc(msg, opts.tools, opts.context, opts.instructions);
       return jsonResponse(reply.status, reply.body);
     },
     [`GET ${MCP_PATH}`]: ({ req }) => (bearerOk(req, opts.secret) ? jsonResponse(405, { error: 'Method not allowed' }, { allow: 'POST' }) : jsonResponse(401, { error: 'Unauthorized' })),

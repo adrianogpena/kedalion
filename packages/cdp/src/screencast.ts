@@ -4,6 +4,7 @@ export interface ScreencastSize {
   width: number;
   height: number;
   dpr: number;
+  mobile?: boolean;
 }
 
 export interface FrameMeta {
@@ -27,7 +28,7 @@ export function startScreencast(session: CdpSession, size: ScreencastSize, onFra
     void session.send('Page.screencastFrameAck', { sessionId: p.sessionId }).catch(() => undefined);
   });
   void session
-    .send('Emulation.setDeviceMetricsOverride', { width: size.width, height: size.height, deviceScaleFactor: size.dpr, mobile: false })
+    .send('Emulation.setDeviceMetricsOverride', { width: size.width, height: size.height, deviceScaleFactor: size.dpr, mobile: size.mobile ?? false })
     .catch(() => undefined);
   void session
     .send('Page.startScreencast', {

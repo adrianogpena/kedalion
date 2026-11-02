@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { NetworkEntry } from '@kedalion/cdp';
-import { Button, IconButton } from '@kedalion/ui';
+import { Button, IconButton, useToast } from '@kedalion/ui';
+import { browserApi } from './client';
 import type { BrowserLogs } from './ConsolePane';
 import { t } from './i18n';
 import { NetworkDetail } from './NetworkDetail';
@@ -50,6 +51,7 @@ export function NetworkPane({ tab, logs }: NetworkPaneProps) {
   const [type, setType] = useState<TypeFilter>('all');
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<number | null>(null);
+  const toast = useToast();
 
   const rows = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -91,6 +93,18 @@ export function NetworkPane({ tab, logs }: NetworkPaneProps) {
           logs.clear('network');
           setSelected(null);
         }} />
+        <IconButton
+          icon="download"
+          size="sm"
+          label={t('browser.network.exportHar')}
+          disabled={logs.networkEntries.length === 0}
+          onClick={() =>
+            void browserApi
+              .exportHar(tab)
+              .then((r) => toast({ message: `${t('browser.network.harSaved')}: ${r.path}`, timeout: 6000 }))
+              .catch(() => {})
+          }
+        />
         <input className="browser-filter" type="text" spellCheck={false} aria-label={t('browser.logs.filter')} placeholder={t('browser.logs.filter')} value={filter} onChange={(e) => setFilter(e.target.value)} />
         <div className="browser-chips" role="group" aria-label={t('browser.network.types')}>
           {FILTERS.map((f) => (

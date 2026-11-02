@@ -201,6 +201,34 @@ export const pageTools: McpTool[] = [
     },
   },
   {
+    name: 'browser_cookies',
+    description: 'List the cookies of the tab page (scope page, default) or of the whole browser (scope all). Values are shown; clear them with browser_cookies_clear.',
+    inputSchema: schema({ scope: { type: 'string', enum: ['page', 'all'] }, name: { type: 'string', description: 'Only cookies whose name contains this text.' } }),
+    async run(a, ctx) {
+      const tab = await resolveTab(ctx, a);
+      const name = str(a, 'name')?.toLowerCase();
+      const list = (await ctx.service.cookies(tab, str(a, 'scope') === 'all' ? 'all' : 'page')).filter((c) => !name || c.name.toLowerCase().includes(name));
+      if (!list.length) return textResult('No cookies.');
+      const lines = list.map((c) => `${c.domain}${c.path}  ${c.name}=${c.value}  ${c.expires === undefined ? 'session' : `expires ${new Date(c.expires * 1000).toISOString()}`}${c.httpOnly ? ' HttpOnly' : ''}${c.secure ? ' Secure' : ''}${c.sameSite ? ` SameSite=${c.sameSite}` : ''}`);
+      return textResult(lines.join('\n'), 'Pass name to narrow the list.');
+    },
+  },
+  {
+    name: 'browser_cookies_clear',
+    description: 'Delete cookies: one by name (and optional domain), all of the tab page (scope page, default) or all of the browser (scope all).',
+    inputSchema: schema({ scope: { type: 'string', enum: ['page', 'all'] }, name: { type: 'string', description: 'Delete only the cookies with this exact name.' }, domain: { type: 'string', description: 'With name: only this domain.' } }),
+    async run(a, ctx) {
+      const tab = await resolveTab(ctx, a);
+      const scope = str(a, 'scope') === 'all' ? 'all' : 'page';
+      const name = str(a, 'name');
+      if (!name) return textResult(`Cleared ${await ctx.service.clearCookies(tab, scope)} cookies.`);
+      const domain = str(a, 'domain');
+      const hit = (await ctx.service.cookies(tab, scope)).filter((c) => c.name === name && (!domain || c.domain === domain));
+      for (const c of hit) await ctx.service.deleteCookie(tab, c);
+      return textResult(`Deleted ${hit.length} cookie${hit.length === 1 ? '' : 's'} named ${name}.`);
+    },
+  },
+  {
     name: 'browser_eval',
     description: 'Evaluate a JavaScript expression in the page and return the result as text.',
     inputSchema: schema({

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { NetworkEntry } from '@kedalion/cdp';
-import { IconButton, request, Tabs } from '@kedalion/ui';
+import { copyNotify, IconButton, request, Tabs } from '@kedalion/ui';
+import { toCurl } from './curl';
 import { t } from './i18n';
 
 export interface NetworkDetailData {
@@ -77,6 +78,13 @@ export function NetworkDetail({ tab, entry, onClose }: NetworkDetailProps) {
     <div className="net-detail">
       <div className="net-detail-head">
         <IconButton icon="close" size="xs" label={t('browser.network.closeDetail')} onClick={onClose} />
+        <IconButton
+          icon="curl"
+          size="xs"
+          label={t('browser.network.copyCurl')}
+          disabled={!detail}
+          onClick={() => detail && void copyNotify(toCurl({ method: entry.method, url: entry.url, headers: detail.requestHeaders, ...(detail.postData !== undefined ? { body: detail.postData } : {}) }))}
+        />
         <Tabs idPrefix="browser-net" active={active} onChange={(id) => setActive(id as DetailTab)} tabs={TABS.map((id) => ({ id, label: t(`browser.network.tab.${id}` as const) }))} />
       </div>
       <div className="net-detail-body" role="tabpanel" id={`browser-net-panel-${active}`} aria-labelledby={`browser-net-tab-${active}`}>

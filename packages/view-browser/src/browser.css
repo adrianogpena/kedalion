@@ -37,6 +37,22 @@
 .net-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs-plus); }
 .net-table th { position: sticky; top: 0; text-align: left; font-weight: 600; padding: 2px var(--space-8); background: var(--bg-1, var(--bg-2, transparent)); border-bottom: 1px solid var(--border-soft); }
 .net-table td { padding: 2px var(--space-8); white-space: nowrap; }
+.cookie-value { max-width: 260px; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); }
+.cookie-detail { width: 35%; min-width: 220px; display: flex; flex-direction: column; border-left: 1px solid var(--border-soft); font-size: var(--fs-xs-plus); }
+.cookie-detail-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--space-8); border-bottom: 1px solid var(--border-soft); }
+.cookie-detail-actions { display: inline-flex; gap: var(--space-4); }
+.cookie-form { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-8); overflow: auto; }
+.cookie-form label, .device-form label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-xs-plus); color: var(--text-3); }
+.cookie-form label.cookie-check, .device-form label.cookie-check { flex-direction: row; align-items: center; gap: var(--space-4); }
+.cookie-form input[type='text'], .cookie-form textarea, .cookie-form select, .device-form input[type='text'] { font-family: var(--font-mono); font-size: var(--fs-xs-plus); }
+.device-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-8); padding: var(--space-8); overflow: auto; }
+.device-form input[type='text'] { width: 90px; }
+.device-form .device-wide { flex: 1 1 100%; }
+.device-form .device-wide input { width: 100%; }
+.rule-status { width: 60px; }
+.rule-type { width: 140px; }
+.browser-viewport.device { overflow: auto; }
+.cookie-detail-value { flex: 1; margin: 0; padding: var(--space-8); overflow: auto; white-space: pre-wrap; word-break: break-all; font-family: var(--font-mono); }
 .net-name { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
 .net-row { cursor: default; }
 .net-row:hover, .net-row:focus-visible { background: var(--bg-hover, rgba(127, 127, 127, 0.12)); outline: 0; }

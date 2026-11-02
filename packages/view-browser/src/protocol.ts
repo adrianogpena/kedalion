@@ -1,4 +1,4 @@
-import type { ConsoleEntry, NetworkEntry, TabInfo, UiInputEvent } from '@kedalion/cdp';
+import type { ConsoleEntry, Emulation, NetworkEntry, TabInfo, UiInputEvent } from '@kedalion/cdp';
 
 export const BROWSER_SOCKET_PATH = '/api/browser/socket';
 
@@ -18,6 +18,7 @@ export type ServerMsg =
   | { type: 'fileChooser'; tab: string; id: string; multiple: boolean }
   | { type: 'select'; tab: string; id: string; options: SelectOptionInfo[] }
   | { type: 'download'; name: string; path: string; done: boolean }
+  | { type: 'emulation'; tab: string; emulation: Emulation }
   | { type: 'error'; message: string };
 
 export type ClientMsg =

@@ -2,9 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { defineServerView, type ServerViewContext, socketTickets } from '@kedalion/server-core';
 import { createMcpConfigFile } from './server/mcp/config.ts';
 import { createDebugState } from './server/mcp/debug-state.ts';
+import { MCP_INSTRUCTIONS } from './server/mcp/instructions.ts';
 import { mcpRoutes } from './server/mcp/rpc.ts';
 import { debugTools } from './server/mcp/tools-debug.ts';
 import { pageTools } from './server/mcp/tools-page.ts';
+import { stateTools } from './server/mcp/tools-state.ts';
 import { browserRoutes } from './server/routes.ts';
 import { type BrowserService, createBrowserService } from './server/service.ts';
 import { BROWSER_DEFAULTS, type BrowserServerSettings, type BrowserSettings, BROWSER_SPEC, browserSettingsOf, validBrowser } from './server/settings.ts';
@@ -35,7 +37,7 @@ export function browserServerView(opts: BrowserServerViewOptions) {
   const secret = randomBytes(24).toString('hex');
   const mcpFile = createMcpConfigFile({ dataDir: opts.dataDir, secret, origin: opts.origin });
   const debug = createDebugState();
-  const tools = [...pageTools, ...debugTools];
+  const tools = [...pageTools, ...stateTools, ...debugTools];
   const refresh = async () => {
     if (load) current = browserSettingsOf(await load().catch(() => ({})));
     if (current.agentTools) mcpFile.write();
@@ -61,6 +63,7 @@ export function browserServerView(opts: BrowserServerViewOptions) {
       return mcpRoutes({
         secret,
         tools,
+        instructions: MCP_INSTRUCTIONS,
         context: () => ({ service, ready, dataDir: opts.dataDir, debug }),
         enabled: async () => {
           await refresh();

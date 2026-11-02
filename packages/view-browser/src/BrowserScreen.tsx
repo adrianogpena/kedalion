@@ -1,17 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import type { TabInfo } from '@kedalion/cdp';
+import type { Emulation, TabInfo } from '@kedalion/cdp';
 import { Button, ContextMenu, copyNotify, IconButton, Tabs, ToolbarSep, useCommand, useViewRequest } from '@kedalion/ui';
 import { browserApi } from './client';
 import { BROWSER_ACTIONS, type BrowserCommandAction, browserCommandDef } from './commands';
 import { ConsolePane, useBrowserLogs } from './ConsolePane';
+import { CookiesPane } from './CookiesPane';
+import { DevicePane } from './DevicePane';
 import { copyMcpConfig, DevToolsPane, type DevToolsPosition, openDevTools, Resizer, useStoredSize } from './DevToolsPane';
 import { NetworkPane } from './NetworkPane';
+import { RulesPane } from './RulesPane';
+import { StoragePane } from './StoragePane';
 import { t } from './i18n';
 import { normalizeAddress } from './address';
 import { BrowserOverlays } from './overlays';
 import { Viewport } from './Viewport';
 import { useBrowserSocket } from './web/useBrowserSocket';
 import './browser.css';
+
+type DockTab = 'console' | 'network' | 'cookies' | 'storage' | 'rules' | 'device';
+const DOCK_TABS: DockTab[] = ['console', 'network', 'cookies', 'storage', 'rules', 'device'];
 
 /** The Browser view: tab strip, toolbar and the page of the active tab, driven through the server's socket. */
 export function BrowserScreen({ home }: { home: string }) {
@@ -26,12 +33,32 @@ export function BrowserScreen({ home }: { home: string }) {
   const { subscribe, send, status } = socket;
   const logs = useBrowserLogs(socket, tab?.id, tab?.url);
   const [dockOpen, setDockOpen] = useState(false);
-  const [dockTab, setDockTab] = useState<'console' | 'network'>('console');
+  const [dockTab, setDockTab] = useState<DockTab>('console');
   const [dockHeight, setDockHeight] = useStoredSize('kedalion.browser.dockHeight', 240);
   const [devtools, setDevtools] = useState<string | null>(null);
   const [devtoolsPosition, setDevtoolsPosition] = useState<DevToolsPosition>('right');
 
+  const [emulation, setEmulation] = useState<Emulation>({});
+
   useEffect(() => setDevtools(null), [active]);
+
+  useEffect(() => {
+    setEmulation({});
+    if (!active) return;
+    let stale = false;
+    void browserApi.emulation(active).then((r) => !stale && setEmulation(r.emulation)).catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [active]);
+
+  useEffect(
+    () =>
+      subscribe((msg) => {
+        if (msg.type === 'emulation' && msg.tab === active) setEmulation(msg.emulation);
+      }),
+    [subscribe, active],
+  );
 
   useEffect(
     () =>
@@ -179,24 +206,32 @@ export function BrowserScreen({ home }: { home: string }) {
               {t('browser.empty')} <Button size="sm" icon="plus" onClick={() => void open()}>{t('browser.tab.new')}</Button>
             </div>
           )}
-          {tab && <Viewport socket={socket} tab={tab.id} loading={tab.loading} pointer={pointer} />}
+          {tab && <Viewport socket={socket} tab={tab.id} loading={tab.loading} pointer={pointer} {...(emulation.width && emulation.height ? { device: { w: emulation.width, h: emulation.height } } : {})} />}
           {dockOpen && tab && (
             <div className="browser-dock" style={{ height: dockHeight }}>
               <Resizer axis="y" size={dockHeight} onSize={setDockHeight} min={100} />
               <Tabs
                 idPrefix="browser-dock"
                 active={dockTab}
-                onChange={(id) => setDockTab(id as 'console' | 'network')}
-                tabs={[
-                  { id: 'console', label: logs.errors ? `${t('browser.console')} (${logs.errors})` : t('browser.console') },
-                  { id: 'network', label: t('browser.network') },
-                ]}
+                onChange={(id) => setDockTab(id as DockTab)}
+                tabs={DOCK_TABS.map((id) => ({
+                  id,
+                  label: id === 'console' && logs.errors ? `${t('browser.console')} (${logs.errors})` : t(`browser.dock.${id}` as const),
+                }))}
               />
               <div className="browser-dock-body" role="tabpanel" id={`browser-dock-panel-${dockTab}`} aria-labelledby={`browser-dock-tab-${dockTab}`}>
                 {dockTab === 'console' ? (
                   <ConsolePane key={tab.id} tab={tab.id} logs={logs} onSource={() => void toggleDevtools(true, 'sources')} />
-                ) : (
+                ) : dockTab === 'network' ? (
                   <NetworkPane key={tab.id} tab={tab.id} logs={logs} />
+                ) : dockTab === 'cookies' ? (
+                  <CookiesPane key={tab.id} tab={tab.id} url={tab.url} />
+                ) : dockTab === 'storage' ? (
+                  <StoragePane key={tab.id} tab={tab.id} url={tab.url} />
+                ) : dockTab === 'rules' ? (
+                  <RulesPane />
+                ) : (
+                  <DevicePane key={tab.id} tab={tab.id} emulation={emulation} />
                 )}
               </div>
             </div>

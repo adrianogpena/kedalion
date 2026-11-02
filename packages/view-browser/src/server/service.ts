@@ -5,22 +5,40 @@ import { join } from 'node:path';
 import {
   answerDialog,
   applyCertPolicy,
+  applyEmulation,
   type BrowserTabs,
   type CdpClient,
   type CdpSession,
   chooseOption,
+  clearSiteData,
+  clearStorage,
   connectCdp,
   type ConsoleLog,
+  type CookieInput,
   createConsoleLog,
+  createInterceptor,
   createNetworkLog,
   createTabs,
+  deleteIndexedDb,
+  type Emulation,
+  getStorageItems,
+  type Interceptor,
+  type InterceptRule,
   type LaunchedBrowser,
   launchBrowser,
+  listIndexedDb,
   mapInput,
+  type NetworkDetail,
   type NetworkLog,
+  originOf,
+  removeStorageItem,
   selectAt,
+  setCookie,
   setFiles,
+  setStorageItem,
   startScreencast,
+  type StorageItem,
+  type StorageKind,
   type TabInfo,
   type UiInputEvent,
   watchDownloads,
@@ -29,6 +47,8 @@ import {
 import { writeFileAtomic } from '@kedalion/platform';
 import { invalid } from '@kedalion/server-core';
 import type { ServerMsg } from '../protocol.ts';
+import { isEmulating } from '../devices.ts';
+import { buildHar } from './har.ts';
 import type { BrowserSettings } from './settings.ts';
 
 export interface BrowserServiceOptions {
@@ -43,6 +63,40 @@ export interface TabLogs {
   console: ConsoleLog;
   network: NetworkLog;
 }
+
+export type CookieScope = 'page' | 'all';
+
+export interface StorageSnapshot {
+  origin: string;
+  local: StorageItem[];
+  session: StorageItem[];
+  indexedDb: string[];
+}
+
+export interface BrowserCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  /** Unix seconds; undefined for a session cookie. */
+  expires?: number;
+  size: number;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite?: string;
+}
+
+const toCookie = (c: any): BrowserCookie => ({
+  name: String(c.name),
+  value: String(c.value ?? ''),
+  domain: String(c.domain ?? ''),
+  path: String(c.path ?? '/'),
+  ...(typeof c.expires === 'number' && c.expires > 0 ? { expires: c.expires } : {}),
+  size: Number(c.size ?? 0),
+  httpOnly: !!c.httpOnly,
+  secure: !!c.secure,
+  ...(c.sameSite ? { sameSite: String(c.sameSite) } : {}),
+});
 
 export interface EvalResult {
   ok: boolean;
@@ -66,6 +120,29 @@ export interface BrowserService {
   evaluate(id: string, expression: string): Promise<EvalResult>;
   /** URL of the DevTools frontend of a tab (frameable). */
   devtoolsUrl(id: string): string;
+  /** Cookies of the tab's page (`page`) or of the whole browser profile (`all`). */
+  cookies(id: string, scope: CookieScope): Promise<BrowserCookie[]>;
+  /** Creates or overwrites a cookie in the tab's browser profile. */
+  setCookie(id: string, cookie: CookieInput): Promise<void>;
+  /** localStorage, sessionStorage and IndexedDB names of the tab's origin. */
+  storage(id: string): Promise<StorageSnapshot>;
+  setStorageItem(id: string, kind: StorageKind, key: string, value: string): Promise<void>;
+  /** Removes one item (`key`), or the IndexedDB database of that name. */
+  removeStorageItem(id: string, kind: StorageKind | 'indexeddb', key: string): Promise<void>;
+  clearStorage(id: string, kind: StorageKind | 'indexeddb'): Promise<void>;
+  /** Cookies, storage, IndexedDB, caches and service workers of the tab's origin (and the HTTP cache when `cache`). */
+  clearSiteData(id: string, cache: boolean): Promise<void>;
+  /** The request rules, applied to every tab. */
+  rules(): InterceptRule[];
+  setRules(rules: InterceptRule[]): void;
+  emulation(id: string): Emulation;
+  setEmulation(id: string, e: Emulation): Promise<void>;
+  /** Writes the tab's network log as a HAR file into Downloads; returns the path and the request count. */
+  exportHar(id: string): Promise<{ path: string; count: number }>;
+  /** Deletes one cookie. */
+  deleteCookie(id: string, cookie: { name: string; domain: string; path: string }): Promise<void>;
+  /** Deletes the cookies of the scope; returns how many were removed. */
+  clearCookies(id: string, scope: CookieScope): Promise<number>;
   setViewport(v: { w: number; h: number; dpr: number }): void;
   /** Frames are sent only while a viewer is connected. */
   setViewers(count: number): void;
@@ -112,7 +189,9 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
   let starting: Promise<void> | undefined;
   let stopping = false;
   let offs: Array<() => void> = [];
-  const perTab = new Map<string, TabLogs & { offPage: () => void }>();
+  const perTab = new Map<string, TabLogs & { offPage: () => void; interceptor: Interceptor }>();
+  const emulations = new Map<string, Emulation>();
+  let rules: InterceptRule[] = [];
   const choosers = new Map<string, { tab: string; backendNodeId: number }>();
   const selects = new Map<string, { tab: string; nodeRef: string }>();
   let nextId = 1;
@@ -126,7 +205,14 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     return tabs;
   };
 
-  const snapshotMsg = (): ServerMsg => ({ type: 'tabs', tabs: tabs?.list() ?? [], ...(tabs?.active() ? { active: tabs.active()! } : {}) });
+  const storageTarget = (id: string): { origin: string; session: CdpSession } => {
+    const t = requireTabs();
+    const origin = originOf(t.list().find((x) => x.id === id)?.url ?? '');
+    if (!origin) throw invalid('badRequest', 'This page has no web storage.');
+    return { origin, session: t.session(id) };
+  };
+
+  const snapshotMsg =(): ServerMsg => ({ type: 'tabs', tabs: tabs?.list() ?? [], ...(tabs?.active() ? { active: tabs.active()! } : {}) });
 
   async function saveNow(): Promise<void> {
     if (!tabs) return;
@@ -156,7 +242,9 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     const active = tabs?.active();
     if (!tabs || !active || !viewport || viewers === 0) return;
     const tab = active;
-    stopFrames = startScreencast(tabs.session(tab), { width: viewport.w, height: viewport.h, dpr: viewport.dpr }, (data, meta) =>
+    const emu = emulations.get(tab);
+    const size = emu?.width && emu.height ? { width: emu.width, height: emu.height, dpr: emu.dpr ?? 1, mobile: !!emu.mobile } : { width: viewport.w, height: viewport.h, dpr: viewport.dpr };
+    stopFrames = startScreencast(tabs.session(tab), size, (data, meta) =>
       emit({ type: 'frame', tab, data, w: meta.deviceWidth, h: meta.deviceHeight }),
     );
   }
@@ -174,7 +262,7 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
         emit({ type: 'fileChooser', tab: id, id: chooserId, multiple: f.multiple });
       },
     });
-    perTab.set(id, { console: consoleLog, network, offPage });
+    perTab.set(id, { console: consoleLog, network, offPage, interceptor: createInterceptor(session, rules) });
   }
 
   function dropTab(id: string): void {
@@ -183,7 +271,9 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     t.console.dispose();
     t.network.dispose();
     t.offPage();
+    t.interceptor.dispose();
     perTab.delete(id);
+    emulations.delete(id);
     for (const [k, v] of choosers) if (v.tab === id) choosers.delete(k);
     for (const [k, v] of selects) if (v.tab === id) selects.delete(k);
   }
@@ -315,6 +405,95 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
       if (!launched) throw invalid('browserNotRunning', 'The browser is not running');
       const host = `127.0.0.1:${launched.port}`;
       return `http://${host}/devtools/inspector.html?ws=${host}/devtools/page/${encodeURIComponent(id)}`;
+    },
+    async cookies(id, scope) {
+      const t = requireTabs();
+      if (scope === 'all') {
+        if (!client) throw invalid('browserNotRunning', 'The browser is not running');
+        const r = await client.send('Storage.getCookies');
+        return ((r.cookies ?? []) as unknown[]).map(toCookie);
+      }
+      const url = t.list().find((x) => x.id === id)?.url;
+      if (!url || !/^https?:/i.test(url)) return [];
+      const r = await t.session(id).send('Network.getCookies', { urls: [url] });
+      return ((r.cookies ?? []) as unknown[]).map(toCookie);
+    },
+    async deleteCookie(id, cookie) {
+      await requireTabs().session(id).send('Network.deleteCookies', { name: cookie.name, domain: cookie.domain, path: cookie.path });
+    },
+    async clearCookies(id, scope) {
+      const list = await service.cookies(id, scope);
+      if (scope === 'all') {
+        await client!.send('Storage.clearCookies');
+        return list.length;
+      }
+      const session = requireTabs().session(id);
+      for (const c of list) await session.send('Network.deleteCookies', { name: c.name, domain: c.domain, path: c.path });
+      return list.length;
+    },
+    async setCookie(id, cookie) {
+      const t = requireTabs();
+      await setCookie(t.session(id), cookie as CookieInput, t.list().find((x) => x.id === id)?.url ?? '');
+    },
+    async storage(id) {
+      const { origin, session } = storageTarget(id);
+      const [local, sessionItems, indexedDb] = await Promise.all([
+        getStorageItems(session, origin, 'local').catch(() => [] as StorageItem[]),
+        getStorageItems(session, origin, 'session').catch(() => [] as StorageItem[]),
+        listIndexedDb(session, origin).catch(() => [] as string[]),
+      ]);
+      return { origin, local, session: sessionItems, indexedDb };
+    },
+    async setStorageItem(id, kind, key, value) {
+      const { origin, session } = storageTarget(id);
+      await setStorageItem(session, origin, kind, key, value);
+    },
+    async removeStorageItem(id, kind, key) {
+      const { origin, session } = storageTarget(id);
+      if (kind === 'indexeddb') await deleteIndexedDb(session, origin, key);
+      else await removeStorageItem(session, origin, kind, key);
+    },
+    async clearStorage(id, kind) {
+      const { origin, session } = storageTarget(id);
+      if (kind === 'indexeddb') for (const name of await listIndexedDb(session, origin)) await deleteIndexedDb(session, origin, name);
+      else await clearStorage(session, origin, kind);
+    },
+    async clearSiteData(id, cache) {
+      const { origin, session } = storageTarget(id);
+      await service.clearCookies(id, 'page');
+      await clearSiteData(session, origin, { cache });
+    },
+    rules: () => rules,
+    setRules(next) {
+      rules = next;
+      for (const t of perTab.values()) t.interceptor.setRules(rules);
+    },
+    emulation: (id) => emulations.get(id) ?? {},
+    async setEmulation(id, e) {
+      const session = requireTabs().session(id);
+      if (isEmulating(e)) emulations.set(id, e);
+      else emulations.delete(id);
+      await applyEmulation(session, e);
+      emit({ type: 'emulation', tab: id, emulation: e });
+      if (tabs?.active() === id) restartFrames();
+    },
+    async exportHar(id) {
+      const logs = perTab.get(id);
+      if (!logs) throw invalid('notFound', 'Unknown tab.');
+      const entries = logs.network.entries();
+      const details = new Map<number, NetworkDetail | undefined>();
+      for (const e of entries) details.set(e.id, await logs.network.detail(e.id).catch(() => undefined));
+      const host = (() => {
+        try {
+          return new URL(requireTabs().list().find((x) => x.id === id)?.url ?? '').hostname || 'page';
+        } catch {
+          return 'page';
+        }
+      })();
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const path = await uniquePath(downloadsDir, `kedalion-${host}-${stamp}.har`, (p) => Bun.file(p).exists());
+      await writeFileAtomic(path, JSON.stringify(buildHar(entries, details), null, 2));
+      return { path, count: entries.length };
     },
     setViewport(v) {
       viewport = v;
