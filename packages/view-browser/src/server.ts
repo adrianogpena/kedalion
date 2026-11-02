@@ -1,4 +1,10 @@
+import { randomBytes } from 'node:crypto';
 import { defineServerView, type ServerViewContext, socketTickets } from '@kedalion/server-core';
+import { createMcpConfigFile } from './server/mcp/config.ts';
+import { createDebugState } from './server/mcp/debug-state.ts';
+import { mcpRoutes } from './server/mcp/rpc.ts';
+import { debugTools } from './server/mcp/tools-debug.ts';
+import { pageTools } from './server/mcp/tools-page.ts';
 import { browserRoutes } from './server/routes.ts';
 import { type BrowserService, createBrowserService } from './server/service.ts';
 import { BROWSER_DEFAULTS, type BrowserServerSettings, type BrowserSettings, BROWSER_SPEC, browserSettingsOf, validBrowser } from './server/settings.ts';
@@ -26,11 +32,20 @@ export function browserServerView(opts: BrowserServerViewOptions) {
   let load: (() => Promise<BrowserServerSettings>) | undefined;
   const service: BrowserService = createBrowserService({ ...opts, settings: () => current });
   const tickets = socketTickets<true>();
+  const secret = randomBytes(24).toString('hex');
+  const mcpFile = createMcpConfigFile({ dataDir: opts.dataDir, secret, origin: opts.origin });
+  const debug = createDebugState();
+  const tools = [...pageTools, ...debugTools];
+  const refresh = async () => {
+    if (load) current = browserSettingsOf(await load().catch(() => ({})));
+    if (current.agentTools) mcpFile.write();
+  };
   const bind = (ctx: ServerViewContext<BrowserServerSettings>) => {
     load = () => ctx.settings.load();
+    void refresh();
   };
   const ready = async () => {
-    if (load) current = browserSettingsOf(await load().catch(() => ({})));
+    await refresh();
     await service.ensure();
   };
 
@@ -39,7 +54,19 @@ export function browserServerView(opts: BrowserServerViewOptions) {
     icon: 'globe',
     routes: (ctx) => {
       bind(ctx);
-      return browserRoutes({ service, ready, issueTicket: () => tickets.issue(true) });
+      return browserRoutes({ service, ready, issueTicket: () => tickets.issue(true), mcpConfig: () => mcpFile.config() });
+    },
+    unauthenticated: (ctx) => {
+      bind(ctx);
+      return mcpRoutes({
+        secret,
+        tools,
+        context: () => ({ service, ready, dataDir: opts.dataDir, debug }),
+        enabled: async () => {
+          await refresh();
+          return current.agentTools;
+        },
+      });
     },
     sockets: (ctx) => {
       bind(ctx);
@@ -48,5 +75,7 @@ export function browserServerView(opts: BrowserServerViewOptions) {
     onQuit: () => service.stop(),
     settings: { validate: { browser: validBrowser }, spec: BROWSER_SPEC },
   });
-  return Object.assign(view, { service, ready });
+  /** Path of `<dataDir>/mcp.json` for `agentsLauncher({ mcpConfig })`; undefined while the setting is off or the file is not written yet. */
+  const mcpConfigFile = (): string | undefined => (current.agentTools ? mcpFile.write() : undefined);
+  return Object.assign(view, { service, ready, mcpConfigFile });
 }

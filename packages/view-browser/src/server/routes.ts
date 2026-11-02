@@ -16,9 +16,11 @@ export interface BrowserRouteOptions {
   /** Loads the settings and starts the browser. */
   ready(): Promise<void>;
   issueTicket(): string;
+  /** The `--mcp-config` content, or undefined while the app origin is not known. */
+  mcpConfig(): unknown;
 }
 
-export function browserRoutes({ service, ready, issueTicket }: BrowserRouteOptions): Routes {
+export function browserRoutes({ service, ready, issueTicket, mcpConfig }: BrowserRouteOptions): Routes {
   const tabList = () => ({ tabs: service.tabs().list(), active: service.activeTab() ?? null });
   const logsOf = (tab: string) => {
     const l = service.logs(tab);
@@ -120,5 +122,10 @@ export function browserRoutes({ service, ready, issueTicket }: BrowserRouteOptio
       return { ok: true };
     },
     'POST /api/browser/socket-ticket': () => ({ ticket: issueTicket() }),
+    'GET /api/browser/mcp-config': () => {
+      const config = mcpConfig();
+      if (!config) throw invalid('notFound', 'The app address is not known yet.');
+      return config;
+    },
   };
 }
