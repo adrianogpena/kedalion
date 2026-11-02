@@ -5,6 +5,23 @@
 .browser-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: row; }
 .browser-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .browser-status { padding: var(--space-8) var(--space-12); font-size: var(--fs-xs-plus); color: var(--text-3); }
+.browser-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.browser-favorites { position: absolute; inset: 0; z-index: 2; overflow: auto; padding: var(--space-16, 16px) var(--space-12); display: flex; flex-direction: column; gap: var(--space-8); align-items: center; background: var(--bg-1, var(--bg-2)); }
+.browser-main > .browser-favorites { position: static; flex: 1; }
+.browser-favorites > * { width: min(100%, 560px); }
+.browser-favorites-title { margin: 0; font-size: var(--fs-md, 1rem); color: var(--text-2); }
+.browser-favorites-empty { margin: 0; font-size: var(--fs-xs-plus); color: var(--text-3); }
+.browser-favorites-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-4, 4px); }
+.browser-favorite { display: flex; align-items: center; gap: var(--space-4, 4px); }
+.browser-favorites-form { display: flex; align-items: center; gap: var(--space-4, 4px); }
+.browser-favorites-form .browser-url { flex: 1; min-width: 0; }
+.browser-favorite { cursor: grab; border-top: 2px solid transparent; }
+.browser-favorite.dragging { opacity: 0.4; }
+.browser-favorite.over { border-top-color: var(--accent); }
+.browser-favorite-link { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: var(--space-4, 4px) var(--space-8); border: 1px solid var(--border-soft); border-radius: var(--radius-sm, 4px); background: transparent; color: var(--text-1); text-align: left; cursor: pointer; }
+.browser-favorite-link:hover { background: var(--bg-2); }
+.browser-favorite-host { font-size: var(--fs-sm, 0.85rem); }
+.browser-favorite-url { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs-plus); color: var(--text-3); }
 .browser-viewport { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--bg-2, transparent); }
 .browser-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: 0; cursor: default; }
 .browser-ime { position: absolute; left: 0; top: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; resize: none; overflow: hidden; pointer-events: none; }

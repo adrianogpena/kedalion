@@ -16,6 +16,7 @@ const RAW_BUTTONS: Record<string, number> = {
   'packages/ui/src/design.tsx': 3,
   'app/web/src/screens/SettingsModal.tsx': 10,
   'packages/editor/src/MarkdownToc.tsx': 2,
+  'packages/view-browser/src/Favorites.tsx': 1,
   'packages/view-grid/src/dashboard/DashboardScreen.tsx': 1,
   'packages/view-grid/src/FolderField.tsx': 2,
   'packages/view-grid/src/panels/tickets/TicketOverview.tsx': 3,

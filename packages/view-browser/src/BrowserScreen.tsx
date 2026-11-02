@@ -7,6 +7,7 @@ import { ConsolePane, useBrowserLogs } from './ConsolePane';
 import { CookiesPane } from './CookiesPane';
 import { DevicePane } from './DevicePane';
 import { copyMcpConfig, DevToolsPane, type DevToolsPosition, openDevTools, Resizer, useStoredSize } from './DevToolsPane';
+import { Favorites, isEmptyTabUrl } from './Favorites';
 import { NetworkPane } from './NetworkPane';
 import { RulesPane } from './RulesPane';
 import { StoragePane } from './StoragePane';
@@ -206,7 +207,13 @@ export function BrowserScreen({ home }: { home: string }) {
               {t('browser.empty')} <Button size="sm" icon="plus" onClick={() => void open()}>{t('browser.tab.new')}</Button>
             </div>
           )}
-          {tab && <Viewport socket={socket} tab={tab.id} loading={tab.loading} pointer={pointer} {...(emulation.width && emulation.height ? { device: { w: emulation.width, h: emulation.height } } : {})} />}
+          {status === 'open' && !tab && <Favorites onOpen={(url) => void open(url)} />}
+          {tab && (
+            <div className="browser-stage">
+              <Viewport socket={socket} tab={tab.id} loading={tab.loading} pointer={pointer} {...(emulation.width && emulation.height ? { device: { w: emulation.width, h: emulation.height } } : {})} />
+              {status === 'open' && isEmptyTabUrl(tab.url) && !tab.loading && <Favorites onOpen={(url) => go({ url })} />}
+            </div>
+          )}
           {dockOpen && tab && (
             <div className="browser-dock" style={{ height: dockHeight }}>
               <Resizer axis="y" size={dockHeight} onSize={setDockHeight} min={100} />
