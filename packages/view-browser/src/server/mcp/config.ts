@@ -25,7 +25,7 @@ export function createMcpConfigFile(opts: { dataDir: string; secret: string; ori
   let written: string | undefined;
   const config = () => {
     const origin = opts.origin();
-    return origin ? buildMcpConfig(origin, opts.secret) : undefined;
+    return origin && /^https?:\/\/[^/]+$/.test(origin) ? buildMcpConfig(origin, opts.secret) : undefined;
   };
   return {
     config,

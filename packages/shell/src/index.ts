@@ -36,6 +36,8 @@ export interface StartContext {
    * `urlProtocol: true`.
    */
   link(path: string): string;
+  /** The local HTTP origin (`http://127.0.0.1:<port>`), or undefined until the server listens. */
+  origin(): string | undefined;
   /** Opens a window (or browser tab) like a new launch would, on `#<path>` when given. */
   show(mode: OpenMode, path?: string): void;
   /** Opens a window (or browser tab) in the running mode, e.g. for a server-started confirm; does nothing in mode `none`. */
@@ -249,6 +251,7 @@ export async function runApp(opts: RunOptions): Promise<void> {
   let serverPort = 0;
   const ctx: StartContext = {
     link: (path) => (linkViaProtocol ? `${app.id}://open/${path}` : `http://127.0.0.1:${serverPort}/#${path}`),
+    origin: () => (serverPort ? `http://127.0.0.1:${serverPort}` : undefined),
     show: (m, path) => void show(m, path),
     reveal: () => {
       if (mode !== 'none') void show(mode);

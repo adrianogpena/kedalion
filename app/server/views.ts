@@ -21,9 +21,11 @@ const agentsHome = homedir();
 const terminalStore = terminalSessions();
 
 let appLink: ((path: string) => string) | undefined;
-/** Called with `StartContext.link` once the app starts; toasts from the Agents view use it as their click target. */
-export const setAppLink = (link: (path: string) => string) => {
+let appOrigin: (() => string | undefined) | undefined;
+/** Called with `StartContext.link` and `.origin` once the app starts; toasts from the Agents view use the link as their click target. */
+export const setAppLink = (link: (path: string) => string, origin?: () => string | undefined) => {
   appLink = link;
+  appOrigin = origin;
 };
 
 /** The app's one notifier (OS toasts); each view sends through `notifications.for(viewId)` and gets its icon. */
@@ -32,7 +34,7 @@ export const notifications = createNotifications({ appName: APP.name, link: () =
 const browser = browserServerView({
   profileDir: join(appHome(APP.id), 'browser-profile'),
   dataDir: join(appHome(APP.id), 'browser'),
-  origin: () => (appLink ? new URL(appLink('/')).origin : undefined),
+  origin: () => appOrigin?.(),
 });
 
 export const serverViews: ServerViewDef[] = [
