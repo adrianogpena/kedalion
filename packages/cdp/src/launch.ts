@@ -65,11 +65,34 @@ async function closeStaleBrowser(portFile: string): Promise<void> {
   await Bun.sleep(500);
 }
 
+/**
+ * A failed launch deletes the port file, so an orphaned browser can outlive it with no way to close it through CDP.
+ * Stop every browser process that still uses the profile directory.
+ */
+async function killProfileProcesses(profileDir: string): Promise<void> {
+  const dir = profileDir.replace(/'/g, "''");
+  const cmd =
+    process.platform === 'win32'
+      ? [
+          'powershell',
+          '-NoProfile',
+          '-Command',
+          `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('--user-data-dir=${dir}') -or $_.CommandLine -like '*--user-data-dir="${dir}"*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+        ]
+      : ['pkill', '-f', `--user-data-dir=${profileDir}`];
+  try {
+    await Bun.spawn(cmd, { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true }).exited;
+  } catch {
+    // Nothing to stop, or no tool to stop it with; the launch timeout reports a held profile.
+  }
+}
+
 export async function launchBrowser(opts: LaunchOptions): Promise<LaunchedBrowser> {
   const executable = opts.executable ?? findAppBrowser();
   if (!executable) throw invalid('browserNotFound', 'No Edge or Chrome browser was found');
   const portFile = join(opts.profileDir, 'DevToolsActivePort');
   await closeStaleBrowser(portFile);
+  await killProfileProcesses(opts.profileDir);
   rmSync(portFile, { force: true });
   const proc = Bun.spawn([executable, ...browserArgs(opts)], { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
   const deadline = Date.now() + (opts.timeoutMs ?? 15000);
