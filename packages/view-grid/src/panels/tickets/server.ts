@@ -12,6 +12,7 @@ import { notifyChanges, notifyScope } from '../../notify-changes';
 import { planAutoMoves } from './auto-move';
 import { infoFields, mapInfo, pcrOf, type JiraInfo } from './jira-info';
 import { linkTickets } from './linker';
+import type { NoteTemplate } from './note-templates';
 import { add, extractKey, MAX_TICKETS, move, normPodId, parsePcr, parseStatuses, remove, update, type Ticket } from './model';
 import type { TicketsData } from './types';
 
@@ -146,6 +147,58 @@ export function ticketsStore(dataDir: string): JsonStore<TicketStore> {
   if (!s) {
     s = createJsonStore({ dataDir, name: 'tickets', parse: parseStore, empty: () => ({ tickets: [], autoMoveMemory: {} }) });
     stores.set(dataDir, s);
+  }
+  return s;
+}
+
+const MAX_TEMPLATES = 50;
+
+/** The starting templates; `{{key}}`, `{{title}}` and `{{url}}` are filled in when one is applied. */
+const DEFAULT_TEMPLATES: NoteTemplate[] = [
+  {
+    id: 'task',
+    name: 'Task',
+    body: [
+      '---', 'id: {{key}}', 'title: {{title}}', 'url: {{url}}', '---', 'feature/DIPE/{{key}}', '',
+      '## Releases', '', '## Always good to remember', '',
+      '- Final test local', '- Local Unit Test Validation', "- @dba I've merged the code to Master. Please merge the scripts.", '',
+      '## Links', '', '## Notes', '',
+    ].join('\n'),
+  },
+  {
+    id: 'task-mmp',
+    name: 'Task MMP',
+    body: [
+      '---', 'id: {{key}}', 'title: {{title}}', 'url: {{url}}', '---', 'feature/DIPE/{{key}}', '',
+      '## Services changed', '', '## Always good to remember', '',
+      '- Final test local', '- ALWAYS RUN ALL LOCAL TESTS BEFORE PUSH', '- Update parent framework (./mvnw versions:update-parent)',
+      '- Check if kustomization is ok', '- Use ingress to get URL for test service', '', '- Create SofHistory (npx changeset)', '', '## Notes', '',
+    ].join('\n'),
+  },
+];
+
+function parseTemplates(raw: unknown): { templates: NoteTemplate[] } {
+  const list = (raw as { templates?: unknown })?.templates;
+  const templates: NoteTemplate[] = [];
+  if (Array.isArray(list)) {
+    for (const r of list.slice(0, MAX_TEMPLATES)) {
+      if (!r || typeof r !== 'object') continue;
+      const o = r as Record<string, unknown>;
+      const id = str(o.id, 100);
+      const name = str(o.name, 100).trim();
+      if (id && name) templates.push({ id, name, body: str(o.body, MAX_NOTES) });
+    }
+  }
+  return { templates };
+}
+
+const templateStores = new Map<string, JsonStore<{ templates: NoteTemplate[] }>>();
+/** The note-templates store of a data dir; starts with the default templates. */
+function templatesStore(dataDir: string): JsonStore<{ templates: NoteTemplate[] }> {
+  let s = templateStores.get(dataDir);
+  if (!s) {
+    s = createJsonStore({ dataDir, name: 'ticket-note-templates', parse: parseTemplates, empty: () => ({ templates: DEFAULT_TEMPLATES }) });
+    templateStores.set(dataDir, s);
   }
   return s;
 }
@@ -312,6 +365,13 @@ export const ticketsSource = defineSource<TicketsConfig>({
       } catch {
         throw invalid('ticket-notes-write', 'The notes file could not be saved.', { file });
       }
+    },
+    async 'templates-get'(_payload, _config, ctx): Promise<NoteTemplate[]> {
+      return (await templatesStore(ctx.dataDir).read()).templates;
+    },
+    async 'templates-set'(payload, _config, ctx): Promise<NoteTemplate[]> {
+      const { templates } = parseTemplates({ templates: payloadOf(payload).templates });
+      return (await templatesStore(ctx.dataDir).update(() => ({ templates }))).templates;
     },
     async 'link-key'(payload, config, ctx) {
       const p = payloadOf(payload);

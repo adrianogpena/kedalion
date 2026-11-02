@@ -20,6 +20,7 @@ export interface JiraComment {
 
 /** What the side panel shows from Jira for one ticket. */
 export interface JiraInfo {
+  summary: string;
   status: string;
   tone: StatusTone;
   type: string;
@@ -93,6 +94,7 @@ export function mapInfo(raw: Raw, pointsId?: string): JiraInfo {
   const points = pointsId ? f[pointsId] : undefined;
   const links = (Array.isArray(f.issuelinks) ? (f.issuelinks as Raw[]) : []).flatMap((l) => linked(l) ?? []);
   return {
+    summary: String(f.summary ?? ''),
     status: String(f.status?.name ?? ''),
     tone: statusTone(f.status?.statusCategory?.key),
     type: String(f.issuetype?.name ?? ''),
