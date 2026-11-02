@@ -19,29 +19,37 @@ export interface FxHistory {
   values: number[];
 }
 
-const KEY = 'kedalion.fx-history';
-const EVENT = 'fx-history';
+/** The saved histories, by `BASE/QUOTE`. */
+export type FxHistories = Record<string, FxHistory>;
+
 const MAX_UPDATES = 10_000;
 
-const pairKey = (base: string, quote: string) => `${base}/${quote}`;
+export const pairKey = (base: string, quote: string) => `${base}/${quote}`;
 
-function readAll(): Record<string, any> {
-  try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-    return raw && typeof raw === 'object' ? raw : {};
-  } catch {
-    return {};
-  }
+export const emptyFxHistory = (): FxHistory => ({ updates: [], dates: [], values: [] });
+
+const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+const validUpdate = (u: any): u is FxUpdate =>
+  !!u && typeof u.at === 'string' && Number.isFinite(Date.parse(u.at)) && num(u.value) && num(u.change) && num(u.percent);
+
+/** Checks and cleans one saved history (from disk or from the browser's old storage). */
+export function parseFxHistory(raw: unknown): FxHistory {
+  const hit = (raw ?? {}) as Record<string, unknown>;
+  const dates = Array.isArray(hit.dates) ? hit.dates : [];
+  const values = Array.isArray(hit.values) ? hit.values : [];
+  const sameSeries = dates.length === values.length && dates.every((d) => typeof d === 'string') && values.every(num);
+  return {
+    updates: (Array.isArray(hit.updates) ? hit.updates : []).filter(validUpdate).map((u) => ({ at: u.at, value: u.value, change: u.change, percent: u.percent, ...(u.live ? { live: true } : {}) })),
+    dates: sameSeries ? (dates as string[]) : [],
+    values: sameSeries ? (values as number[]) : [],
+  };
 }
 
-/** The saved history of a pair; empty before the first fetch. */
-export function readFxHistory(base: string, quote: string): FxHistory {
-  const hit = readAll()[pairKey(base, quote)];
-  return {
-    updates: Array.isArray(hit?.updates) ? hit.updates : [],
-    dates: Array.isArray(hit?.dates) ? hit.dates : [],
-    values: Array.isArray(hit?.values) ? hit.values : [],
-  };
+export function parseFxHistories(raw: unknown): FxHistories {
+  const out: FxHistories = {};
+  if (raw && typeof raw === 'object') for (const [key, value] of Object.entries(raw)) out[key] = parseFxHistory(value);
+  return out;
 }
 
 /** Adds one fetch to the history and keeps the updates of the last `days` days. */
@@ -55,25 +63,11 @@ export function addFxUpdate(prev: FxHistory, data: FxData, days: number, now: Da
   return { updates, dates: data.dates, values: data.values };
 }
 
-/** Saves a fetch into the pair's history and tells open side panels. */
-export function recordFx(data: FxData, days: number): void {
-  if (data.values.length === 0) return;
-  try {
-    const all = readAll();
-    const key = pairKey(data.base, data.quote);
-    all[key] = addFxUpdate(readFxHistory(data.base, data.quote), data, days, new Date());
-    localStorage.setItem(KEY, JSON.stringify(all));
-  } catch {
-    // storage unavailable: the side panel stays as it was
-  }
-  window.dispatchEvent(new CustomEvent(EVENT, { detail: pairKey(data.base, data.quote) }));
-}
-
-/** Calls `run` when the history of `base/quote` changes; returns the unsubscribe. */
-export function onFxHistory(base: string, quote: string, run: () => void): () => void {
-  const handler = (e: Event) => {
-    if ((e as CustomEvent<string>).detail === pairKey(base, quote)) run();
-  };
-  window.addEventListener(EVENT, handler);
-  return () => window.removeEventListener(EVENT, handler);
+/** Joins the updates of `extra` (e.g. a browser's old storage) into `prev`: one per fetch time, oldest first; the graph series stays `prev`'s unless it is empty. */
+export function mergeFxHistory(prev: FxHistory, extra: FxHistory): FxHistory {
+  const byTime = new Map<string, FxUpdate>();
+  for (const u of [...extra.updates, ...prev.updates]) byTime.set(u.at, u);
+  const updates = [...byTime.values()].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).slice(-MAX_UPDATES);
+  const useExtraSeries = prev.values.length === 0;
+  return { updates, dates: useExtraSeries ? extra.dates : prev.dates, values: useExtraSeries ? extra.values : prev.values };
 }

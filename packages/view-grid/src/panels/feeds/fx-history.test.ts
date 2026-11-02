@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { addFxUpdate } from './fx-history';
+import { addFxUpdate, mergeFxHistory } from './fx-history';
 
 const data = (values: number[], live?: boolean) => ({ base: 'EUR', quote: 'BRL', dates: values.map((_, i) => `2026-10-0${i + 1}`), values, live });
 const empty = { updates: [], dates: [], values: [] };
@@ -26,5 +26,21 @@ describe('addFxUpdate', () => {
 
   test('ignores a fetch without data', () => {
     expect(addFxUpdate(empty, data([]), 30, new Date())).toBe(empty);
+  });
+});
+
+describe('mergeFxHistory', () => {
+  const upd = (at: string, value: number) => ({ at, value, change: 0, percent: 0 });
+
+  test('joins updates once per fetch time, oldest first', () => {
+    const prev = { updates: [upd('2026-10-31T10:00:00.000Z', 6), upd('2026-11-01T10:00:00.000Z', 7)], dates: ['a'], values: [1] };
+    const extra = { updates: [upd('2026-10-30T10:00:00.000Z', 5), upd('2026-10-31T10:00:00.000Z', 6)], dates: ['b'], values: [2] };
+    const merged = mergeFxHistory(prev, extra);
+    expect(merged.updates.map((u) => u.at)).toEqual(['2026-10-30T10:00:00.000Z', '2026-10-31T10:00:00.000Z', '2026-11-01T10:00:00.000Z']);
+    expect(merged.values).toEqual([1]);
+  });
+
+  test('takes the extra series when there is none', () => {
+    expect(mergeFxHistory(empty, { updates: [], dates: ['b'], values: [2] }).values).toEqual([2]);
   });
 });

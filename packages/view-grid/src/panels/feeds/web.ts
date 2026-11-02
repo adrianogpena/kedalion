@@ -7,7 +7,7 @@ import { WeatherPanel, type WeatherConfig } from './WeatherPanel';
 import { FX_FIELDS, RSS_FIELDS, WEATHER_FIELDS } from './fields';
 import type { FxData } from './fx';
 import { FxActions } from './FxActions';
-import { recordFx } from './fx-history';
+import { announceFx, importOldFxHistory } from './fx-history-web';
 import type { FeedItem } from './rss';
 import type { WeatherData } from './weather';
 
@@ -50,7 +50,7 @@ const exchangeRatePanel = definePanel<FxConfig, FxData>({
   config: { fields: FX_FIELDS },
   load: async (config, ctx) => {
     const data = await fetchSource<FxData>('feeds-fx', { base: config.base, quote: config.quote, days: config.days, apiKey: config.apiKey }, ctx.signal);
-    recordFx(data, config.days);
+    void importOldFxHistory(config).finally(() => announceFx(config));
     return data;
   },
   refreshMs: (config) => (config.apiKey?.trim() ? 5 * MIN : 60 * MIN),

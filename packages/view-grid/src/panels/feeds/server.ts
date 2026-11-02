@@ -1,8 +1,10 @@
 import { readLimited, sourceFetch } from '../../connections/errors';
 import { notifyChanges, notifyScope } from '../../notify-changes';
+import { createJsonStore } from '../../json-store';
 import { defineSource,type DataSource, type GridPanelSpec } from '../../server';
 import { fields, FX_FIELDS, RSS_SOURCE_FIELDS, WEATHER_SOURCE_FIELDS } from './fields';
 import { currencyCode, mapSeries, mapTwelveData, startDate, type FxData } from './fx';
+import { addFxUpdate, emptyFxHistory, mergeFxHistory, pairKey, parseFxHistories, type FxHistories } from './fx-history';
 import { feedUrls, mergeFeeds, parseFeed, type Feed, type FeedItem } from './rss';
 import { emptyWeather, forecastParams, mapForecast, placeName, type WeatherData, type WeatherUnits } from './weather';
 
@@ -82,20 +84,54 @@ async function fetchLiveFx(base: string, quote: string, days: number, apiKey: st
   }
 }
 
+const fxStores = new Map<string, ReturnType<typeof createJsonStore<FxHistories>>>();
+
+const fxStoreOf = (dataDir: string) => {
+  let s = fxStores.get(dataDir);
+  if (!s) {
+    s = createJsonStore<FxHistories>({ dataDir, name: 'fx-history', parse: parseFxHistories, empty: () => ({}) });
+    fxStores.set(dataDir, s);
+  }
+  return s;
+};
+
+async function loadFx(config: { base: string; quote: string; days: number; apiKey?: string }, signal: AbortSignal): Promise<FxData> {
+  const base = currencyCode(config.base, 'EUR');
+  const quote = currencyCode(config.quote, 'BRL');
+  if (base === quote) return { base, quote, dates: [], values: [] };
+  const apiKey = config.apiKey?.trim();
+  if (apiKey) {
+    const live = await fetchLiveFx(base, quote, config.days, apiKey, signal);
+    if (live) return live;
+  }
+  const res = await sourceFetch(`https://api.frankfurter.app/${startDate(new Date(), config.days)}..?from=${base}&to=${quote}`, { headers }, { signal });
+  return mapSeries(await res.json(), base, quote);
+}
+
 export const fxSource = defineSource<{ base: string; quote: string; days: number; apiKey?: string }>({
   id: 'feeds-fx',
   fields: FX_FIELDS,
-  async fetch(config, { signal }): Promise<FxData> {
-    const base = currencyCode(config.base, 'EUR');
-    const quote = currencyCode(config.quote, 'BRL');
-    if (base === quote) return { base, quote, dates: [], values: [] };
-    const apiKey = config.apiKey?.trim();
-    if (apiKey) {
-      const live = await fetchLiveFx(base, quote, config.days, apiKey, signal);
-      if (live) return live;
+  async fetch(config, { signal, dataDir }): Promise<FxData> {
+    const data = await loadFx(config, signal);
+    if (data.values.length > 0) {
+      const key = pairKey(data.base, data.quote);
+      await fxStoreOf(dataDir).update((all) => ({ ...all, [key]: addFxUpdate(all[key] ?? emptyFxHistory(), data, config.days, new Date()) }));
     }
-    const res = await sourceFetch(`https://api.frankfurter.app/${startDate(new Date(), config.days)}..?from=${base}&to=${quote}`, { headers }, { signal });
-    return mapSeries(await res.json(), base, quote);
+    return data;
+  },
+  actions: {
+    /** The saved history of the config's pair. */
+    history: async (_payload, config, { dataDir }) => (await fxStoreOf(dataDir).read())[pairKey(currencyCode(config.base, 'EUR'), currencyCode(config.quote, 'BRL'))] ?? emptyFxHistory(),
+    /** Joins histories a browser profile saved before this store existed. */
+    import: async (payload, _config, { dataDir }) => {
+      const old = parseFxHistories(payload);
+      await fxStoreOf(dataDir).update((all) => {
+        const next = { ...all };
+        for (const [key, h] of Object.entries(old)) next[key] = mergeFxHistory(next[key] ?? emptyFxHistory(), h);
+        return next;
+      });
+      return true;
+    },
   },
 });
 
