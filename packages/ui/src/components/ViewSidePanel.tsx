@@ -54,13 +54,18 @@ function tabFor(next: SidePanelContent, wanted: string | undefined, prev: SideLa
   return same ? prev.tab : next.tabs[0]?.id ?? null;
 }
 
+/** Side panel state per scope, kept while the view is unmounted so the panel survives a view change. */
+const kept_ = new Map<string, { layers: SideLayer[]; shown: boolean; last: SideLayer[] | null }>();
+
 /** State of one view's side panels. Opening the id already on top (no `tab`) closes it; a new id starts on its first tab. */
 export function useViewSidePanel(scope: string): ViewSidePanelState {
-  const [layers, setLayers] = useState<SideLayer[]>([]);
-  const [shown, setShown] = useState(false);
-  const last = useRef<SideLayer[] | null>(null);
+  const kept = kept_.get(scope);
+  const [layers, setLayers] = useState<SideLayer[]>(kept?.layers ?? []);
+  const [shown, setShown] = useState(kept?.shown ?? false);
+  const last = useRef<SideLayer[] | null>(kept?.last ?? null);
   const current = useRef({ layers, shown });
   current.current = { layers, shown };
+  useEffect(() => { kept_.set(scope, { layers, shown, last: last.current }); }, [scope, layers, shown]);
 
   const closeAll = useCallback(() => {
     const cur = current.current;
