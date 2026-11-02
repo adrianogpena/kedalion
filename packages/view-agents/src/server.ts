@@ -187,6 +187,7 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
     for (const a of r.adopt) {
       const cur = opts.terminals?.list().find((x) => x.id === a.terminal);
       if (cur) opts.terminals?.setMeta(a.terminal, { ...cur.meta, agentSession: a.to });
+      tracker.settle(a.from);
     }
     return r;
   };

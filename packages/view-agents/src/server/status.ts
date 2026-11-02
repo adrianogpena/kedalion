@@ -220,6 +220,12 @@ export function createStatusTracker(now: () => number = Date.now) {
       const k = new Set(keep);
       for (const m of [doneAt, errorAt, sinceAt]) for (const id of [...m.keys()]) if (!k.has(id) && !prev.has(id)) m.delete(id);
     },
+    /** Drops the done / error marks of a session replaced by `/clear`, so it shows stopped. */
+    settle(sessionId: string) {
+      doneAt.delete(sessionId);
+      errorAt.delete(sessionId);
+      errored.delete(sessionId);
+    },
     /** Writes a fresh done (mark unread on a session with no status). */
     forceDone(sessionId: string) {
       doneAt.set(sessionId, now());

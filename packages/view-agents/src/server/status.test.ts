@@ -84,6 +84,16 @@ test('offline: unseen done -> done, unseen error -> exited, else stopped; forceD
   expect(t.offline('c', {})).toBe('exited');
 });
 
+test('settle: a session replaced by /clear shows stopped, not done', () => {
+  const t = createStatusTracker();
+  const e = (status: string) => [{ pid: 1, sessionId: 'a', status }];
+  t.update(e('busy'));
+  t.update(e('idle'));
+  t.update([]);
+  t.settle('a');
+  expect(t.offline('a', {})).toBe('stopped');
+});
+
 test('lifecycle sets: starting without a record, exited wins', () => {
   const t = createStatusTracker();
   const out = t.update([{ pid: 1, sessionId: 'x', status: 'busy' }], undefined, { starting: ['s'], exited: ['x'] });
