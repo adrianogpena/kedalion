@@ -4,6 +4,7 @@ import charon from './assets/views/charon.svg' with { type: 'text' };
 import hermes from './assets/views/hermes.svg' with { type: 'text' };
 import kourai from './assets/views/kourai.svg' with { type: 'text' };
 import moirai from './assets/views/moirai.svg' with { type: 'text' };
+import odysseus from './assets/views/odysseus.svg' with { type: 'text' };
 import sibyl from './assets/views/sibyl.svg' with { type: 'text' };
 import themis from './assets/views/themis.svg' with { type: 'text' };
 import theseus from './assets/views/theseus.svg' with { type: 'text' };
@@ -16,6 +17,7 @@ export const VIEW_ICON_SVGS: Record<string, string> = {
   workbench: sibyl,
   git: moirai,
   dashboard: argus,
+  browser: odysseus,
   agents: kourai,
   settings: themis,
 };

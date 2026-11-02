@@ -28,6 +28,7 @@ The scheme follows three groups:
 | **Sibyl** | Hero | Workbench (SQL) | A prophetess who answers the questions people bring her; a query is a question and the result is the answer. |
 | **Moirai** | Hero | Git | The Fates who spin, measure and cut the thread of each life: commits are the thread of the code, and a revert cuts it. |
 | **Argus** | Hero | Dashboard | The giant with a hundred eyes who never stops watching; a dashboard is many eyes on many things at once. |
+| **Odysseus** | Hero | Browser | The wanderer who visits many lands and finds his way home: a browser visits many sites and returns with what it found. |
 | **Kourai** | Olympian | Agents | The golden maidens Hephaestus made to help him at the forge; they think and act on their own, like agents. |
 | **Themis** | Olympian | Settings | The goddess of order and custom: how things are set and done. |
 
