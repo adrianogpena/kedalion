@@ -1,0 +1,15 @@
+/* Browser screen: tab strip, toolbar, the page canvas and the dock g8 fills. */
+.browser { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+.browser-toolbar { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-8); border-bottom: 1px solid var(--border-soft); }
+.browser-url { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--fs-xs-plus); }
+.browser-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.browser-status { padding: var(--space-8) var(--space-12); font-size: var(--fs-xs-plus); color: var(--text-3); }
+.browser-viewport { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--bg-2, transparent); }
+.browser-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: 0; cursor: default; }
+.browser-ime { position: absolute; left: 0; top: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; resize: none; overflow: hidden; pointer-events: none; }
+.browser-progress { position: absolute; left: 0; top: 0; right: 0; height: 2px; overflow: hidden; pointer-events: none; z-index: 1; }
+.browser-progress::before { content: ''; position: absolute; top: 0; bottom: 0; width: 30%; background: var(--accent); animation: browser-progress 1.1s ease-in-out infinite; }
+@keyframes browser-progress { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .browser-progress::before { animation: none; width: 100%; opacity: 0.5; } }
+.browser-dock { flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; }
+.browser-dock:empty { display: none; }
