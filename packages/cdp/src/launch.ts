@@ -40,10 +40,36 @@ export interface LaunchedBrowser {
   exited: Promise<number>;
 }
 
+/**
+ * A browser left over from a previous app run still holds the profile: a new launch hands off to it and never
+ * writes a port file. Its port file is still there, so close it through CDP before launching.
+ */
+async function closeStaleBrowser(portFile: string): Promise<void> {
+  if (!existsSync(portFile)) return;
+  const parsed = parsePortFile(readFileSync(portFile, 'utf8'));
+  if (!parsed) return;
+  await new Promise<void>((resolve) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${parsed.port}${parsed.wsPath}`);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      ws.close();
+      done();
+    }, 3000);
+    ws.addEventListener('open', () => ws.send(JSON.stringify({ id: 1, method: 'Browser.close' })));
+    ws.addEventListener('close', done);
+    ws.addEventListener('error', done);
+  });
+  await Bun.sleep(500);
+}
+
 export async function launchBrowser(opts: LaunchOptions): Promise<LaunchedBrowser> {
   const executable = opts.executable ?? findAppBrowser();
   if (!executable) throw invalid('browserNotFound', 'No Edge or Chrome browser was found');
   const portFile = join(opts.profileDir, 'DevToolsActivePort');
+  await closeStaleBrowser(portFile);
   rmSync(portFile, { force: true });
   const proc = Bun.spawn([executable, ...browserArgs(opts)], { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
   const deadline = Date.now() + (opts.timeoutMs ?? 15000);
