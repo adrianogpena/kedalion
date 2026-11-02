@@ -1,5 +1,6 @@
 import { sqlEn, sqlPtBR } from '@kedalion/sql-ui';
 import { addMessages, createT } from '@kedalion/ui';
+import type { BrowserMessageKey } from '@kedalion/view-browser/web';
 import type { ExplorerMessageKey } from '@kedalion/view-explorer/web';
 import type { GitMessageKey } from '@kedalion/view-git/web';
 import type { GridMessageKey } from '@kedalion/view-grid/web';
@@ -13,5 +14,5 @@ import { ptBR } from './pt-BR';
 addMessages({ en, 'pt-BR': ptBR });
 addMessages({ en: sqlEn, 'pt-BR': sqlPtBR });
 
-export type MessageKey = keyof typeof en | TerminalMessageKey | WorkbenchMessageKey | RestMessageKey | GitMessageKey | GridMessageKey | ExplorerMessageKey;
+export type MessageKey = keyof typeof en | TerminalMessageKey | WorkbenchMessageKey | RestMessageKey | GitMessageKey | GridMessageKey | ExplorerMessageKey | BrowserMessageKey;
 export const t = createT<MessageKey>();

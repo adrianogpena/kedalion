@@ -6,6 +6,7 @@ import { runApp } from '@kedalion/shell';
 import type { ExplorerServerSettings } from '@kedalion/view-explorer/server';
 import type { GitServerSettings } from '@kedalion/view-git/server';
 import type { AgentsServerSettings } from '@kedalion/view-agents/server';
+import type { BrowserServerSettings } from '@kedalion/view-browser/server';
 import { restHistorySizeOf, type RestServerSettings } from '@kedalion/view-rest/server';
 import type { TerminalServerSettings } from '@kedalion/view-terminal/server';
 import { historySizeOf, type WorkbenchServerSettings } from '@kedalion/view-workbench/server';
@@ -20,7 +21,7 @@ import { routes } from './routes.ts';
 import { stores } from './stores.ts';
 import { serverViews, setAppLink } from './views.ts';
 
-export interface Settings extends BaseSettings, TerminalServerSettings, WorkbenchServerSettings, RestServerSettings, GitServerSettings,DashboardServerSettings, ExplorerServerSettings, AgentsServerSettings {
+export interface Settings extends BaseSettings, TerminalServerSettings, WorkbenchServerSettings, RestServerSettings, GitServerSettings,DashboardServerSettings, ExplorerServerSettings, AgentsServerSettings, BrowserServerSettings {
   /** Start at Windows login (exe only). */
   autostart: boolean;
   /** Tray icon, so closing the window keeps the app running; read at startup. */
@@ -112,7 +113,7 @@ const WINDOW_SPEC: Record<string, FieldSpec> = {
 const GENERAL_SPEC: Record<string, FieldSpec> = {
   confirmCloseDirty: 'boolean',
   toastDuration: [1000, 60_000],
-  startScreen: ['dashboard', 'explorer', 'workbench', 'rest', 'terminal', 'git', 'agents'],
+  startScreen: ['dashboard', 'explorer', 'workbench', 'rest', 'terminal', 'git', 'agents', 'browser'],
   browser: 'string',
 };
 const KEYBOARD_SPEC: Record<string, FieldSpec> = {

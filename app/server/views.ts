@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { appHome, createNotifications } from '@kedalion/platform';
 import type { ServerViewDef } from '@kedalion/server-core';
 import { dashboardServerView, dashboardSources, dashboardSpecs } from '@kedalion/view-grid/server';
+import { browserServerView } from '@kedalion/view-browser/server';
 import { explorerServerView } from '@kedalion/view-explorer/server';
 import { gitServerView } from '@kedalion/view-git/server';
 import { restServerView } from '@kedalion/view-rest/server';
@@ -28,13 +29,20 @@ export const setAppLink = (link: (path: string) => string) => {
 /** The app's one notifier (OS toasts); each view sends through `notifications.for(viewId)` and gets its icon. */
 export const notifications = createNotifications({ appName: APP.name, link: () => appLink });
 
+const browser = browserServerView({
+  profileDir: join(appHome(APP.id), 'browser-profile'),
+  dataDir: join(appHome(APP.id), 'browser'),
+  origin: () => (appLink ? new URL(appLink('/')).origin : undefined),
+});
+
 export const serverViews: ServerViewDef[] = [
   explorer,
-  terminalServerView({ integrationDir: join(appHome(APP.id), 'shell-integration'), resolveCwd: explorer.resolveCwd, launchers: launchers({ claude: agentsLauncher({ home: agentsHome }) }), sessions: terminalStore }),
+  terminalServerView({ integrationDir: join(appHome(APP.id), 'shell-integration'), resolveCwd: explorer.resolveCwd, launchers: launchers({ claude: agentsLauncher({ home: agentsHome, mcpConfig: () => browser.mcpConfigFile() }) }), sessions: terminalStore }),
   workbenchServerView(),
   restServerView(),
   gitServerView(),
   dashboardServerView({ panels: dashboardSpecs, sources: dashboardSources, notifications }),
+  browser,
   agentsServerView({
     home: agentsHome,
     link: () => appLink,

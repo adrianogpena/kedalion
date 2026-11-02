@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PALETTES } from '@kedalion/server-core/palettes';
-import { CommandPalette, DialogHost, detectLanguage, effectiveKeys, ErrorBanner, GLOBAL, AppFrame, IconButton, isDesktop, KeybindingProvider, LayoutProvider, type PaletteItem, popOut, popoutView, usePopouts,setFileAssociations, setLanguage, setViewTitle, Sidebar, Spinner, titleWithBadge, ToastProvider, type ApiError, errorMessage, errorOf, useToast, useAsync, useCommand, useCommandPalette, useHashRoute, useHeartbeat, useKeybindings, useRunCommand, useTheme, useTitleBadge,useViewTitle,useZen, useZoom, DesignSwitcher, useBridge, CommandBar, ActivityStrip } from '@kedalion/ui';
+import { CommandPalette, DEFAULT_LINK_SETTINGS, installLinkRouter, LinkContextMenu, type LinkTarget, DialogHost, detectLanguage, effectiveKeys, ErrorBanner, GLOBAL, AppFrame, IconButton, isDesktop, KeybindingProvider, LayoutProvider, type PaletteItem, popOut, popoutView, usePopouts,setFileAssociations, setLanguage, setViewTitle, Sidebar, Spinner, titleWithBadge, ToastProvider, type ApiError, errorMessage, errorOf, useToast, useAsync, useCommand, useCommandPalette, useHashRoute, useHeartbeat, useKeybindings, useRunCommand, useTheme, useTitleBadge,useViewTitle,useZen, useZoom, DesignSwitcher, useBridge, CommandBar, ActivityStrip } from '@kedalion/ui';
 import { EditorOptionsContext } from '@kedalion/editor/options';
 import { APP } from '../../app';
 import { api, type Settings } from './api';
 import { commandById, commands, KEYS_COMMAND, navCommandId, POPOUT_COMMAND, SETTINGS_COMMAND } from './commands';
 import { type MessageKey, t } from './i18n';
-import { appearanceSettingsOf, editorSettingsOf, generalSettingsOf, keyboardSettingsOf, windowSettingsOf } from './settings';
+import { appearanceSettingsOf, editorSettingsOf, generalSettingsOf, keyboardSettingsOf, linkSettingsOf, windowSettingsOf } from './settings';
 import { SettingsModal, viewSettingsSection } from './screens/SettingsModal';
 import { views, type ScreenId } from './views';
 
@@ -109,6 +109,27 @@ function Main({ settings, setSettings, screen, go, overlay, setOverlay }: MainPr
 
   const inPopout = popoutView() !== undefined;
   const popouts = usePopouts();
+
+  const latestSettings = useRef(settings);
+  latestSettings.current = settings;
+  useEffect(
+    () =>
+      installLinkRouter({
+        settings: () => (latestSettings.current.links ? linkSettingsOf(latestSettings.current) : DEFAULT_LINK_SETTINGS),
+        open: (url, target) => {
+          if (target === 'internal' && !inPopout) views.link('browser', { url });
+          else api.openExternal(url).catch(() => {});
+        },
+      }),
+    [inPopout],
+  );
+  const openLink = useCallback(
+    (url: string, target: LinkTarget) => {
+      if (target === 'internal' && !inPopout) views.link('browser', { url });
+      else api.openExternal(url).catch(() => {});
+    },
+    [inPopout],
+  );
   const popped = popouts.views;
   const titleBadge = useTitleBadge();
   const viewTitle = useViewTitle();
@@ -228,7 +249,7 @@ function Main({ settings, setSettings, screen, go, overlay, setOverlay }: MainPr
   const sidebarNode = inPopout ? undefined : <Sidebar name={APP.name} sections={sections} current={screen} onSelect={goView} footer={footer} popped={popped as ReadonlySet<ScreenId>} poppedHint={t('window.poppedHint')} />;
   const mainNode = (
     <main className="main">
-      <div className="main-view" hidden={!!overlay}>{views.render(screen, { settings, onSave: save, go: go as (id: string) => void })}</div>
+      <div className="main-view" data-link-scope={`view:${screen}`} hidden={!!overlay}>{views.render(screen, { settings, onSave: save, go: go as (id: string) => void })}</div>
       {overlay && (
         <SettingsModal key={overlay} settings={settings} onChange={save} onReplace={replace} onQuit={() => setStopped(true)} onClose={() => setOverlay(null)} onlyView={inPopout ? screen : undefined} initialSection={inPopout ? undefined : overlay === 'keys' ? 'keyboard.shortcuts' : overlay.startsWith('settings/') ? overlay.slice('settings/'.length) : undefined} />
       )}
@@ -245,6 +266,7 @@ function Main({ settings, setSettings, screen, go, overlay, setOverlay }: MainPr
     <LayoutProvider layout={settings.layout} icons={settings.icons} mainMenu={settings.mainMenu} dock={settings.dock}>
     <ToastProvider defaultTimeout={general.toastDuration}>
       <DialogHost />
+      <LinkContextMenu open={openLink} />
       <SaveErrorToast error={saveError} onShown={() => setSaveError(null)} />
       <EditorOptionsContext.Provider value={editorOptions}>
       <views.Providers settings={settings} go={go as (id: string) => void}>

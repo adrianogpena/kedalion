@@ -24,6 +24,7 @@
     "@kedalion/terminal": "workspace:*",
     "@kedalion/ui": "workspace:*",
     "@kedalion/view-agents": "workspace:*",
+    "@kedalion/view-browser": "workspace:*",
     "@kedalion/view-explorer": "workspace:*",
     "@kedalion/view-git": "workspace:*",
     "@kedalion/view-grid": "workspace:*",

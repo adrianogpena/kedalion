@@ -9,6 +9,7 @@ import type { TerminalSettings, TerminalViewSettings } from '@kedalion/view-term
 import type { ExplorerSettings, FsEntry, FsRead, Project, SearchHit, TextEncoding } from '@kedalion/view-explorer/web';
 import type { GitViewSettings } from '@kedalion/view-git/web';
 import type { AgentsViewSettings } from '@kedalion/view-agents/web';
+import type { BrowserViewSettings } from '@kedalion/view-browser/web';
 import type { RestViewSettings } from '@kedalion/view-rest/web';
 import type { WorkbenchViewSettings } from '@kedalion/view-workbench/web';
 import type { CopyFormat, DbColumn, DbPlanRow, DbRunResult, DbSchema, DbSchemaTable, DbStatus, DbTableConstraint, DbTableDetails, DbTableIndex, DemoRow } from '@kedalion/sql-ui';
@@ -16,7 +17,7 @@ import { type FileAssociation, type GitSettings, type FileSettings, type Keymap,
 
 export type { TerminalSettings };
 
-export interface Settings extends ThemeSettings, TerminalViewSettings, WorkbenchViewSettings, RestViewSettings, GitViewSettings, AgentsViewSettings {
+export interface Settings extends ThemeSettings, TerminalViewSettings, WorkbenchViewSettings, RestViewSettings, GitViewSettings, AgentsViewSettings, BrowserViewSettings {
   language?: Language;
   /** The main menu shows only its icons. */
   /** Keybinding overrides by command id; the server validates it. */
@@ -146,6 +147,7 @@ export const api = {
   saveSettings: (patch: Partial<Settings>) => request<Settings>('PUT', '/api/settings', {}, patch),
   openSettingsFile: () => request<{ ok: true }>('POST', '/api/settings/open-file'),
   externalSettings: () => request<{ changed: boolean; settings: Settings }>('GET', '/api/settings/external'),
+  openExternal: (url: string) => request<{ ok: boolean }>('POST', '/api/browser/open-external', {}, { url }),
   quit: () => request<{ ok: boolean }>('POST', '/api/quit'),
   testToast: () => request<{ ok: true }>('POST', '/api/toast/test'),
   backupParts: () => request<{ stores: string[] }>('GET', '/api/backup/parts'),
