@@ -47,6 +47,8 @@ Open the URL the server prints. `bun run build` builds the executable for this m
 - **Terminal**: terminal with search and clipboard support.
 - **Git**: repository status and history.
 - **Agents**: Claude Code sessions, described above.
+- **Browser**: internal browser (headless Edge or Chrome) with tabs, Console and Network panes, real Chrome DevTools for breakpoints and traces, and browser tools that Claude sessions launched from Kedalion can use (screenshots, console, network, eval, breakpoints).
+- **Link settings**: every link opens in the internal browser by default; Settings > General > Links sends whole views or single Dashboard panels to the default browser, and right-clicking a link offers "Open in default browser".
 - **Settings**: theme, language, layout, browser and shortcuts.
 
 Any view can pop out into its own window. All dialogs (file pickers, confirms) are in-app, themed and translated; no native OS dialogs.

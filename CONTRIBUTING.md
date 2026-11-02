@@ -373,6 +373,16 @@ Each view is its own `view-*` package, an island that reaches only what it needs
 
 The Agents view lives in `packages/view-agents`.
 
+## Browser view
+
+The internal browser (`packages/view-browser`) is the default target for links in the app.
+
+- Engine: headless Edge or Chrome driven over CDP by `packages/cdp` (`launch.ts` holds the flags in `browserArgs`, `tabs.ts`/`page.ts`/`input.ts` the tab, page and input calls, `logs.ts` the console and network capture, `screencast.ts` the frames). The profile is `~/.kedalion/browser-profile`. It starts lazily on first use and is killed when Kedalion quits. Set `browser.executable` to pick a binary.
+- View package: `src/server.ts` wires the server half (`src/server/service.ts` engine and tabs, `routes.ts` under `/api/browser/*`, `socket.ts` live frames, console and network messages, `settings.ts`); `src/view.tsx` and `BrowserScreen.tsx` are the web screen, with `Viewport`, `ConsolePane`, `NetworkPane`/`NetworkDetail` and `DevToolsPane` (real Chrome DevTools, for breakpoints and Performance traces).
+- Link routing: `installLinkRouter` (`packages/ui/src/links.ts`, installed in `app/web/src/App.tsx`) catches clicks and `window.open` of http(s) URLs outside the app and picks `internal` (Browser view) or `external` (`POST /api/browser/open-external`). The scope is the chain of `data-link-scope` ancestors, innermost first: `view:<id>` on each view root (set by `App.tsx`, so a new view gets a scope for free) and `panel:<kind>` on each Dashboard panel item (so a new panel does too). The innermost scope with a setting in the settings group `links` wins, else the global setting; the settings page is `app/web/src/screens/LinksSettings.tsx`. Right-click on a link offers Kedalion browser, default browser and copy.
+- MCP endpoint: `POST /api/browser/mcp` (Streamable HTTP, plain JSON; an unauthenticated route that checks its own `Authorization: Bearer <secret>`, random per app start). `<appHome>/browser/mcp.json` is rewritten at each start, and Kedalion-launched `claude` sessions get `--mcp-config` pointing to it while `browser.agentTools` is on.
+- Adding a browser MCP tool: add an `McpTool` (`name`, `description`, `inputSchema`, `run`) to `src/server/mcp/tools-page.ts` (`pageTools`) or `tools-debug.ts` (`debugTools`); `server.ts` serves both. A failing tool must return `failResult(message)` (a normal result with `isError: true`), never throw a protocol error, and cap its text output at 20 000 characters with a hint naming the parameter that fetches more. Add a test next to the file.
+
 ## Releases
 
 The version comes from `app/package.json`. Executables are named
