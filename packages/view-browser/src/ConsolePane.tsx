@@ -1,0 +1,248 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ConsoleEntry, NetworkEntry } from '@kedalion/cdp';
+import { Button, IconButton, request } from '@kedalion/ui';
+import { t } from './i18n';
+import type { BrowserSocket } from './web/useBrowserSocket';
+
+export type LogKind = 'console' | 'network';
+
+export const MAX_ROWS = 2000;
+
+export interface EvalResult {
+  ok: boolean;
+  text: string;
+  type?: string;
+}
+
+export interface BrowserLogs {
+  consoleEntries: ConsoleEntry[];
+  networkEntries: NetworkEntry[];
+  errors: number;
+  preserve: Record<LogKind, boolean>;
+  setPreserve(kind: LogKind, on: boolean): void;
+  clear(kind: LogKind): void;
+}
+
+const cap = <T,>(rows: T[]): T[] => (rows.length > MAX_ROWS ? rows.slice(rows.length - MAX_ROWS) : rows);
+
+/** Console and network rows of every tab, collected from the socket so counts stay right while the dock is closed. */
+export function useBrowserLogs(socket: BrowserSocket, tab: string | undefined, url: string | undefined): BrowserLogs {
+  const [consoleRows, setConsoleRows] = useState<Record<string, ConsoleEntry[]>>({});
+  const [networkRows, setNetworkRows] = useState<Record<string, NetworkEntry[]>>({});
+  const [preserve, setPreserveState] = useState<Record<LogKind, boolean>>({ console: false, network: false });
+  const lastUrl = useRef(new Map<string, string>());
+  const preserveRef = useRef(preserve);
+  preserveRef.current = preserve;
+  const { subscribe } = socket;
+
+  useEffect(
+    () =>
+      subscribe((msg) => {
+        if (msg.type === 'console') {
+          setConsoleRows((prev) => ({ ...prev, [msg.tab]: cap([...(prev[msg.tab] ?? []), ...msg.entries]) }));
+        } else if (msg.type === 'network') {
+          setNetworkRows((prev) => {
+            const rows = [...(prev[msg.tab] ?? [])];
+            for (const e of msg.entries) {
+              const i = rows.findIndex((r) => r.id === e.id);
+              if (i >= 0) rows[i] = e;
+              else rows.push(e);
+            }
+            return { ...prev, [msg.tab]: cap(rows) };
+          });
+        }
+      }),
+    [subscribe],
+  );
+
+  useEffect(() => {
+    if (!tab || url === undefined) return;
+    const before = lastUrl.current.get(tab);
+    lastUrl.current.set(tab, url);
+    if (before === undefined || before === url) return;
+    if (!preserveRef.current.console) setConsoleRows((prev) => ({ ...prev, [tab]: [] }));
+    if (!preserveRef.current.network) setNetworkRows((prev) => ({ ...prev, [tab]: [] }));
+  }, [tab, url]);
+
+  useEffect(() => {
+    if (!tab) return;
+    for (const kind of ['console', 'network'] as const) {
+      if (preserveRef.current[kind]) void request('POST', '/api/browser/logs/preserve', {}, { id: tab, kind, on: true }).catch(() => {});
+    }
+  }, [tab]);
+
+  const setPreserve = useCallback(
+    (kind: LogKind, on: boolean) => {
+      setPreserveState((p) => ({ ...p, [kind]: on }));
+      if (tab) void request('POST', '/api/browser/logs/preserve', {}, { id: tab, kind, on }).catch(() => {});
+    },
+    [tab],
+  );
+  const clear = useCallback(
+    (kind: LogKind) => {
+      if (!tab) return;
+      if (kind === 'console') setConsoleRows((prev) => ({ ...prev, [tab]: [] }));
+      else setNetworkRows((prev) => ({ ...prev, [tab]: [] }));
+      void request('POST', '/api/browser/logs/clear', {}, { id: tab, kind }).catch(() => {});
+    },
+    [tab],
+  );
+
+  const consoleEntries = useMemo(() => (tab ? (consoleRows[tab] ?? []) : []), [consoleRows, tab]);
+  const networkEntries = useMemo(() => (tab ? (networkRows[tab] ?? []) : []), [networkRows, tab]);
+  const errors = useMemo(() => consoleEntries.filter((e) => e.level === 'error').length, [consoleEntries]);
+  return { consoleEntries, networkEntries, errors, preserve, setPreserve, clear };
+}
+
+type Level = 'verbose' | 'info' | 'warnings' | 'errors';
+const LEVELS: Level[] = ['verbose', 'info', 'warnings', 'errors'];
+const SHOWN: Record<Level, string[]> = {
+  verbose: ['debug', 'log', 'info', 'warn', 'error'],
+  info: ['log', 'info', 'warn', 'error'],
+  warnings: ['warn', 'error'],
+  errors: ['error'],
+};
+
+interface Local {
+  id: number;
+  input: string;
+  result?: EvalResult;
+}
+
+const fileOf = (url: string) => {
+  try {
+    const u = new URL(url);
+    return u.pathname.split('/').filter(Boolean).pop() || u.host;
+  } catch {
+    return url;
+  }
+};
+
+export interface ConsolePaneProps {
+  tab: string;
+  logs: BrowserLogs;
+  /** Opens the DevTools at the Sources panel for a source link. */
+  onSource(url: string, line: number): void;
+}
+
+export function ConsolePane({ tab, logs, onSource }: ConsolePaneProps) {
+  const [level, setLevel] = useState<Level>('verbose');
+  const [filter, setFilter] = useState('');
+  const [local, setLocal] = useState<Local[]>([]);
+  const [draft, setDraft] = useState('');
+  const history = useRef<string[]>([]);
+  const cursor = useRef(-1);
+  const nextLocal = useRef(1);
+  const list = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+
+  const rows = useMemo(() => {
+    const shown = SHOWN[level];
+    const needle = filter.trim().toLowerCase();
+    return logs.consoleEntries.filter((e) => shown.includes(e.level) && (!needle || e.text.toLowerCase().includes(needle)));
+  }, [logs.consoleEntries, level, filter]);
+
+  useEffect(() => {
+    const el = list.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [rows, local]);
+
+  const run = async () => {
+    const input = draft.trim();
+    if (!input) return;
+    history.current.push(input);
+    cursor.current = -1;
+    setDraft('');
+    const id = nextLocal.current++;
+    setLocal((l) => [...l, { id, input }].slice(-MAX_ROWS));
+    let result: EvalResult;
+    try {
+      result = await request<EvalResult>('POST', '/api/browser/eval', {}, { id: tab, expression: input });
+    } catch (e) {
+      result = { ok: false, text: e instanceof Error ? e.message : String(e) };
+    }
+    setLocal((l) => l.map((x) => (x.id === id ? { ...x, result } : x)));
+  };
+
+  const recall = (delta: number) => {
+    const h = history.current;
+    if (!h.length) return;
+    const next = cursor.current === -1 ? (delta < 0 ? h.length - 1 : -1) : cursor.current + delta;
+    if (next < 0 || next >= h.length) {
+      cursor.current = -1;
+      setDraft('');
+      return;
+    }
+    cursor.current = next;
+    setDraft(h[next]!);
+  };
+
+  return (
+    <div className="browser-pane">
+      <div className="browser-pane-bar">
+        <IconButton icon="trash" size="sm" label={t('browser.logs.clear')} onClick={() => {
+          logs.clear('console');
+          setLocal([]);
+        }} />
+        <select className="browser-select" aria-label={t('browser.console.level')} value={level} onChange={(e) => setLevel(e.target.value as Level)}>
+          {LEVELS.map((l) => (
+            <option key={l} value={l}>{t(`browser.console.level.${l}` as const)}</option>
+          ))}
+        </select>
+        <input className="browser-filter" type="text" spellCheck={false} aria-label={t('browser.logs.filter')} placeholder={t('browser.logs.filter')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <Button size="sm" pressed={logs.preserve.console} onClick={() => logs.setPreserve('console', !logs.preserve.console)}>{t('browser.logs.preserve')}</Button>
+      </div>
+      <div
+        ref={list}
+        className="browser-console-list"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+        }}
+      >
+        {rows.length === 0 && local.length === 0 && <div className="browser-pane-empty">{t('browser.console.empty')}</div>}
+        {rows.map((e) => (
+          <div key={e.id} className={`console-row lvl-${e.level}`}>
+            <pre className="console-text">{e.stack && !e.text.includes(e.stack) ? `${e.text}\n${e.stack}` : e.text}</pre>
+            {e.source && (
+              <Button variant="ghost" size="xs" className="console-source" title={`${e.source.url}:${e.source.line}`} onClick={() => onSource(e.source!.url, e.source!.line)}>
+                {fileOf(e.source.url)}:{e.source.line}
+              </Button>
+            )}
+          </div>
+        ))}
+        {local.map((x) => (
+          <div key={`l${x.id}`} className="console-local">
+            <div className="console-row lvl-input"><pre className="console-text">{`> ${x.input}`}</pre></div>
+            {x.result && (
+              <div className={`console-row ${x.result.ok ? 'lvl-result' : 'lvl-error'}`}>
+                <pre className="console-text">{x.result.text}</pre>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <textarea
+        className="browser-prompt"
+        rows={1}
+        spellCheck={false}
+        aria-label={t('browser.console.prompt')}
+        placeholder={t('browser.console.prompt')}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            void run();
+          } else if (e.key === 'ArrowUp' && e.currentTarget.selectionStart === 0) {
+            e.preventDefault();
+            recall(-1);
+          } else if (e.key === 'ArrowDown' && e.currentTarget.selectionEnd === e.currentTarget.value.length && cursor.current !== -1) {
+            e.preventDefault();
+            recall(1);
+          }
+        }}
+      />
+    </div>
+  );
+}
