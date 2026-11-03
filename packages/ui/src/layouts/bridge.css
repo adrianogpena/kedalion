@@ -1,7 +1,7 @@
 /* Bridge: the combination picked from the design explore. Command-bar shell (design variant A) and
    Workbench A / REST B inside; the views switch on useBridge() (packages/ui/src/bridge.ts), this file only
    tunes the header like Ribbon does. */
-:root[data-layout='bridge'] { --nav-header-h: 44px; --tabbar-h: 34px; }
-:root[data-layout='bridge'],
-:root[data-layout='bridge'] body { overflow: clip; }
-:root[data-layout='bridge'] .tab-chip { margin-top: var(--space-4); }
+:root[data-nav='header-command'] { --nav-header-h: 44px; --tabbar-h: 34px; }
+:root[data-nav='header-command'],
+:root[data-nav='header-command'] body { overflow: clip; }
+:root[data-nav='header-command'] .tab-chip { margin-top: var(--space-4); }

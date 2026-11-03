@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, type ComponentType, type ReactNode } from 'react';
-import { legacyLayoutId, resolveLayout, resolveLayouts, supportsDock, type Layout, type LayoutsSetting, type LayoutStructure, type MainMenu, type ResolvedLayouts } from '@kedalion/server-core/layouts';
+import { legacyLayoutId, resolveLayout, resolveLayouts, supportsDock, type Layout, type LayoutsSetting, type LayoutStructure, type MainMenu, type NavigationId, type ResolvedLayouts, type SkinId } from '@kedalion/server-core/layouts';
 import { setFileIconVariants } from './file-icons';
 import { iconSetById } from './icons';
 import { AtlasAppFrame, BaseAppFrame, IslandsAppFrame, type AppFrameProps } from './components/AppFrame';
@@ -16,14 +16,28 @@ export interface ShellComponents {
 
 const SHELLS: Record<string, Partial<ShellComponents>> = {};
 
-/** Swaps shell parts for a layout id; slots left out keep the base components. */
-export function registerShell(layoutId: string, parts: Partial<ShellComponents>): void {
-  SHELLS[layoutId] = { ...SHELLS[layoutId], ...parts };
+/** Swaps shell parts for a key, `nav:<NavigationId>` or `skin:<SkinId>`; slots left out keep the base components. */
+export function registerShell(key: string, parts: Partial<ShellComponents>): void {
+  SHELLS[key] = { ...SHELLS[key], ...parts };
 }
 
-registerShell('islands', { Frame: IslandsAppFrame, StatusBar: IslandsStatusBar });
-registerShell('modeline', { StatusBar: ModelineStatusBar });
-registerShell('atlas', { Frame: AtlasAppFrame, Sidebar: AtlasSidebar });
+registerShell('skin:islands', { Frame: IslandsAppFrame, StatusBar: IslandsStatusBar });
+registerShell('skin:modeline', { StatusBar: ModelineStatusBar });
+registerShell('nav:atlas', { Frame: AtlasAppFrame, Sidebar: AtlasSidebar });
+
+/** Base parts, then the navigation's, then the skin's. */
+export function resolveShell(navigation: NavigationId, skin: SkinId): ShellComponents {
+  const nav = SHELLS[`nav:${navigation}`] ?? {};
+  const sk = SHELLS[`skin:${skin}`] ?? {};
+  return {
+    Frame: BaseAppFrame,
+    Sidebar: BaseSidebar,
+    TabBar: BaseTabBar,
+    StatusBar: BaseStatusBar,
+    ...nav,
+    ...sk,
+  };
+}
 
 export interface LayoutContext {
   layout: Layout;
@@ -57,13 +71,7 @@ export function LayoutProvider({ layouts, icons, children }: { layouts?: Layouts
 export function useLayout(): LayoutContext {
   const { layout, iconSet, mainMenu, resolved } = useContext(Ctx);
   return useMemo(() => {
-    const parts = SHELLS[layout.id] ?? {};
-    const shell: ShellComponents = {
-      Frame: parts.Frame ?? BaseAppFrame,
-      Sidebar: parts.Sidebar ?? BaseSidebar,
-      TabBar: parts.TabBar ?? BaseTabBar,
-      StatusBar: parts.StatusBar ?? BaseStatusBar,
-    };
+    const shell = resolveShell(resolved.navigation, resolved.skin);
     return { layout, structure: resolved.structure, mainMenu, iconSet, shell, resolved };
   }, [layout, iconSet, mainMenu, resolved]);
 }

@@ -1,38 +1,38 @@
 /* Atlas: files-first. Labelled, sectioned sidebar; coloured Atom icon set ('atlas'); the global tools
    sit at the right end of a frame-wide status row (AtlasAppFrame), so they stay reachable when the
    per-file status bar is off. Palette family 'atlas' (quiet cool grey, teal accent) is picked separately. */
-:root[data-layout='atlas'] {
+:root[data-nav='atlas'] {
   --sidebar-w: 212px;
 }
 
 /* The status row is a grid row of .app; clip keeps it from scrolling the document (and avoids the
    doubled context-menu capture seen with modeline). */
-:root[data-layout='atlas'], :root[data-layout='atlas'] body { overflow: clip; }
+:root[data-nav='atlas'], :root[data-nav='atlas'] body { overflow: clip; }
 
 /* Shell: sidebar and content on row 1, the tools row spans row 2. */
-:root[data-layout='atlas'] .app { grid-template-rows: minmax(0, 1fr) auto; }
-:root[data-layout='atlas'] .app > .sidebar { grid-row: 1; }
-:root[data-layout='atlas'] .atlas-statusbar {
+:root[data-nav='atlas'] .app { grid-template-rows: minmax(0, 1fr) auto; }
+:root[data-nav='atlas'] .app > .sidebar { grid-row: 1; }
+:root[data-nav='atlas'] .atlas-statusbar {
   grid-column: 1 / -1; grid-row: 2;
   display: flex; align-items: center; gap: var(--space-2);
   min-height: var(--statusbar-h); padding: 0 var(--space-6);
   border-top: 1px solid var(--border-soft); background: var(--bg-elev); color: var(--text-2); font-size: var(--fs-sm);
 }
-:root[data-layout='atlas'] .atlas-statusbar .spacer { flex: 1; }
-:root[data-layout='atlas'] .atlas-statusbar .btn { height: calc(var(--statusbar-h) - 4px); }
-:root[data-layout='atlas'] .app.zen > .atlas-statusbar { display: none; }
+:root[data-nav='atlas'] .atlas-statusbar .spacer { flex: 1; }
+:root[data-nav='atlas'] .atlas-statusbar .btn { height: calc(var(--statusbar-h) - 4px); }
+:root[data-nav='atlas'] .app.zen > .atlas-statusbar { display: none; }
 
 /* Sidebar: section labels 10.5 caps +0.06em; collapsed rail (mainMenu 'icons') hides them already. */
-:root[data-layout='atlas'] .side-title { font-family: var(--font-sans); font-size: var(--fs-2xs); letter-spacing: .06em; text-transform: uppercase; }
+:root[data-nav='atlas'] .side-title { font-family: var(--font-sans); font-size: var(--fs-2xs); letter-spacing: .06em; text-transform: uppercase; }
 
 /* Tree rows 24, 12.5. */
-:root[data-layout='atlas'] .tree-row { min-height: 24px; font-size: var(--fs-sm-plus); }
+:root[data-skin='atlas'] .tree-row { min-height: 24px; font-size: var(--fs-sm-plus); }
 
 /* Accent is for selection and primary only: active nav icons keep their own colour. */
-:root[data-layout='atlas'] .side-item.active .icon { color: inherit; }
+:root[data-skin='atlas'] .side-item.active .icon { color: inherit; }
 
 /* Terminal: xterm keeps --bg-sunken, the same as the frame; a 1px rule marks its edge. */
-:root[data-layout='atlas'] .terminal-pane:not(.preview) .terminal-host .xterm { outline: 1px solid var(--border); }
+:root[data-skin='atlas'] .terminal-pane:not(.preview) .terminal-host .xterm { outline: 1px solid var(--border); }
 
 /* Dock = Right: the sidebar is pinned to row 1 above, so give it the right column explicitly. */
-:root[data-layout='atlas'] .app.sidebar-right > .sidebar { grid-column: 2; }
+:root[data-nav='atlas'] .app.sidebar-right > .sidebar { grid-column: 2; }

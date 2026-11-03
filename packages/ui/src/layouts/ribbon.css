@@ -1,21 +1,21 @@
 /* Ribbon: the main menu is a header strip of labelled screen tabs (navPlacement: 'header'), document
    tabs under it, tools at the right of the header; no sidebar. Reuses the default palettes; the
    boldness is the shell. */
-:root[data-layout='ribbon'] {
+:root[data-nav='header'] {
   --nav-header-h: 44px; --tabbar-h: 34px;
 }
 
-:root[data-layout='ribbon'],
-:root[data-layout='ribbon'] body { overflow: clip; }
+:root[data-nav='header'],
+:root[data-nav='header'] body { overflow: clip; }
 
-:root[data-layout='ribbon'] .header-nav { gap: var(--space-10); }
-:root[data-layout='ribbon'] .header-brand { margin-block: var(--space-10); padding-right: var(--space-12); border-right: 1px solid var(--border-soft); }
-:root[data-layout='ribbon'] .header-tab { padding: 0 var(--space-12); font-size: 13.5px; font-weight: 500; }
-:root[data-layout='ribbon'] .header-tab:hover { background: transparent; }
-:root[data-layout='ribbon'] .header-tab.active { font-weight: 600; }
-:root[data-layout='ribbon'] .header-tab.active::after { left: var(--space-10); right: var(--space-10); }
-:root[data-layout='ribbon'] .header-nav.icons-only .header-tab { padding: 0; }
-:root[data-layout='ribbon'] .header-tools .btn-icon { width: var(--control-h); height: var(--control-h); }
+:root[data-nav='header'] .header-nav { gap: var(--space-10); }
+:root[data-nav='header'] .header-brand { margin-block: var(--space-10); padding-right: var(--space-12); border-right: 1px solid var(--border-soft); }
+:root[data-nav='header'] .header-tab { padding: 0 var(--space-12); font-size: 13.5px; font-weight: 500; }
+:root[data-nav='header'] .header-tab:hover { background: transparent; }
+:root[data-nav='header'] .header-tab.active { font-weight: 600; }
+:root[data-nav='header'] .header-tab.active::after { left: var(--space-10); right: var(--space-10); }
+:root[data-nav='header'] .header-nav.icons-only .header-tab { padding: 0; }
+:root[data-nav='header'] .header-tools .btn-icon { width: var(--control-h); height: var(--control-h); }
 
 /* Document tabs: a shorter bar under the header strip. */
-:root[data-layout='ribbon'] .tab-chip { margin-top: var(--space-4); }
+:root[data-nav='header'] .tab-chip { margin-top: var(--space-4); }
