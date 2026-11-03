@@ -103,6 +103,30 @@ export interface HttpSendInput {
   environment?: string;
   /** The editor's unresolved draft, kept in the request history as is (Authorization dropped); without it the history keeps `request`. */
   draft?: HttpRequestDraft;
+  /** Captured chain values, layered over the environment variables (these win). */
+  vars?: Record<string, string>;
+}
+
+/** A value a chain step takes from its response: a JSON path (`$.a.b[0]`) of the body, or a header name. */
+export interface RestChainCapture {
+  name: string;
+  from: 'body' | 'header';
+  path: string;
+}
+
+export interface RestChainStep {
+  /** Saved request id. */
+  requestId: string;
+  captures: RestChainCapture[];
+}
+
+/** `GET /api/rest/chains` items. */
+export interface RestChain {
+  id: string;
+  name: string;
+  steps: RestChainStep[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /** A sent REST request in the history (`GET /api/rest/history?q=`, newest first). */

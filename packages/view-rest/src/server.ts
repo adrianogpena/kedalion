@@ -75,6 +75,7 @@ export const restServerView = () =>
       return {
         ...environmentRoutes(ctx.stores as unknown as AppStores),
         ...recordRoutes(requests, '/api/requests'),
+        ...recordRoutes(ctx.stores.chains as RecordStore<{ name: string; steps: unknown[] }>, '/api/rest/chains'),
         // The saved Authorization value, only for Copy as curl.
         'GET /api/requests/auth': async ({ query }) => {
           const id = query.get('id');

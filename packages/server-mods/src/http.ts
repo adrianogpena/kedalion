@@ -419,12 +419,22 @@ export function suggestedName(url: string, contentType: string): string {
   return name;
 }
 
+/** Captured chain values from a send body: string values only, at most 100 names, 64 KB each. */
+function validVars(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!isRecord(raw)) return out;
+  for (const [name, value] of Object.entries(raw).slice(0, 100)) {
+    if (typeof value === 'string' && value.length <= 65536) out[name] = value;
+  }
+  return out;
+}
+
 /** `POST /api/http/send` (`HttpSendInput`: `{ request, secretRef?, environment? }`, `{{name}}` resolved before sending) and `POST /api/http/save` (`{ id, target }`, `target` is the path the in-app save dialog returned). */
 export function httpRoutes(executor: HttpExecutor, opts: HttpRoutesOptions = {}): Routes {
   const { secretHeaders, environmentVars, secretVars, onSend, picks } = opts;
 
   async function send(body: Record<string, unknown>, signal: AbortSignal): Promise<HttpResponseInfo> {
-    const values = typeof body.environment === 'string' && environmentVars ? await environmentVars(body.environment) : {};
+    const values = { ...(typeof body.environment === 'string' && environmentVars ? await environmentVars(body.environment) : {}), ...validVars(body.vars) };
     const vars = variableResolver(values);
     const request = resolveRequest(body.request, vars);
     vars.check();

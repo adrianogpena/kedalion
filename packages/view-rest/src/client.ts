@@ -1,6 +1,6 @@
 import { httpClient, type HttpClient } from '@kedalion/editor';
 import { request } from '@kedalion/ui';
-import type { RestEnvironment, RestEnvironmentInput, RestHistoryEntry } from '@kedalion/server-core/protocol';
+import type { RestChain, RestEnvironment, RestEnvironmentInput, RestHistoryEntry } from '@kedalion/server-core/protocol';
 import type { RestTabsFile, SavedRequest } from './settings';
 
 /** The server calls the REST view makes (the sending and the environment list come from `HttpClient`); the app builds it from its api and passes it to `restView`. */
@@ -22,6 +22,10 @@ export interface RestClient extends HttpClient {
   createRestEnvironment: (input: RestEnvironmentInput) => Promise<RestEnvironment>;
   updateRestEnvironment: (id: string, input: RestEnvironmentInput) => Promise<RestEnvironment>;
   deleteRestEnvironment: (id: string) => Promise<unknown>;
+  chains: () => Promise<RestChain[]>;
+  createChain: (input: Omit<RestChain, 'id' | 'createdAt' | 'updatedAt'>) => Promise<RestChain>;
+  updateChain: (id: string, input: Omit<RestChain, 'id' | 'createdAt' | 'updatedAt'>) => Promise<RestChain>;
+  deleteChain: (id: string) => Promise<unknown>;
   /** Sent requests, newest first; `q` matches method and URL. */
   restHistory: (q?: string) => Promise<RestHistoryEntry[]>;
   clearRestHistory: () => Promise<unknown>;
@@ -58,6 +62,10 @@ export const restClient: RestClient = {
   createRestEnvironment: (input) => request<RestEnvironment>('POST', '/api/rest/environments', {}, input),
   updateRestEnvironment: (id, input) => request<RestEnvironment>('PUT', '/api/rest/environments', { id }, input),
   deleteRestEnvironment: (id) => request<{ ok: true }>('DELETE', '/api/rest/environments', { id }),
+  chains: () => request<RestChain[]>('GET', '/api/rest/chains'),
+  createChain: (input) => request<RestChain>('POST', '/api/rest/chains', {}, input),
+  updateChain: (id, input) => request<RestChain>('PUT', '/api/rest/chains', { id }, input),
+  deleteChain: (id) => request<{ ok: true }>('DELETE', '/api/rest/chains', { id }),
   restHistory: (q = '') => request<RestHistoryEntry[]>('GET', '/api/rest/history', q ? { q } : {}),
   clearRestHistory: () => request<{ ok: true }>('DELETE', '/api/rest/history'),
 };

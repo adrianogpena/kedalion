@@ -352,6 +352,16 @@ test('send resolves environment variables in URL, headers, body, form and saved 
   expect(asked).toEqual(['dev', 'dev']);
 });
 
+test('captured vars win over the environment and unknown names still fail', async () => {
+  const routes = httpRoutes(httpExecutor(), { environmentVars: async () => ({ base, who: 'env' }) });
+  const send = (request: unknown, vars: unknown) =>
+    Promise.resolve(routes['POST /api/http/send']!({ req: new Request('http://x/'), json: async () => ({ request, environment: 'e', vars }) } as unknown as RouteContext));
+  const res = (await send({ method: 'GET', url: '{{base}}/echo', headers: [['x-who', '{{who}}']] }, { who: 'captured', bad: 5 })) as { text: string };
+  expect(JSON.parse(res.text).headers['x-who']).toBe('captured');
+  const err = (await send({ method: 'GET', url: '{{base}}/echo', headers: [['x-a', '{{bad}}']] }, { bad: 5 }).catch((e) => e)) as AppError;
+  expect(err.code).toBe('unknownVariable');
+});
+
 test('unknown variables fail before sending and list every name', async () => {
   let fetched = 0;
   const executor = httpExecutor({ fetchImpl: (async () => (fetched++, new Response('x'))) as unknown as typeof fetch });

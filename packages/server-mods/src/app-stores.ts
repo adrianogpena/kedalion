@@ -2,7 +2,7 @@ import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { appHome, secretStore } from '@kedalion/platform';
 import { AppError, invalid, isRecord, notFound, type Routes } from '@kedalion/server-core';
-import { REST_ENV_MAX_VARS, REST_ENV_NAME_CHARS, REST_VAR_NAME, type HttpRequestDraft, type RestEnvVar } from '@kedalion/server-core/protocol';
+import { REST_ENV_MAX_VARS, REST_ENV_NAME_CHARS, REST_VAR_NAME, type HttpRequestDraft, type RestChainStep, type RestEnvVar } from '@kedalion/server-core/protocol';
 import { httpExecutor, httpRoutes, validateDraft } from './http.ts';
 import { pickedPaths } from './dialogs.ts';
 import type { DialogPicks } from './file-dialog.ts';
@@ -23,6 +23,11 @@ export interface StoredEnvironment {
   vars: RestEnvVar[];
   /** JSON object name → value of the secret variables; a secret field. */
   secrets?: unknown;
+}
+
+export interface StoredChain {
+  name: string;
+  steps: RestChainStep[];
 }
 
 export interface AppStoresOptions {
@@ -46,6 +51,8 @@ export interface AppStores {
   projectRoots: () => Promise<Array<{ id: string; path: string }>>;
   requests: RecordStore<SavedRequest>;
   restHistory: RestHistory;
+  /** Saved REST chains (steps of saved requests with captures). */
+  chains: RecordStore<StoredChain>;
   environments: RecordStore<StoredEnvironment>;
   /** Client input as the environments store takes it (secret variables go to the secret store). */
   environmentInput: (raw: unknown, id?: string) => Promise<unknown>;
@@ -150,6 +157,32 @@ export function appStores(appId: string, opts: AppStoresOptions = {}): AppStores
     },
   });
 
+  const badChain = () => invalid('badChain', 'The chain is not valid.');
+  const chains = recordStore<StoredChain>({
+    dir: home,
+    name: 'rest-chains',
+    validate(input) {
+      const { name, steps } = isRecord(input) ? input : ({} as Record<string, unknown>);
+      const trimmed = typeof name === 'string' ? name.trim() : '';
+      if (trimmed.length < 1 || trimmed.length > 80) throw invalid('badChainName', 'The name must have 1 to 80 characters.');
+      if (!Array.isArray(steps) || steps.length > 50) throw badChain();
+      const out = steps.map((s): RestChainStep => {
+        if (!isRecord(s) || typeof s.requestId !== 'string' || s.requestId === '') throw badChain();
+        const caps = s.captures ?? [];
+        if (!Array.isArray(caps) || caps.length > 20) throw badChain();
+        return {
+          requestId: s.requestId,
+          captures: caps.map((c) => {
+            if (!isRecord(c) || typeof c.name !== 'string' || !/^[A-Za-z_][\w.-]{0,63}$/.test(c.name)) throw badChain();
+            if ((c.from !== 'body' && c.from !== 'header') || typeof c.path !== 'string' || c.path.length > 200) throw badChain();
+            return { name: c.name, from: c.from, path: c.path };
+          }),
+        };
+      });
+      return { name: trimmed, steps: out };
+    },
+  });
+
   const storedSecrets = async (id: string): Promise<Map<string, string>> => {
     const raw = await environments.secret(id, 'secrets');
     if (!raw) return new Map();
@@ -213,7 +246,7 @@ export function appStores(appId: string, opts: AppStoresOptions = {}): AppStores
   const picks: DialogPicks = { opened: pickedFolders, saveTargets: pickedPaths() };
   const ui = uiBroker();
 
-  return { home, secrets, pickedFolders, picks, ui, projects, projectRoots, requests, restHistory: history, environments, environmentInput, environmentVars, secretVars, secretHeaders };
+  return { home, secrets, pickedFolders, picks, ui, projects, projectRoots, requests, restHistory: history, chains, environments, environmentInput, environmentVars, secretVars, secretHeaders };
 }
 
 /** `/api/http/*` (send, import, save...): shared by the rest view and the Explorer curl panel, so both declare it as `shared: 'http'`. */

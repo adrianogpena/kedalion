@@ -179,7 +179,7 @@ await runApp({
     ...infoRoutes({ app: APP, version: pkg.version, dataDir }),
     ...settingsRoutes(settings),
     // Machine-specific: autostart writes the Run key, port is per machine.
-    ...backupRoutes({ app: { id: APP.id, version: pkg.version }, settings, stores: { projects: stores.projects, dbConnections: stores.dbConnections, requests: stores.requests, environments: stores.environments }, excludeSettings: ['autostart', 'port'], picks: stores.picks }),
+    ...backupRoutes({ app: { id: APP.id, version: pkg.version }, settings, stores: { projects: stores.projects, dbConnections: stores.dbConnections, requests: stores.requests, chains: stores.chains, environments: stores.environments }, excludeSettings: ['autostart', 'port'], picks: stores.picks }),
     ...(setAppLink(ctx.link, ctx.origin), routes(ctx)),
     ...mounted.routes,
     ...fileDialogRoutes({ home: dataDir, picks: stores.picks }),
