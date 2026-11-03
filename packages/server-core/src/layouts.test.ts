@@ -1,5 +1,69 @@
 import { expect, test } from 'bun:test';
-import { applyDockSide, applyMainMenu, supportsDock, DEFAULT_LAYOUT, hasLabelledMenu, LAYOUTS, ORIGINAL_STRUCTURE, resolveLayout } from './layouts.ts';
+import {
+  applyDockSide, applyMainMenu, supportsDock, DEFAULT_LAYOUT, hasLabelledMenu, LAYOUTS, ORIGINAL_STRUCTURE, resolveLayout,
+  PRESETS, differsFromPreset, layoutsConflicts, layoutsFromLegacy, legacyLayoutId, optionConflicts, resolveLayouts, validLayouts,
+} from './layouts.ts';
+
+test('every legacy layout id reduces to a conflict-free combination with the same structure', () => {
+  for (const l of LAYOUTS) {
+    const r = resolveLayouts(layoutsFromLegacy({ layout: l.id }));
+    expect(layoutsConflicts(r)).toEqual([]);
+    expect(r.structure).toEqual(l.structure);
+    expect(legacyLayoutId(r)).toBe(l.id);
+    expect(r.icons).toBe(l.icons);
+  }
+});
+
+test('legacy mainMenu and dock migrate to nav toggles', () => {
+  const s = layoutsFromLegacy({ layout: 'original', mainMenu: 'icons', dock: 'right' });
+  expect(s).toEqual({ preset: 'original', nav: { dock: 'right' } });
+  expect(layoutsFromLegacy({ layout: 'ribbon', mainMenu: 'icons' }).nav).toEqual({ labels: false });
+  expect(layoutsFromLegacy({})).toEqual({ preset: 'ribbon' });
+});
+
+test('presets are conflict-free', () => {
+  for (const p of PRESETS) expect(layoutsConflicts(resolveLayouts({ preset: p.id }))).toEqual([]);
+});
+
+test('Ledger needs a header navigation', () => {
+  const sidebar = resolveLayouts({ preset: 'original' });
+  expect(optionConflicts(sidebar, 'skin', 'ledger')).toEqual([
+    { row: 'skin', option: 'ledger', blockedBy: 'navigation', reason: 'needsHeader' },
+  ]);
+  expect(optionConflicts(resolveLayouts({ preset: 'ribbon' }), 'skin', 'ledger')).toEqual([]);
+});
+
+test('Modeline needs bottom tabs and a status bar', () => {
+  const r = resolveLayouts({ preset: 'original' });
+  expect(optionConflicts(r, 'skin', 'modeline').map((c) => c.reason)).toEqual(['needsBottomTabs']);
+  const bottom = resolveLayouts({ preset: 'original', nav: { tabBar: 'bottom' }, skin: 'modeline' });
+  expect(optionConflicts(bottom, 'nav.tabBar', 'top')[0]?.reason).toBe('needsBottomTabs');
+  expect(optionConflicts(bottom, 'nav.statusBar', 'false')[0]?.reason).toBe('needsStatusBar');
+});
+
+test('Islands is blocked by a header, in both directions', () => {
+  expect(optionConflicts(resolveLayouts({ preset: 'ribbon' }), 'skin', 'islands')[0]?.reason).toBe('needsSidebar');
+  const islands = resolveLayouts({ preset: 'original', skin: 'islands' });
+  expect(optionConflicts(islands, 'navigation', 'header')).toEqual([
+    { row: 'skin', option: 'islands', blockedBy: 'navigation', reason: 'needsSidebar' },
+  ]);
+  expect(optionConflicts(islands, 'navigation', 'atlas')).toEqual([]);
+});
+
+test('differsFromPreset lists the overriding rows', () => {
+  expect(differsFromPreset({ preset: 'ribbon' })).toEqual([]);
+  expect(differsFromPreset({ preset: 'bridge', views: { workbench: 'one-surface' } })).toEqual([]);
+  expect(differsFromPreset({ preset: 'ribbon', skin: 'base', density: 'roomy', views: { rest: 'panes' }, nav: { dock: 'right' } }))
+    .toEqual(['nav.dock', 'density', 'view.rest']);
+});
+
+test('resolveLayouts follows the preset for unknown ids; validLayouts drops unknown keys', () => {
+  expect(resolveLayouts({ preset: 'nope', skin: 'zzz' as never }).navigation).toBe('header');
+  expect(validLayouts({ preset: 'bridge', skin: 'zzz', density: 'roomy', extra: 1, views: { git: 'x', rest: 'panes' } }))
+    .toEqual({ preset: 'bridge', density: 'roomy', views: { rest: 'panes' } });
+  expect(validLayouts({ preset: 'nope' })).toBeUndefined();
+  expect(validLayouts(null)).toBeUndefined();
+});
 
 test('layout ids are unique and include the default', () => {
   const ids = LAYOUTS.map((l) => l.id);

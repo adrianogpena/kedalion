@@ -3,6 +3,8 @@
 // A layout also declares its screen structure (`LayoutStructure`) and its default icon set.
 // Pure module, shared by the server (settings validation) and the web UI (applies `data-layout`).
 
+import type { ThemeSettings } from './palettes.ts';
+
 export interface LayoutStructure {
   sidebarSide: 'left' | 'right';
   sidebarMode: 'collapsed' | 'expanded';
@@ -102,4 +104,261 @@ export function resolveLayout(id?: string): Layout {
 /** The icon set to use: `override` when it is a known id, else the layout's own. */
 export function resolveIconSetId(layout: Layout, override?: string): string {
   return override !== undefined && ICON_SET_IDS.includes(override) ? override : layout.icons;
+}
+
+// ---- Per-view layouts, Navigation, Look, presets and compatibility (design/LAYOUT-PLAN.md) ----
+
+export type NavigationId = 'header' | 'header-command' | 'sidebar' | 'atlas';
+export type DensityId = 'normal' | 'compact' | 'roomy';
+export const SKIN_IDS = ['base', 'material', 'blueprint', 'transit', 'modeline', 'ledger', 'atlas', 'islands', 'rack'] as const;
+export type SkinId = (typeof SKIN_IDS)[number];
+export const NAVIGATION_IDS: readonly NavigationId[] = ['header', 'header-command', 'sidebar', 'atlas'];
+export const DENSITY_IDS: readonly DensityId[] = ['normal', 'compact', 'roomy'];
+
+/** The layouts each view offers; the first is its Base. */
+export const VIEW_LAYOUTS: Readonly<Record<'git' | 'workbench' | 'rest', readonly string[]>> = {
+  git: ['base', 'read-through'],
+  workbench: ['base', 'one-surface'],
+  rest: ['base', 'panes'],
+};
+
+export interface NavToggles {
+  labels?: boolean;
+  brand?: boolean;
+  statusBar?: boolean;
+  tabBar?: 'top' | 'bottom';
+  dock?: 'left' | 'right';
+}
+
+export interface LayoutsSetting {
+  preset: string;
+  views?: Partial<Record<string, string>>;
+  navigation?: NavigationId;
+  nav?: NavToggles;
+  density?: DensityId;
+  skin?: SkinId;
+}
+
+export interface Preset {
+  id: 'ribbon' | 'bridge' | 'original';
+  navigation: NavigationId;
+  nav: Required<NavToggles>;
+  density: DensityId;
+  skin: SkinId;
+  views: Record<string, string>;
+  icons: string;
+}
+
+const BASE_VIEWS: Record<string, string> = { git: 'base', workbench: 'base', rest: 'base' };
+
+export const PRESETS: readonly Preset[] = [
+  {
+    id: 'ribbon', navigation: 'header', nav: { labels: true, brand: true, statusBar: true, tabBar: 'top', dock: 'left' },
+    density: 'normal', skin: 'base', views: { ...BASE_VIEWS }, icons: 'atom',
+  },
+  {
+    id: 'bridge', navigation: 'header-command', nav: { labels: true, brand: true, statusBar: true, tabBar: 'top', dock: 'left' },
+    density: 'normal', skin: 'base', views: { git: 'base', workbench: 'one-surface', rest: 'panes' }, icons: 'atom',
+  },
+  {
+    id: 'original', navigation: 'sidebar', nav: { labels: false, brand: true, statusBar: true, tabBar: 'top', dock: 'left' },
+    density: 'normal', skin: 'base', views: { ...BASE_VIEWS }, icons: 'original',
+  },
+];
+export const DEFAULT_PRESET = 'ribbon';
+
+function presetById(id: string | undefined): Preset {
+  return PRESETS.find((p) => p.id === id) ?? PRESETS.find((p) => p.id === DEFAULT_PRESET)!;
+}
+
+export interface ResolvedLayouts {
+  preset: string;
+  navigation: NavigationId;
+  nav: Required<NavToggles>;
+  density: DensityId;
+  skin: SkinId;
+  views: Record<string, string>;
+  structure: LayoutStructure;
+  icons: string;
+}
+
+export function navToggleApplies(n: NavigationId, toggle: keyof NavToggles): boolean {
+  switch (toggle) {
+    case 'labels':
+    case 'dock':
+      return n === 'sidebar' || n === 'atlas';
+    case 'brand':
+      return n === 'sidebar';
+    default:
+      return true;
+  }
+}
+
+function structureFor(navigation: NavigationId, nav: Required<NavToggles>): LayoutStructure {
+  const common = { statusBar: nav.statusBar, tabBarPosition: nav.tabBar, sidebarSide: nav.dock };
+  const mode = nav.labels ? 'expanded' : 'collapsed';
+  if (navigation === 'header' || navigation === 'header-command') {
+    return { ...ORIGINAL_STRUCTURE, ...common, navPlacement: 'header', navFooter: 'none' };
+  }
+  if (navigation === 'atlas') {
+    return { ...ORIGINAL_STRUCTURE, ...common, sidebarMode: mode, sidebarBrand: false, navFooter: 'none' };
+  }
+  return { ...ORIGINAL_STRUCTURE, ...common, sidebarMode: mode, sidebarBrand: nav.brand };
+}
+
+function pick<T extends string>(ids: readonly T[], v: unknown, fallback: T): T {
+  return typeof v === 'string' && (ids as readonly string[]).includes(v) ? (v as T) : fallback;
+}
+
+/** Resolve a setting against its preset; a missing or unknown value follows the preset. */
+export function resolveLayouts(s?: LayoutsSetting, iconsOverride?: string): ResolvedLayouts {
+  const p = presetById(s?.preset);
+  const navigation = pick(NAVIGATION_IDS, s?.navigation, p.navigation);
+  const nav: Required<NavToggles> = {
+    labels: typeof s?.nav?.labels === 'boolean' ? s.nav.labels : p.nav.labels,
+    brand: typeof s?.nav?.brand === 'boolean' ? s.nav.brand : p.nav.brand,
+    statusBar: typeof s?.nav?.statusBar === 'boolean' ? s.nav.statusBar : p.nav.statusBar,
+    tabBar: pick(['top', 'bottom'] as const, s?.nav?.tabBar, p.nav.tabBar),
+    dock: pick(['left', 'right'] as const, s?.nav?.dock, p.nav.dock),
+  };
+  const density = pick(DENSITY_IDS, s?.density, p.density);
+  const skin = pick(SKIN_IDS, s?.skin, p.skin);
+  const views: Record<string, string> = { ...p.views };
+  for (const [view, id] of Object.entries(s?.views ?? {})) {
+    const allowed = (VIEW_LAYOUTS as Record<string, readonly string[]>)[view];
+    if (allowed && id !== undefined && allowed.includes(id)) views[view] = id;
+  }
+  const skinIcons = skin === 'material' ? 'material' : skin === 'atlas' ? 'atom' : p.icons;
+  const icons = iconsOverride !== undefined && ICON_SET_IDS.includes(iconsOverride) ? iconsOverride : skinIcons;
+  return { preset: p.id, navigation, nav, density, skin, views, structure: structureFor(navigation, nav), icons };
+}
+
+function legacyEntry(id: string): LayoutsSetting {
+  switch (id) {
+    case 'original': return { preset: 'original' };
+    case 'dense': return { preset: 'original', density: 'compact' };
+    case 'calm': return { preset: 'original', nav: { brand: false, statusBar: false }, density: 'roomy' };
+    case 'material': return { preset: 'original', nav: { labels: true }, skin: 'material' };
+    case 'blueprint': return { preset: 'original', skin: 'blueprint' };
+    case 'transit': return { preset: 'original', nav: { labels: true }, skin: 'transit' };
+    case 'islands': return { preset: 'original', nav: { brand: false }, skin: 'islands' };
+    case 'modeline': return { preset: 'original', nav: { brand: false, tabBar: 'bottom' }, skin: 'modeline' };
+    case 'bridge': return { preset: 'bridge' };
+    case 'ledger': return { preset: 'original', navigation: 'header', skin: 'ledger' };
+    case 'atlas': return { preset: 'original', navigation: 'atlas', nav: { labels: true }, skin: 'atlas' };
+    default: return { preset: 'ribbon' };
+  }
+}
+
+/** The old `layout` / `mainMenu` / `dock` values as a layouts setting; only keys differing from the preset are written. */
+export function layoutsFromLegacy(t: { layout?: string; mainMenu?: 'labels' | 'icons'; dock?: 'left' | 'right' }): LayoutsSetting {
+  const out = legacyEntry(t.layout ?? DEFAULT_LAYOUT);
+  const p = presetById(out.preset);
+  const nav: NavToggles = { ...out.nav };
+  if (t.mainMenu === 'icons') nav.labels = false;
+  if (t.dock) nav.dock = t.dock;
+  for (const k of Object.keys(nav) as (keyof NavToggles)[]) if (nav[k] === p.nav[k]) delete nav[k];
+  const { nav: _drop, ...rest } = out;
+  return Object.keys(nav).length ? { ...rest, nav } : rest;
+}
+
+export function effectiveLayouts(t: ThemeSettings): LayoutsSetting {
+  return t.layouts ?? layoutsFromLegacy(t);
+}
+
+/** Shape check: keeps known keys and ids, drops the rest; undefined when `input` has no valid preset. */
+export function validLayouts(input: unknown): LayoutsSetting | undefined {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return undefined;
+  const o = input as Record<string, unknown>;
+  if (typeof o.preset !== 'string' || !PRESETS.some((p) => p.id === o.preset)) return undefined;
+  const out: LayoutsSetting = { preset: o.preset };
+  if (typeof o.views === 'object' && o.views !== null) {
+    const views: Record<string, string> = {};
+    for (const [view, id] of Object.entries(o.views as Record<string, unknown>)) {
+      const allowed = (VIEW_LAYOUTS as Record<string, readonly string[]>)[view];
+      if (allowed && typeof id === 'string' && allowed.includes(id)) views[view] = id;
+    }
+    if (Object.keys(views).length) out.views = views;
+  }
+  if ((NAVIGATION_IDS as readonly unknown[]).includes(o.navigation)) out.navigation = o.navigation as NavigationId;
+  if (typeof o.nav === 'object' && o.nav !== null) {
+    const n = o.nav as Record<string, unknown>;
+    const nav: NavToggles = {};
+    if (typeof n.labels === 'boolean') nav.labels = n.labels;
+    if (typeof n.brand === 'boolean') nav.brand = n.brand;
+    if (typeof n.statusBar === 'boolean') nav.statusBar = n.statusBar;
+    if (n.tabBar === 'top' || n.tabBar === 'bottom') nav.tabBar = n.tabBar;
+    if (n.dock === 'left' || n.dock === 'right') nav.dock = n.dock;
+    if (Object.keys(nav).length) out.nav = nav;
+  }
+  if ((DENSITY_IDS as readonly unknown[]).includes(o.density)) out.density = o.density as DensityId;
+  if ((SKIN_IDS as readonly unknown[]).includes(o.skin)) out.skin = o.skin as SkinId;
+  return out;
+}
+
+export type LayoutRow =
+  | 'preset' | 'navigation' | 'nav.labels' | 'nav.brand' | 'nav.statusBar' | 'nav.tabBar' | 'nav.dock'
+  | 'density' | 'skin' | `view.${string}`;
+
+export interface LayoutConflict {
+  row: LayoutRow;
+  option: string;
+  blockedBy: LayoutRow;
+  reason: 'needsHeader' | 'needsSidebar' | 'needsBottomTabs' | 'needsStatusBar';
+}
+
+/** Every unmet requirement of the combination: Ledger needs a header, Modeline bottom tabs and a status bar, Islands a sidebar. */
+export function layoutsConflicts(r: ResolvedLayouts): LayoutConflict[] {
+  const out: LayoutConflict[] = [];
+  const header = r.navigation === 'header' || r.navigation === 'header-command';
+  if (r.skin === 'ledger' && !header) out.push({ row: 'skin', option: 'ledger', blockedBy: 'navigation', reason: 'needsHeader' });
+  if (r.skin === 'modeline' && r.nav.tabBar !== 'bottom') out.push({ row: 'skin', option: 'modeline', blockedBy: 'nav.tabBar', reason: 'needsBottomTabs' });
+  if (r.skin === 'modeline' && !r.nav.statusBar) out.push({ row: 'skin', option: 'modeline', blockedBy: 'nav.statusBar', reason: 'needsStatusBar' });
+  if (r.skin === 'islands' && header) out.push({ row: 'skin', option: 'islands', blockedBy: 'navigation', reason: 'needsSidebar' });
+  return out;
+}
+
+function withOption(c: ResolvedLayouts, row: LayoutRow, option: string): ResolvedLayouts {
+  const next: ResolvedLayouts = { ...c, nav: { ...c.nav }, views: { ...c.views } };
+  if (row === 'preset') return resolveLayouts({ preset: option });
+  if (row === 'navigation') next.navigation = option as NavigationId;
+  else if (row === 'density') next.density = option as DensityId;
+  else if (row === 'skin') next.skin = option as SkinId;
+  else if (row === 'nav.labels') next.nav.labels = option === 'true';
+  else if (row === 'nav.brand') next.nav.brand = option === 'true';
+  else if (row === 'nav.statusBar') next.nav.statusBar = option === 'true';
+  else if (row === 'nav.tabBar') next.nav.tabBar = option === 'bottom' ? 'bottom' : 'top';
+  else if (row === 'nav.dock') next.nav.dock = option === 'right' ? 'right' : 'left';
+  else next.views[row.slice(5)] = option;
+  return next;
+}
+
+/** Conflicts picking `option` in `row` would cause, in either direction (the option's own needs, or the rows that need the old value). [] = allowed. */
+export function optionConflicts(current: ResolvedLayouts, row: LayoutRow, option: string): LayoutConflict[] {
+  return layoutsConflicts(withOption(current, row, option)).filter((c) => c.row === row || c.blockedBy === row);
+}
+
+/** Rows whose value overrides the preset ("Custom"). */
+export function differsFromPreset(s: LayoutsSetting): LayoutRow[] {
+  const base = resolveLayouts({ preset: s.preset });
+  const r = resolveLayouts(s);
+  const rows: LayoutRow[] = [];
+  if (r.navigation !== base.navigation) rows.push('navigation');
+  for (const k of ['labels', 'brand', 'statusBar', 'tabBar', 'dock'] as const) {
+    if (r.nav[k] !== base.nav[k]) rows.push(`nav.${k}`);
+  }
+  if (r.density !== base.density) rows.push('density');
+  if (r.skin !== base.skin) rows.push('skin');
+  for (const view of Object.keys(r.views)) if (r.views[view] !== base.views[view]) rows.push(`view.${view}`);
+  return rows;
+}
+
+/** The LAYOUTS id whose CSS matches the combination (until the skins own their CSS). */
+export function legacyLayoutId(r: ResolvedLayouts): string {
+  if (r.skin !== 'base') return r.skin;
+  if (r.density === 'roomy') return 'calm';
+  if (r.density === 'compact') return 'dense';
+  if (r.navigation === 'header-command') return 'bridge';
+  if (r.navigation === 'header') return 'ribbon';
+  return r.navigation === 'atlas' ? 'atlas' : 'original';
 }

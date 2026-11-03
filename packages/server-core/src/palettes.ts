@@ -1,6 +1,8 @@
 // Colour palettes: values for every colour token of packages/ui/src/styles.css. Pure module,
 // shared by the server (settings validation) and the web UI (applies the tokens).
 
+import type { LayoutsSetting } from './layouts.ts';
+
 export type ThemeKind = 'dark' | 'light';
 export type ThemePreference = 'system' | ThemeKind;
 
@@ -19,6 +21,8 @@ export interface ThemeSettings {
   mainMenu?: 'labels' | 'icons';
   /** Side of the main menu dock; unset means the layout's own. */
   dock?: 'left' | 'right';
+  /** Per-view layouts, Navigation and Look; unset migrates from `layout`/`mainMenu`/`dock` (see effectiveLayouts). */
+  layouts?: LayoutsSetting;
 }
 
 export const ZOOM_LEVELS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const;
