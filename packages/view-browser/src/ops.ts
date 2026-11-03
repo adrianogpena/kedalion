@@ -37,8 +37,20 @@ function summarizeValues(segment: string): string {
   return text.length > ARGS_CAP ? `${text.slice(0, ARGS_CAP - 3)}...` : text;
 }
 
+/** GWT-RPC body `7|0|<n>|base|strongName|service|method|...`: `Service.method`, null for any other body. */
+function decodeGwtRpc(body: string): DecodedOperation | null {
+  const parts = body.split('|');
+  if (!/^\d+$/.test(parts[0] ?? '') || !/^\d+$/.test(parts[1] ?? '') || !/^\d+$/.test(parts[2] ?? '')) return null;
+  const count = Number(parts[2]);
+  const strings = parts.slice(3, 3 + count);
+  if (strings.length < 4 || strings.length < count) return null;
+  return { operation: `${strings[2]!.split('.').pop()}.${strings[3]}`, args: '' };
+}
+
 /** Operations batched in an RPC body (SmartGWT `_transaction` XML): name and a one-line summary of the values. */
 export function decodeOperations(body: string): DecodedOperation[] {
+  const gwt = decodeGwtRpc(body);
+  if (gwt) return [gwt];
   const xml = xmlOf(body);
   const starts = [...xml.matchAll(/<operation>([^<]*)<\/operation>/g)];
   return starts.map((m, i) => {
@@ -110,4 +122,21 @@ export function summarizeRequest(req: RequestLike): string {
   }
   const name = path.split('/').filter(Boolean).pop() ?? 'rpc';
   return `${name}: ${ops[0]!.operation}${ops.length > 1 ? ` +${ops.length - 1}` : ''}`;
+}
+
+/** Resource types hidden by the compact network view when they succeeded. */
+export const STATIC_TYPES = new Set(['image', 'stylesheet', 'script', 'font', 'media', 'manifest', 'texttrack']);
+
+const COMPACT_VALUE_MAX = 40;
+
+/** Path plus the query parameters whose values are short; long ones (encoded transactions) become `name=…`. */
+export function compactUrl(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  const parts = [...u.searchParams].map(([k, v]) => (v.length <= COMPACT_VALUE_MAX ? `${k}=${v}` : `${k}=…`));
+  return u.pathname + (parts.length ? `?${parts.join('&')}` : '');
 }

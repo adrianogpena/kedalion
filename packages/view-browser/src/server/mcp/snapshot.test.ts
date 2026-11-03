@@ -21,6 +21,12 @@ describe('renderSnapshot', () => {
     expect(out).toContain('Hello world');
   });
 
+  test('masks password fields whatever the type casing', () => {
+    const out = renderSnapshot(snap({ fields: [{ tag: 'input', type: 'PASSWORD', name: 'p', value: 'secret', selector: '#p' }] }), 5000);
+    expect(out).toContain('= "***"');
+    expect(out).not.toContain('secret');
+  });
+
   test('stays within the budget and drops text before links before fields', () => {
     const links = Array.from({ length: 50 }, (_, i) => ({ text: `link ${i}`, href: `http://x/${i}` }));
     const out = renderSnapshot(snap({ links, text: 'T'.repeat(5000) }), 400);

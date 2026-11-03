@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { diffRuns, type Step } from './server/mcp/steps.ts';
-import { decodeOperations, prettyBody, summarizeRequest } from './ops.ts';
+import { compactUrl, decodeOperations, prettyBody, summarizeRequest } from './ops.ts';
 
 const xml =
   '<transaction xsi:type="xsd:Object" xmlns:xsi="http://www.w3.org/2000/10/XMLSchema-instance"><transactionNum>3</transactionNum><operations xsi:type="xsd:List">' +
@@ -52,4 +52,18 @@ test('diffRuns reports differing results, requests and extra steps', () => {
   expect(out).toContain('request only in a: POST 200 /x');
   expect(out).toContain('request only in b: POST 500 /x');
   expect(out).toContain('step 2: only in a');
+});
+
+test('compactUrl keeps the path and short query values', () => {
+  const long = encodeURIComponent('<transaction>' + 'x'.repeat(80));
+  expect(compactUrl(`https://h/app/sc/DataSourceLoader?dataSource=NamedValueDTO&isc_tnum=6&_transaction=${long}`)).toBe('/app/sc/DataSourceLoader?dataSource=NamedValueDTO&isc_tnum=6&_transaction=…');
+  expect(compactUrl('https://h/a/b.js')).toBe('/a/b.js');
+  expect(compactUrl('not a url')).toBe('not a url');
+});
+
+test('decodes a GWT-RPC body to Service.method', () => {
+  const body = '7|0|4|https://h/app/|ABC123|be.sofico.silkroad.client.services.ISessionMgmtService|getMilesFabricToken|1|2|3|4|0|';
+  expect(decodeOperations(body)).toEqual([{ operation: 'ISessionMgmtService.getMilesFabricToken', args: '' }]);
+  expect(summarizeRequest({ url: 'https://h/app/SessionMgmt', postData: body })).toBe('SessionMgmt: ISessionMgmtService.getMilesFabricToken');
+  expect(decodeOperations('a=1&b=2')).toEqual([]);
 });

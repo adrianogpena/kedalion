@@ -183,6 +183,12 @@ export interface NetworkDetail {
   truncated?: boolean;
 }
 
+/** Failed, or answered with 4xx/5xx; a request the page canceled after a successful response (e.g. a video range) is not a failure. */
+function isFailed(e: NetworkEntry): boolean {
+  if ((e.status ?? 0) >= 400) return true;
+  return !!e.failed && !(e.failed === 'canceled' && e.status !== undefined);
+}
+
 export interface NetworkLog {
   entries(o?: QueryOptions<NetworkFilter>): NetworkEntry[];
   detail(id: number): Promise<NetworkDetail | undefined>;
@@ -230,9 +236,9 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
         (e) =>
           (!text || e.url.toLowerCase().includes(text)) &&
           (f.method === undefined || e.method === f.method) &&
-          (f.type === undefined || e.type === f.type) &&
+          (f.type === undefined || e.type?.toLowerCase() === f.type.toLowerCase()) &&
           (f.status === undefined || e.status === f.status) &&
-          (f.failed === undefined || !!e.failed === f.failed),
+          (f.failed === undefined || isFailed(e) === f.failed),
         o,
       );
     },

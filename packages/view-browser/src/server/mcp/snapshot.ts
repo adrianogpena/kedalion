@@ -27,7 +27,7 @@ export interface RenderOptions {
 
 const heading = (h: PageSnapshot['headings'][number]) => `${'#'.repeat(Math.min(Math.max(h.level, 1), 6))} ${h.text}`;
 const field = (f: PageSnapshot['fields'][number]) =>
-  `- ${f.tag}${f.type ? `[${f.type}]` : ''} ${f.label || f.name || ''} ${f.selector}${f.value !== undefined ? ` = ${JSON.stringify(f.type === 'password' && f.value ? '***' : f.value)}` : ''}${f.ref ? ` ${f.ref}` : ''}`.replace(/ {2,}/g, ' ');
+  `- ${f.tag}${f.type ? `[${f.type}]` : ''} ${f.label || f.name || ''} ${f.selector}${f.value !== undefined ? ` = ${JSON.stringify(f.type?.toLowerCase() === 'password' && f.value ? '***' : f.value)}` : ''}${f.ref ? ` ${f.ref}` : ''}`.replace(/ {2,}/g, ' ');
 const link = (l: PageSnapshot['links'][number]) => `- ${l.text || '(no text)'} -> ${l.href}`;
 const clickable = (c: NonNullable<PageSnapshot['clickable']>[number]) => `- ${c.ref} <${c.tag}> ${c.text || '(no text)'}${c.state ? ` [${c.state}]` : ''}`;
 

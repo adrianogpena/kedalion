@@ -1,5 +1,5 @@
 import { normalizeAddress } from '../../address.ts';
-import { decodeOperations, prettyBody, summarizeRequest } from '../../ops.ts';
+import { compactUrl, decodeOperations, prettyBody, STATIC_TYPES, summarizeRequest } from '../../ops.ts';
 import { stepLogFor } from './steps.ts';
 import { bool, num, pageSession, resolveTab, runtimeEval, str, withTimeout } from './page-util.ts';
 import { PAGE_LIB } from './page-lib.ts';
@@ -168,7 +168,8 @@ export const pageTools: McpTool[] = [
       url: { type: 'string', description: 'Only URLs containing this text.' },
       status: { type: 'integer' },
       type: { type: 'string', description: 'Resource type, e.g. XHR, Fetch, Document, Script.' },
-      failedOnly: { type: 'boolean' },
+      failedOnly: { type: 'boolean', description: 'Failed or canceled requests and HTTP 4xx/5xx.' },
+      compact: { type: 'boolean', description: 'Hide successful static requests (images, styles, scripts, fonts, media) and show URLs as path plus short query values.' },
       limit: { type: 'integer', description: 'Default 50.' },
       offset: { type: 'integer', description: 'Skip this many matches, default 0.' },
       body: { type: 'string', description: 'Only requests whose decoded request body or recorded response body contains this text (case-insensitive).' },
@@ -204,17 +205,25 @@ export const pageTools: McpTool[] = [
           return req.toLowerCase().includes(bodyText) || (r.body?.toLowerCase().includes(bodyText) ?? false);
         });
       }
-      if (!all.length) return textResult('No matching requests.');
+      const compact = bool(a, 'compact');
+      let hidden = 0;
+      if (compact) {
+        const before = all.length;
+        all = all.filter((e) => e.failed || (e.status ?? 0) >= 400 || !e.type || !STATIC_TYPES.has(e.type.toLowerCase()));
+        hidden = before - all.length;
+      }
+      if (!all.length) return textResult(hidden ? `No matching requests (${hidden} static hidden).` : 'No matching requests.');
       const offset = Math.max(num(a, 'offset') ?? 0, 0);
       const limit = Math.max(num(a, 'limit') ?? 50, 1);
       const page = all.slice(offset, offset + limit);
       const lines = page.map((e) => {
         const ops = summarizeRequest({ url: e.url, postData: rec(e.id)?.postData });
         const age = !e.done && e.startedAt !== undefined ? `  pending ${Math.round((now - e.startedAt) / 1000)}s` : '';
-        return `#${e.id} ${e.method} ${e.status ?? (e.failed ? 'FAILED' : '...')} ${e.type ?? ''} ${e.url}${e.failed ? `  (${e.failed})` : ''}${e.timing !== undefined ? `  ${Math.round(e.timing)}ms` : ''}${age}${ops ? `  | ${ops}` : ''}`;
+        return `#${e.id} ${e.method} ${e.status ?? (e.failed ? 'FAILED' : '...')} ${e.type ?? ''} ${compact ? compactUrl(e.url) : e.url}${e.failed ? `  (${e.failed})` : ''}${e.timing !== undefined ? `  ${Math.round(e.timing)}ms` : ''}${age}${ops ? `  | ${ops}` : ''}`;
       });
       const more = offset + page.length < all.length ? `\n... ${all.length - offset - page.length} more; pass offset=${offset + page.length}` : '';
-      return textResult(`${lines.join('\n')}${more}`, `Pass a smaller limit or offset=${offset + page.length}.`);
+      const note = hidden ? `\n(${hidden} static requests hidden by compact)` : '';
+      return textResult(`${lines.join('\n')}${more}${note}`, `Pass a smaller limit or offset=${offset + page.length}.`);
     },
   },
   {

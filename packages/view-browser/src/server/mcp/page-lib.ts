@@ -206,6 +206,7 @@ kd.selectNative = (ref, option) => {
 };
 kd.texts = () => {
   const out = [];
+  if (!document.body) return out;
   const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n = w.nextNode(); n && out.length < 800; n = w.nextNode()) {
     const t = clean(n.textContent);
@@ -248,9 +249,9 @@ kd.snapshot = (scope, withClickable) => {
     links: q('a[href]').filter(vis).map((a) => ({ text: clean(a.textContent || a.getAttribute('aria-label')), href: a.href })),
     fields: fieldsAll.slice(0, 400).map((f) => {
       const tag = f.tagName.toLowerCase();
-      const type = f.getAttribute('type') || undefined;
+      const type = f.getAttribute('type')?.toLowerCase() || undefined;
       const isButton = tag === 'button' || type === 'submit' || type === 'button';
-      const value = isButton ? undefined : type === 'password' ? (f.value ? '***' : '') : String(f.value ?? '');
+      const value = isButton ? undefined : type === 'password' ? (f.value ? '***' : '') : type === 'checkbox' || type === 'radio' ? (f.checked ? 'checked' : 'unchecked') : String(f.value ?? '');
       return { tag, type, name: f.getAttribute('name') || undefined, label: isButton ? clean(f.textContent || f.value) : labelOf(f), value, selector: css(f), ref: kd.ref(f) };
     }),
     clickable: withClickable ? kd.collect('click', scope).filter((el) => textOf(el) || el.matches('input,select,textarea')).slice(0, 400).map((el) => ({ ref: kd.ref(el), tag: el.tagName.toLowerCase(), text: cut(textOf(el), 80), state: stateOf(el) })) : undefined,

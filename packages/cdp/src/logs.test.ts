@@ -74,6 +74,28 @@ test('failed requests carry the reason', () => {
   expect(log.entries({ filter: { failed: false } })).toHaveLength(0);
 });
 
+test('failed filter includes 4xx/5xx and type filter ignores case', () => {
+  const { client, session } = setup();
+  const log = createNetworkLog(session);
+  emit(client, 'Network.requestWillBeSent', { requestId: 'r1', timestamp: 1, type: 'XHR', request: { url: 'http://x/a', method: 'POST' } });
+  emit(client, 'Network.responseReceived', { requestId: 'r1', type: 'XHR', response: { status: 500, headers: {} } });
+  emit(client, 'Network.loadingFinished', { requestId: 'r1', timestamp: 2, encodedDataLength: 5 });
+  expect(log.entries({ filter: { failed: true } })).toHaveLength(1);
+  expect(log.entries({ filter: { failed: false } })).toHaveLength(0);
+  expect(log.entries({ filter: { type: 'XHR' } })).toHaveLength(1);
+  expect(log.entries({ filter: { type: 'xhr' } })).toHaveLength(1);
+});
+
+test('a canceled request after a response is not failed', () => {
+  const { client, session } = setup();
+  const log = createNetworkLog(session);
+  emit(client, 'Network.requestWillBeSent', { requestId: 'r1', timestamp: 1, type: 'Media', request: { url: 'http://x/v.mp4', method: 'GET' } });
+  emit(client, 'Network.responseReceived', { requestId: 'r1', type: 'Media', response: { status: 206, headers: {} } });
+  emit(client, 'Network.loadingFailed', { requestId: 'r1', timestamp: 2, canceled: true });
+  expect(log.entries()[0]).toMatchObject({ failed: 'canceled', status: 206 });
+  expect(log.entries({ filter: { failed: true } })).toHaveLength(0);
+});
+
 test('redirects finish the first entry and start another', () => {
   const { client, session } = setup();
   const log = createNetworkLog(session);
