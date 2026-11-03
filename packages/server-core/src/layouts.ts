@@ -88,7 +88,7 @@ export const LAYOUTS: readonly Layout[] = [
 ];
 
 /** Layouts offered in Settings; the others stay defined (for building new layouts) but are not listed. */
-export const SELECTABLE_LAYOUT_IDS: readonly string[] = ['ribbon', 'bridge'];
+export const SELECTABLE_LAYOUT_IDS: readonly string[] = ['ribbon', 'bridge', 'original', 'dense', 'calm', 'material', 'blueprint', 'transit', 'islands', 'modeline', 'ledger', 'atlas'];
 
 export const ICON_SET_IDS: readonly string[] = ['original', 'material', 'atom', 'dossier'];
 
