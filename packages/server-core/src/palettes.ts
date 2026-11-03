@@ -234,6 +234,11 @@ const atlas = (id: string, label: string, kind: ThemeKind, roles: Roles, exact: 
   id, label, family: 'atlas', kind, tokens: { ...fromRoles(kind, roles), ...exact },
 });
 
+/** Rack family: graphite instrument bezel (dark) and pale equipment grey (light); amber signal accent; exact surface and ink values. */
+const rack = (id: string, label: string, kind: ThemeKind, roles: Roles, exact: Partial<Record<Token, string>>): Palette => ({
+  id, label, family: 'rack', kind, tokens: { ...fromRoles(kind, roles), ...exact },
+});
+
 const RAW_PALETTES: readonly Palette[] = [
   { id: 'kedalion-dark', label: 'Kedalion Dark', family: 'kedalion', kind: 'dark', tokens: KEDALION_DARK },
   { id: 'kedalion-light', label: 'Kedalion Light', family: 'kedalion', kind: 'light', tokens: KEDALION_LIGHT },
@@ -348,6 +353,18 @@ const RAW_PALETTES: readonly Palette[] = [
     '--border': '#d6d9df', '--text': '#1c1f25', '--text-2': '#535966', '--text-3': '#8a909c', '--accent': '#0e8a7e',
     '--ink-on-accent': '#ffffff',
   }),
+  rack('rack-dark', 'Rack Dark', 'dark', [
+    0x2a2d31, 0x32363b, 0x484d54, 0xe7e9ec, 0x8d939b, 0xffb340, 0xb39ddb, 0x5fc4d8, 0x6fd08c, 0xf2c14e, 0xf08a4b, 0xf0625f], {
+    '--bg-sunken': '#202225', '--bg': '#2a2d31', '--bg-elev': '#32363b', '--panel': '#32363b', '--panel-2': '#383c42',
+    '--border': '#484d54', '--text': '#e7e9ec', '--text-2': '#b3b8bf', '--text-3': '#8d939b', '--accent': '#ffb340',
+    '--ink-on-accent': '#1d1608',
+  }),
+  rack('rack-light', 'Rack Light', 'light', [
+    0xdde0e3, 0xeceef0, 0xaab0b7, 0x1b1e22, 0x636a73, 0x8a4a00, 0x6a4fb3, 0x1279a0, 0x1f7a3a, 0x8a6200, 0xa84a12, 0xb82f2a], {
+    '--bg-sunken': '#cfd3d7', '--bg': '#dde0e3', '--bg-elev': '#eceef0', '--panel': '#eceef0', '--panel-2': '#f3f4f6',
+    '--border': '#aab0b7', '--text': '#1b1e22', '--text-2': '#454b53', '--text-3': '#636a73', '--accent': '#8a4a00',
+    '--ink-on-accent': '#ffffff',
+  }),
 ];
 
 export const SURFACES: Token[] = ['--bg', '--bg-elev', '--bg-sunken', '--panel', '--panel-2', '--hover', '--selected', '--side-active'];
@@ -355,7 +372,7 @@ export const CONTRAST_FLOORS: [fg: Token, bgs: Token[], floor: number][] = [
   ['--text', SURFACES, 4.5],
   ['--text-2', SURFACES, 4.5],
   ['--text-3', ['--bg', '--bg-elev', '--panel', '--panel-2'], 3],
-  ['--accent', ['--bg', '--bg-elev', '--panel'], 4.5],
+  ['--accent', ['--bg', '--bg-elev', '--panel', '--bg-sunken'], 4.5],
   ['--ink-on-accent', ['--accent'], 4.5],
   ['--ok', ['--bg', '--panel'], 4.5],
   ['--warn', ['--bg', '--panel'], 4.5],

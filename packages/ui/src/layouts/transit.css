@@ -4,7 +4,7 @@
    neutral. Line 8 (grey) is for tools outside the nav. */
 
 /* Size variables */
-:root[data-layout='transit'] {
+:root[data-skin='transit'] {
   --font-sign: 'Bahnschrift', 'Barlow Semi Condensed', 'Geist', 'Segoe UI', sans-serif;
   --sign-tracking: .04em;
   /* signage is square: 2 controls, 4 cards, 8 modals */
@@ -16,29 +16,29 @@
 }
 
 /* Line colours */
-:root[data-layout='transit'],
-:root[data-layout='transit'][data-theme='dark'] {
+:root[data-skin='transit'],
+:root[data-skin='transit'][data-theme='dark'] {
   --line-1: #f0605a; --line-2: #4c9bf0; --line-3: #4cc07a; --line-4: #e8b13a;
   --line-5: #a487f0; --line-6: #3cc3c0; --line-7: #e46bb4; --line-8: #9aa3ae;
   --line-ink: #0f1720;
 }
-:root[data-layout='transit'][data-theme='light'] {
+:root[data-skin='transit'][data-theme='light'] {
   --line-1: #c8322c; --line-2: #1f62c4; --line-3: #1e8a4b; --line-4: #a87100;
   --line-5: #6a48c9; --line-6: #0e8a87; --line-7: #b0347e; --line-8: #5e6773;
   --line-ink: #ffffff;
 }
 
 /* The current line becomes the accent. */
-:root[data-layout='transit'][data-line='1'] { --line: var(--line-1); }
-:root[data-layout='transit'][data-line='2'] { --line: var(--line-2); }
-:root[data-layout='transit'][data-line='3'] { --line: var(--line-3); }
-:root[data-layout='transit'][data-line='4'] { --line: var(--line-4); }
-:root[data-layout='transit'][data-line='5'] { --line: var(--line-5); }
-:root[data-layout='transit'][data-line='6'] { --line: var(--line-6); }
-:root[data-layout='transit'][data-line='7'] { --line: var(--line-7); }
+:root[data-skin='transit'][data-line='1'] { --line: var(--line-1); }
+:root[data-skin='transit'][data-line='2'] { --line: var(--line-2); }
+:root[data-skin='transit'][data-line='3'] { --line: var(--line-3); }
+:root[data-skin='transit'][data-line='4'] { --line: var(--line-4); }
+:root[data-skin='transit'][data-line='5'] { --line: var(--line-5); }
+:root[data-skin='transit'][data-line='6'] { --line: var(--line-6); }
+:root[data-skin='transit'][data-line='7'] { --line: var(--line-7); }
 /* On body, not :root: useTheme writes the palette tokens as inline styles on <html>, which beat
    any :root rule; body and everything in it (overlays included) inherit from here instead. */
-:root[data-layout='transit'][data-line] body {
+:root[data-skin='transit'][data-line] body {
   --accent: var(--line);
   --accent-2: color-mix(in srgb, var(--line) 82%, var(--text));
   --accent-soft: color-mix(in srgb, var(--line) 14%, transparent);
@@ -48,59 +48,59 @@
 }
 
 /* Sidebar: every item carries its line as a marker; the active one is solid. */
-:root[data-layout='transit'] .brand { font-family: var(--font-sign); font-weight: 600; text-transform: uppercase; letter-spacing: var(--sign-tracking); }
-:root[data-layout='transit'] .side-title { font-family: var(--font-sign); letter-spacing: var(--sign-tracking); }
-:root[data-layout='transit'] .side-item { height: var(--nav-row-h); font-family: var(--font-sign); font-weight: 600; border-radius: var(--radius-2xs); }
-:root[data-layout='transit'] .side-item[data-line='1'] { --item-line: var(--line-1); }
-:root[data-layout='transit'] .side-item[data-line='2'] { --item-line: var(--line-2); }
-:root[data-layout='transit'] .side-item[data-line='3'] { --item-line: var(--line-3); }
-:root[data-layout='transit'] .side-item[data-line='4'] { --item-line: var(--line-4); }
-:root[data-layout='transit'] .side-item[data-line='5'] { --item-line: var(--line-5); }
-:root[data-layout='transit'] .side-item[data-line='6'] { --item-line: var(--line-6); }
-:root[data-layout='transit'] .side-item[data-line='7'] { --item-line: var(--line-7); }
-:root[data-layout='transit'] .side-item::before {
+:root[data-skin='transit'] .brand { font-family: var(--font-sign); font-weight: 600; text-transform: uppercase; letter-spacing: var(--sign-tracking); }
+:root[data-skin='transit'] .side-title { font-family: var(--font-sign); letter-spacing: var(--sign-tracking); }
+:root[data-skin='transit'] .side-item { height: var(--nav-row-h); font-family: var(--font-sign); font-weight: 600; border-radius: var(--radius-2xs); }
+:root[data-skin='transit'] .side-item[data-line='1'] { --item-line: var(--line-1); }
+:root[data-skin='transit'] .side-item[data-line='2'] { --item-line: var(--line-2); }
+:root[data-skin='transit'] .side-item[data-line='3'] { --item-line: var(--line-3); }
+:root[data-skin='transit'] .side-item[data-line='4'] { --item-line: var(--line-4); }
+:root[data-skin='transit'] .side-item[data-line='5'] { --item-line: var(--line-5); }
+:root[data-skin='transit'] .side-item[data-line='6'] { --item-line: var(--line-6); }
+:root[data-skin='transit'] .side-item[data-line='7'] { --item-line: var(--line-7); }
+:root[data-skin='transit'] .side-item::before {
   content: ""; position: absolute; left: 0; top: var(--space-6); bottom: var(--space-6); width: var(--line-marker-w);
   border-radius: 0; background: var(--item-line, var(--line-8)); opacity: .35;
 }
-:root[data-layout='transit'] .side-item.active::before { top: 0; bottom: 0; width: var(--line-marker-w); opacity: 1; }
-:root[data-layout='transit'] .side-item .icon { color: var(--item-line, var(--text-2)); }
-:root[data-layout='transit'] .app.sidebar-right .side-item::before { left: auto; right: 0; }
-:root[data-layout='transit'] .sidebar.collapsed .side-item { height: 44px; }
+:root[data-skin='transit'] .side-item.active::before { top: 0; bottom: 0; width: var(--line-marker-w); opacity: 1; }
+:root[data-skin='transit'] .side-item .icon { color: var(--item-line, var(--text-2)); }
+:root[data-skin='transit'] .app.sidebar-right .side-item::before { left: auto; right: 0; }
+:root[data-skin='transit'] .sidebar.collapsed .side-item { height: 44px; }
 
 /* Tabs: the bar sits on a line-coloured rule; the active tab is a solid line block on top. */
-:root[data-layout='transit'] .tabbar { box-shadow: inset 0 calc(-1 * var(--line-rule-h)) 0 var(--accent); }
-:root[data-layout='transit'] .pane.tabbar-bottom .tabbar { box-shadow: inset 0 var(--line-rule-h) 0 var(--accent); }
-:root[data-layout='transit'] .tab-title { font-family: var(--font-sign); font-weight: 600; letter-spacing: .02em; }
-:root[data-layout='transit'] .tab-chip { border-radius: var(--radius-2xs) var(--radius-2xs) 0 0; }
-:root[data-layout='transit'] .tab-chip.active::before { left: 0; right: 0; top: -1px; height: 3px; border-radius: 0; }
+:root[data-skin='transit'] .tabbar { box-shadow: inset 0 calc(-1 * var(--line-rule-h)) 0 var(--accent); }
+:root[data-skin='transit'] .pane.tabbar-bottom .tabbar { box-shadow: inset 0 var(--line-rule-h) 0 var(--accent); }
+:root[data-skin='transit'] .tab-title { font-family: var(--font-sign); font-weight: 600; letter-spacing: .02em; }
+:root[data-skin='transit'] .tab-chip { border-radius: var(--radius-2xs) var(--radius-2xs) 0 0; }
+:root[data-skin='transit'] .tab-chip.active::before { left: 0; right: 0; top: -1px; height: 3px; border-radius: 0; }
 
 /* Panel heads: uppercase signage with a line rule. */
-:root[data-layout='transit'] .panel-head {
+:root[data-skin='transit'] .panel-head {
   font-family: var(--font-sign); font-weight: 600; font-size: var(--fs-sm); text-transform: uppercase;
   letter-spacing: var(--sign-tracking); border-bottom: var(--line-rule-h) solid var(--accent);
 }
-:root[data-layout='transit'] .panel.collapsed .panel-head { border-bottom-color: transparent; }
+:root[data-skin='transit'] .panel.collapsed .panel-head { border-bottom-color: transparent; }
 
 /* Status bar: a line colour chip at the start. */
-:root[data-layout='transit'] .status-bar::before {
+:root[data-skin='transit'] .status-bar::before {
   content: ""; flex-shrink: 0; width: 10px; height: 10px; margin-right: var(--space-6); background: var(--accent);
 }
 
 /* Collapsed rail (mainMenu 'icons'): the line colours stay on the icons and markers. */
-:root[data-layout='transit'] .sidebar.collapsed .side-item::before { top: var(--space-10); bottom: var(--space-10); width: 3px; }
-:root[data-layout='transit'] .sidebar.collapsed .side-item.active::before { top: 0; bottom: 0; width: var(--line-marker-w); }
-:root[data-layout='transit'] .sidebar.collapsed .side-item.active { background: var(--side-active); }
+:root[data-skin='transit'] .sidebar.collapsed .side-item::before { top: var(--space-10); bottom: var(--space-10); width: 3px; }
+:root[data-skin='transit'] .sidebar.collapsed .side-item.active::before { top: 0; bottom: 0; width: var(--line-marker-w); }
+:root[data-skin='transit'] .sidebar.collapsed .side-item.active { background: var(--side-active); }
 
 /* Headings: signage type; content stays neutral. */
-:root[data-layout='transit'] h1, :root[data-layout='transit'] h2, :root[data-layout='transit'] h3 {
+:root[data-skin='transit'] h1, :root[data-skin='transit'] h2, :root[data-skin='transit'] h3 {
   font-family: var(--font-sign); font-weight: 600; letter-spacing: .01em;
 }
-:root[data-layout='transit'] .panel-title { font-family: var(--font-sign); font-size: var(--fs-sm); font-weight: 600; text-transform: uppercase; letter-spacing: var(--sign-tracking); }
-:root[data-layout='transit'] .modal-head { font-family: var(--font-sign); }
-:root[data-layout='transit'] .settings-nav-item { font-family: var(--font-sign); font-weight: 600; }
-:root[data-layout='transit'] .settings-nav-item.active { color: var(--text); box-shadow: inset var(--line-marker-w) 0 0 var(--accent); }
+:root[data-skin='transit'] .panel-title { font-family: var(--font-sign); font-size: var(--fs-sm); font-weight: 600; text-transform: uppercase; letter-spacing: var(--sign-tracking); }
+:root[data-skin='transit'] .modal-head { font-family: var(--font-sign); }
+:root[data-skin='transit'] .settings-nav-item { font-family: var(--font-sign); font-weight: 600; }
+:root[data-skin='transit'] .settings-nav-item.active { color: var(--text); box-shadow: inset var(--line-marker-w) 0 0 var(--accent); }
 
 /* Cards: square, flat, a thin top rule in the neutral border colour. */
-:root[data-layout='transit'] .card { border-top: var(--line-rule-h) solid var(--border); }
-:root[data-layout='transit'] .modal { border-top: var(--line-marker-w) solid var(--accent); }
-:root[data-layout='transit'] .btn-primary { text-transform: uppercase; letter-spacing: var(--sign-tracking); font-family: var(--font-sign); }
+:root[data-skin='transit'] .card { border-top: var(--line-rule-h) solid var(--border); }
+:root[data-skin='transit'] .modal { border-top: var(--line-marker-w) solid var(--accent); }
+:root[data-skin='transit'] .btn-primary { text-transform: uppercase; letter-spacing: var(--sign-tracking); font-family: var(--font-sign); }

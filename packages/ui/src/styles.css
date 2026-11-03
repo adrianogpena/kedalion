@@ -8,7 +8,7 @@
 @import '@fontsource/fraunces/latin-600.css';
 
 /* Layouts: layout files are imported here as @import './layouts/<id>.css';, each scoped under
-   :root[data-layout='<id>'], overriding the size variables below and any rule. 'original' is
+   :root[data-skin='<id>'], overriding the size variables below and any rule. 'original' is
    this file and has no layout file. */
 @import './layouts/dense.css';
 @import './layouts/calm.css';
@@ -21,6 +21,7 @@
 @import './layouts/bridge.css';
 @import './layouts/ledger.css';
 @import './layouts/atlas.css';
+@import './layouts/rack.css';
 
 :root,
 :root[data-theme='dark'] {

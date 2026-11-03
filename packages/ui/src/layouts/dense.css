@@ -1,5 +1,5 @@
 /* Dense: one step denser everywhere; size tokens only. */
-:root[data-layout='dense'] {
+:root[data-density='compact'] {
   --fs-md: 12px; --fs-sm: 11.5px; --fs-xs: 10.5px; --fs-lg: 13px; --fs-xl: 14px;
   --control-h: 26px; --control-h-sm: 24px; --control-h-xs: 22px; --control-h-2xs: 20px; --control-h-3xs: 18px;
   --tabbar-h: 32px; --statusbar-h: 20px; --header-h: 30px; --panel-head-h: 32px;

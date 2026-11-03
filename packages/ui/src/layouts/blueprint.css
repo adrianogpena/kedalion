@@ -1,6 +1,6 @@
 /* Blueprint: a drafting sheet. Thin drawn lines for every division, square panes and tabs, mono
    annotations (panel heads, tabs, status). Pair with the 'blueprint' palette family; original icons. */
-:root[data-layout='blueprint'] {
+:root[data-skin='blueprint'] {
   /* radius by level: 2 controls, 4 floating layers (menus, modals, palette), 0 panes and cards */
   --radius-2xs: 2px; --radius-xs: 2px; --radius-sm: 2px; --radius-md: 2px; --radius-lg: 2px;
   --radius-xl: 2px; --radius-2xl: 4px; --radius-3xl: 2px; --radius-4xl: 0px; --radius-5xl: 4px;
@@ -9,54 +9,54 @@
 }
 
 /* Lines only: panels and cards carry no shadow, full-strength line. */
-:root[data-layout='blueprint'] .card,
-:root[data-layout='blueprint'] .panel { border-color: var(--border); box-shadow: none; }
-:root[data-layout='blueprint'] .panel-head { border-bottom-color: var(--border); }
-:root[data-layout='blueprint'] .code-editor,
-:root[data-layout='blueprint'] .code-view,
-:root[data-layout='blueprint'] .code-view-plain,
-:root[data-layout='blueprint'] .diff-view-body,
-:root[data-layout='blueprint'] .markdown pre { border-radius: 0; }
-:root[data-layout='blueprint'] .modal-large { border-radius: var(--radius-5xl); }
+:root[data-skin='blueprint'] .card,
+:root[data-skin='blueprint'] .panel { border-color: var(--border); box-shadow: none; }
+:root[data-skin='blueprint'] .panel-head { border-bottom-color: var(--border); }
+:root[data-skin='blueprint'] .code-editor,
+:root[data-skin='blueprint'] .code-view,
+:root[data-skin='blueprint'] .code-view-plain,
+:root[data-skin='blueprint'] .diff-view-body,
+:root[data-skin='blueprint'] .markdown pre { border-radius: 0; }
+:root[data-skin='blueprint'] .modal-large { border-radius: var(--radius-5xl); }
 
 /* Mono annotations: panel heads, tab labels, status. */
-:root[data-layout='blueprint'] .panel-title,
-:root[data-layout='blueprint'] .tab-title,
-:root[data-layout='blueprint'] .status-bar {
+:root[data-skin='blueprint'] .panel-title,
+:root[data-skin='blueprint'] .tab-title,
+:root[data-skin='blueprint'] .status-bar {
   font-family: var(--font-mono); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em;
 }
-:root[data-layout='blueprint'] .panel-title { font-weight: 500; color: var(--text-2); }
+:root[data-skin='blueprint'] .panel-title { font-weight: 500; color: var(--text-2); }
 
 /* Nav: selection as a 1px accent outline, no fill. */
-:root[data-layout='blueprint'] .side-item.active { background: transparent; box-shadow: inset 0 0 0 1px var(--accent); }
-:root[data-layout='blueprint'] .side-item.active::before { display: none; }
+:root[data-skin='blueprint'] .side-item.active { background: transparent; box-shadow: inset 0 0 0 1px var(--accent); }
+:root[data-skin='blueprint'] .side-item.active::before { display: none; }
 
 /* Tabs: square cells divided by lines; active tab marked by a full-width 2px accent top rule. */
-:root[data-layout='blueprint'] .tabbar { border-bottom-color: var(--border); }
-:root[data-layout='blueprint'] .tabs-strip { gap: 0; }
-:root[data-layout='blueprint'] .tab-chip {
+:root[data-skin='blueprint'] .tabbar { border-bottom-color: var(--border); }
+:root[data-skin='blueprint'] .tabs-strip { gap: 0; }
+:root[data-skin='blueprint'] .tab-chip {
   margin-top: 0; border-radius: 0; border: 0; border-right: 1px solid var(--border);
 }
-:root[data-layout='blueprint'] .tab-chip.active { border-color: var(--border); }
-:root[data-layout='blueprint'] .tab-chip.active::before { left: 0; right: 0; top: 0; border-radius: 0; }
-:root[data-layout='blueprint'] .pane.tabbar-bottom .tabbar { border-top-color: var(--border); }
-:root[data-layout='blueprint'] .pane.tabbar-bottom .tab-chip { margin-bottom: 0; border-radius: 0; border-bottom: 0; }
-:root[data-layout='blueprint'] .pane.tabbar-bottom .tab-chip.active::before { top: auto; bottom: 0; border-radius: 0; }
+:root[data-skin='blueprint'] .tab-chip.active { border-color: var(--border); }
+:root[data-skin='blueprint'] .tab-chip.active::before { left: 0; right: 0; top: 0; border-radius: 0; }
+:root[data-skin='blueprint'] .pane.tabbar-bottom .tabbar { border-top-color: var(--border); }
+:root[data-skin='blueprint'] .pane.tabbar-bottom .tab-chip { margin-bottom: 0; border-radius: 0; border-bottom: 0; }
+:root[data-skin='blueprint'] .pane.tabbar-bottom .tab-chip.active::before { top: auto; bottom: 0; border-radius: 0; }
 
 /* Facts and resource rows are card-level: square, drawn line. Toasts float: 4px. */
-:root[data-layout='blueprint'] .fact,
-:root[data-layout='blueprint'] .resource-row { border-radius: 0; border-color: var(--border); }
-:root[data-layout='blueprint'] .toast { border-radius: var(--radius-5xl); }
+:root[data-skin='blueprint'] .fact,
+:root[data-skin='blueprint'] .resource-row { border-radius: 0; border-color: var(--border); }
+:root[data-skin='blueprint'] .toast { border-radius: var(--radius-5xl); }
 
 /* Selection: a 1px accent outline, not a fill (tree, tables). */
-:root[data-layout='blueprint'] .tree-row.selected,
-:root[data-layout='blueprint'] .dtable-row.selected { background: transparent; box-shadow: inset 0 0 0 1px var(--accent); }
+:root[data-skin='blueprint'] .tree-row.selected,
+:root[data-skin='blueprint'] .dtable-row.selected { background: transparent; box-shadow: inset 0 0 0 1px var(--accent); }
 
 /* Focus: the line turns accent, no soft halo. */
-:root[data-layout='blueprint'] input:focus,
-:root[data-layout='blueprint'] select:focus,
-:root[data-layout='blueprint'] textarea:focus,
-:root[data-layout='blueprint'] .log-search:focus-within { box-shadow: none; }
+:root[data-skin='blueprint'] input:focus,
+:root[data-skin='blueprint'] select:focus,
+:root[data-skin='blueprint'] textarea:focus,
+:root[data-skin='blueprint'] .log-search:focus-within { box-shadow: none; }
 
 /* Status bar: drawn line above, sunken sheet. */
-:root[data-layout='blueprint'] .status-bar { border-top-color: var(--border); background: var(--bg-sunken); }
+:root[data-skin='blueprint'] .status-bar { border-top-color: var(--border); background: var(--bg-sunken); }

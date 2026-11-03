@@ -1,0 +1,59 @@
+/* Rack: instrument panel. A collapsed switch bank on the right edge (one square key per screen, a
+   lamp marks the active one), mono-forward chrome (captions, tabs, status readouts), tight density,
+   small radii and stronger bezel borders. Palette family 'rack' (graphite / equipment grey, amber
+   signal accent) is picked separately. The accent marks lamps and the selection; status keeps its
+   fixed tones. */
+
+/* Size variables */
+:root[data-skin='rack'] {
+  --radius-2xs: 1px; --radius-xs: 2px; --radius-sm: 2px; --radius-md: 3px; --radius-lg: 3px;
+  --radius-xl: 3px; --radius-2xl: 4px; --radius-3xl: 4px; --radius-4xl: 5px; --radius-5xl: 6px;
+  --fs-3xs: 10px; --fs-2xs: 10px; --fs-xs: 10.5px; --fs-xs-plus: 11px; --fs-sm: 11.5px;
+  --fs-sm-plus: 12px; --fs-md: 12.5px; --fs-lg: 13px; --fs-xl: 14px; --fs-2xl: 15px;
+  --control-h: 28px; --control-h-sm: 26px; --control-h-xs: 24px; --control-h-2xs: 22px; --control-h-3xs: 20px;
+  --tabbar-h: 30px; --statusbar-h: 22px; --header-h: 32px; --panel-head-h: 32px;
+  --sidebar-w-collapsed: 48px; --rail-w: 48px;
+}
+
+/* The shell is exactly the viewport: clip, not hidden, so no row can scroll the document. */
+:root[data-skin='rack'], :root[data-skin='rack'] body { overflow: clip; }
+
+/* Switch bank: sunken strip with a bezel edge; keys are square, the active key is a lit panel. */
+:root[data-skin='rack'] .sidebar { background: var(--bg-sunken); border-right: 0; border-left: 1px solid var(--border); }
+:root[data-skin='rack'] .app:not(.sidebar-right) > .sidebar { border-left: 0; border-right: 1px solid var(--border); }
+:root[data-skin='rack'] .sidebar.collapsed .side-item { height: 40px; border-radius: 0; border-bottom: 1px solid var(--border-soft); }
+:root[data-skin='rack'] .sidebar.collapsed .side-scroll { padding: 0; }
+:root[data-skin='rack'] .sidebar.collapsed .side-section { margin-top: 0; }
+:root[data-skin='rack'] .sidebar.collapsed .side-item.active { background: var(--panel-2); }
+:root[data-skin='rack'] .side-item.active .icon { color: var(--text); }
+/* Lamp: a 6px square LED in the key's top corner instead of the bar. */
+:root[data-skin='rack'] .side-item.active::before,
+:root[data-skin='rack'] .sidebar.collapsed .side-item.active::before {
+  top: 6px; left: 6px; bottom: auto; width: 6px; height: 6px; border-radius: 1px; background: var(--accent);
+}
+:root[data-skin='rack'] .side-title { letter-spacing: .12em; }
+:root[data-skin='rack'] .side-footer { border-top-color: var(--border); }
+
+/* Tabs: joined segments with a 1px bezel; the active one is a lit panel with a lamp line. */
+:root[data-skin='rack'] .tabbar { gap: 0; padding: 0 var(--space-4); background: var(--bg-sunken); border-bottom-color: var(--border); }
+:root[data-skin='rack'] .tabs-strip { gap: 0; }
+:root[data-skin='rack'] .tab-chip {
+  margin-top: var(--space-4); margin-left: -1px; border-radius: 0; border: 1px solid var(--border-soft); border-bottom: 0;
+  font-family: var(--font-mono); font-size: var(--fs-sm); letter-spacing: .02em;
+}
+:root[data-skin='rack'] .tab-chip:first-child { margin-left: 0; }
+:root[data-skin='rack'] .tab-chip.active { background: var(--panel-2); border-color: var(--border); }
+:root[data-skin='rack'] .tab-chip.active::before { left: 0; right: 0; height: 2px; border-radius: 0; }
+
+/* Captions and readouts in mono caps. */
+:root[data-skin='rack'] .panel { border-color: var(--border); }
+:root[data-skin='rack'] .panel-head { border-bottom-color: var(--border); background: var(--panel-2); }
+:root[data-skin='rack'] .panel-title {
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+}
+:root[data-skin='rack'] .status-bar {
+  background: var(--bg-sunken); border-top-color: var(--border);
+  font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: .04em; text-transform: uppercase;
+}
+:root[data-skin='rack'] .badge { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
+:root[data-skin='rack'] .btn { font-family: var(--font-mono); font-size: var(--fs-sm); letter-spacing: .02em; }

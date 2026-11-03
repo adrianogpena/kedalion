@@ -1,6 +1,6 @@
 /* Material: filled Material glyphs (icon set 'material'), rounder controls, labelled (expanded) nav,
    pill nav items and pill tabs. Same palettes. */
-:root[data-layout='material'] {
+:root[data-skin='material'] {
   --radius-sm: 8px; --radius-md: 10px; --radius-lg: 12px; --radius-xl: 14px; --radius-2xl: 16px;
   --radius-3xl: 16px; --radius-4xl: 18px; --radius-5xl: 20px;
   --control-h: 32px;
@@ -8,21 +8,21 @@
 }
 
 /* Buttons: near pill. */
-:root[data-layout='material'] .btn { border-radius: 999px; padding: 0 14px; }
-:root[data-layout='material'] .btn-icon { padding: 0; }
+:root[data-skin='material'] .btn { border-radius: 999px; padding: 0 14px; }
+:root[data-skin='material'] .btn-icon { padding: 0; }
 
 /* Nav: rounded pills, active item as an accent soft fill, no edge marker. */
-:root[data-layout='material'] .side-item { border-radius: 999px; padding: 0 var(--space-12); gap: var(--space-12); }
-:root[data-layout='material'] .side-item.active { background: var(--accent-soft); }
-:root[data-layout='material'] .side-item.active::before { display: none; }
+:root[data-skin='material'] .side-item { border-radius: 999px; padding: 0 var(--space-12); gap: var(--space-12); }
+:root[data-skin='material'] .side-item.active { background: var(--accent-soft); }
+:root[data-skin='material'] .side-item.active::before { display: none; }
 /* Icon rail (main menu 'icons' or collapsed): centred icon in a round pill. */
-:root[data-layout='material'] .app.nav-collapsed .side-item { justify-content: center; padding: 0; }
+:root[data-skin='material'] .app.nav-collapsed .side-item { justify-content: center; padding: 0; }
 
 /* Tabs: pills sitting inside the bar instead of folder tabs. */
-:root[data-layout='material'] .tabs-strip { align-items: center; margin-bottom: 0; gap: var(--space-4); }
-:root[data-layout='material'] .tab-chip {
+:root[data-skin='material'] .tabs-strip { align-items: center; margin-bottom: 0; gap: var(--space-4); }
+:root[data-skin='material'] .tab-chip {
   margin-top: 0; height: var(--control-h); border-radius: 999px; border-bottom: 1px solid transparent;
 }
-:root[data-layout='material'] .tab-chip.active { background: var(--accent-soft); border-color: transparent; }
-:root[data-layout='material'] .tab-chip.active::before { display: none; }
-:root[data-layout='material'] .pane.tabbar-bottom .tab-chip { margin-bottom: 0; border-radius: 999px; }
+:root[data-skin='material'] .tab-chip.active { background: var(--accent-soft); border-color: transparent; }
+:root[data-skin='material'] .tab-chip.active::before { display: none; }
+:root[data-skin='material'] .pane.tabbar-bottom .tab-chip { margin-bottom: 0; border-radius: 999px; }

@@ -2,7 +2,7 @@
    the background, not a border. Shell swaps: IslandsAppFrame (rail + brand cell) and
    IslandsStatusBar (on the frame). */
 
-:root[data-layout='islands'] {
+:root[data-skin='islands'] {
   /* radius: controls and inputs 6, inner cards 6, menus 8, modal 14; islands use --island-radius */
   --radius-md: 6px; --radius-lg: 6px; --radius-xl: 6px; --radius-2xl: 8px; --radius-3xl: 6px;
   --radius-4xl: 6px; --radius-5xl: 14px;
@@ -13,74 +13,74 @@
 }
 
 /* ---- frame */
-:root[data-layout='islands'] body { background: var(--bg-sunken); }
-:root[data-layout='islands'] .app.islands-frame {
+:root[data-skin='islands'] body { background: var(--bg-sunken); }
+:root[data-skin='islands'] .app.islands-frame {
   grid-template-columns: var(--sidebar-w) 1fr; gap: var(--island-gap); padding: var(--island-gap);
   background: var(--bg-sunken);
 }
-:root[data-layout='islands'] .app.islands-frame.nav-collapsed { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
-:root[data-layout='islands'] .app.islands-frame.sidebar-right { grid-template-columns: 1fr var(--sidebar-w); }
-:root[data-layout='islands'] .app.islands-frame.sidebar-right.nav-collapsed { grid-template-columns: 1fr var(--sidebar-w-collapsed); }
-:root[data-layout='islands'] .app.islands-frame.zen { grid-template-columns: 1fr; }
-:root[data-layout='islands'] .app.islands-frame.zen > .islands-rail { display: none; }
-:root[data-layout='islands'] .app.islands-frame.sidebar-right > .islands-rail { order: 2; }
+:root[data-skin='islands'] .app.islands-frame.nav-collapsed { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
+:root[data-skin='islands'] .app.islands-frame.sidebar-right { grid-template-columns: 1fr var(--sidebar-w); }
+:root[data-skin='islands'] .app.islands-frame.sidebar-right.nav-collapsed { grid-template-columns: 1fr var(--sidebar-w-collapsed); }
+:root[data-skin='islands'] .app.islands-frame.zen { grid-template-columns: 1fr; }
+:root[data-skin='islands'] .app.islands-frame.zen > .islands-rail { display: none; }
+:root[data-skin='islands'] .app.islands-frame.sidebar-right > .islands-rail { order: 2; }
 
 /* ---- rail: brand cell level with the tab row, then the nav island */
-:root[data-layout='islands'] .islands-rail { display: flex; flex-direction: column; min-height: 0; }
-:root[data-layout='islands'] .islands-brand {
+:root[data-skin='islands'] .islands-rail { display: flex; flex-direction: column; min-height: 0; }
+:root[data-skin='islands'] .islands-brand {
   display: flex; align-items: center; justify-content: center; flex-shrink: 0; height: var(--tabbar-h);
 }
-:root[data-layout='islands'] .islands-rail > .sidebar {
+:root[data-skin='islands'] .islands-rail > .sidebar {
   flex: 1; border: 0; border-radius: var(--island-radius); background: var(--panel); overflow: hidden;
 }
-:root[data-layout='islands'] .app.sidebar-right .islands-rail > .sidebar { border: 0; }
+:root[data-skin='islands'] .app.sidebar-right .islands-rail > .sidebar { border: 0; }
 
 @media (max-width: 800px) {
-  :root[data-layout='islands'] .app.islands-frame,
-  :root[data-layout='islands'] .app.islands-frame.nav-collapsed,
-  :root[data-layout='islands'] .app.islands-frame.sidebar-right,
-  :root[data-layout='islands'] .app.islands-frame.sidebar-right.nav-collapsed { grid-template-columns: 1fr; }
-  :root[data-layout='islands'] .app.islands-frame > .islands-rail { display: none; }
+  :root[data-skin='islands'] .app.islands-frame,
+  :root[data-skin='islands'] .app.islands-frame.nav-collapsed,
+  :root[data-skin='islands'] .app.islands-frame.sidebar-right,
+  :root[data-skin='islands'] .app.islands-frame.sidebar-right.nav-collapsed { grid-template-columns: 1fr; }
+  :root[data-skin='islands'] .app.islands-frame > .islands-rail { display: none; }
 }
 
 /* ---- main: an island by default; tab workspaces put their tab row on the frame instead */
-:root[data-layout='islands'] .main { background: var(--bg); border-radius: var(--island-radius); overflow: hidden; }
-:root[data-layout='islands'] .main:has(.panes) { background: transparent; border-radius: 0; overflow: visible; }
-:root[data-layout='islands'] .tabbar { background: transparent; border-bottom: 0; padding-left: 0; }
-:root[data-layout='islands'] .pane.tabbar-bottom .tabbar { border-top: 0; }
-:root[data-layout='islands'] .tab-chip.active { border-color: transparent; }
-:root[data-layout='islands'] .pane-body { background: var(--bg); border-radius: var(--island-radius); overflow: hidden; }
-:root[data-layout='islands'] .pane.focused .tabbar,
-:root[data-layout='islands'] .pane.tabbar-bottom.focused .tabbar { box-shadow: none; }
-:root[data-layout='islands'] .pane.focused .pane-body { outline: 1px solid var(--accent); outline-offset: -1px; }
+:root[data-skin='islands'] .main { background: var(--bg); border-radius: var(--island-radius); overflow: hidden; }
+:root[data-skin='islands'] .main:has(.panes) { background: transparent; border-radius: 0; overflow: visible; }
+:root[data-skin='islands'] .tabbar { background: transparent; border-bottom: 0; padding-left: 0; }
+:root[data-skin='islands'] .pane.tabbar-bottom .tabbar { border-top: 0; }
+:root[data-skin='islands'] .tab-chip.active { border-color: transparent; }
+:root[data-skin='islands'] .pane-body { background: var(--bg); border-radius: var(--island-radius); overflow: hidden; }
+:root[data-skin='islands'] .pane.focused .tabbar,
+:root[data-skin='islands'] .pane.tabbar-bottom.focused .tabbar { box-shadow: none; }
+:root[data-skin='islands'] .pane.focused .pane-body { outline: 1px solid var(--accent); outline-offset: -1px; }
 
 /* ---- gutters between split islands */
-:root[data-layout='islands'] .split-divider { flex-basis: var(--island-gap); }
-:root[data-layout='islands'] .split-divider::after { background: transparent; }
+:root[data-skin='islands'] .split-divider { flex-basis: var(--island-gap); }
+:root[data-skin='islands'] .split-divider::after { background: transparent; }
 
 /* ---- status: on the frame, no strip */
-:root[data-layout='islands'] .islands-status .status-bar { background: transparent; border-top: 0; }
+:root[data-skin='islands'] .islands-status .status-bar { background: transparent; border-top: 0; }
 
 /* ---- screens */
 /* Full-window screens: the island already marks the window edge. */
-:root[data-layout='islands'] .screen-edges { border-right: 0; border-bottom: 0; }
-:root[data-layout='islands'] .screen-edges::after { display: none; }
+:root[data-skin='islands'] .screen-edges { border-right: 0; border-bottom: 0; }
+:root[data-skin='islands'] .screen-edges::after { display: none; }
 /* Explorer: the tree is its own island, a gutter from the editor islands. */
-:root[data-layout='islands'] .explorer { gap: var(--island-gap); }
-:root[data-layout='islands'] .explorer-side,
-:root[data-layout='islands'] .explorer-rail { border: 0 !important; border-radius: var(--island-radius); background: var(--panel); overflow: hidden; }
+:root[data-skin='islands'] .explorer { gap: var(--island-gap); }
+:root[data-skin='islands'] .explorer-side,
+:root[data-skin='islands'] .explorer-rail { border: 0 !important; border-radius: var(--island-radius); background: var(--panel); overflow: hidden; }
 /* Panel grid: each panel is an island on the frame, not a card inside one. */
-:root[data-layout='islands'] .main:has(.panel-grid) { background: transparent; border-radius: 0; }
-:root[data-layout='islands'] .panel { border: 0; border-radius: var(--island-radius); background: var(--bg); }
-:root[data-layout='islands'] .panel-grid .react-grid-item.react-grid-placeholder { border-radius: var(--island-radius); }
+:root[data-skin='islands'] .main:has(.panel-grid) { background: transparent; border-radius: 0; }
+:root[data-skin='islands'] .panel { border: 0; border-radius: var(--island-radius); background: var(--bg); }
+:root[data-skin='islands'] .panel-grid .react-grid-item.react-grid-placeholder { border-radius: var(--island-radius); }
 /* Inner surfaces drop to 6 (radius vars) and stay flat. */
-:root[data-layout='islands'] .card,
-:root[data-layout='islands'] .fact,
-:root[data-layout='islands'] .resource-row { box-shadow: none; }
+:root[data-skin='islands'] .card,
+:root[data-skin='islands'] .fact,
+:root[data-skin='islands'] .resource-row { box-shadow: none; }
 /* Rail selection: the accent fill and icon, no side marker inside a narrow island. */
-:root[data-layout='islands'] .sidebar.collapsed .side-item.active::before { display: none; }
+:root[data-skin='islands'] .sidebar.collapsed .side-item.active::before { display: none; }
 /* Floating layers keep --shadow and the modal radius. */
-:root[data-layout='islands'] .modal-large { border-radius: var(--radius-5xl); }
+:root[data-skin='islands'] .modal-large { border-radius: var(--radius-5xl); }
 
 /* ---- type: panel heads 12.5/600, body 13 */
-:root[data-layout='islands'] .panel-title { font-size: var(--fs-sm-plus); font-weight: 600; }
+:root[data-skin='islands'] .panel-title { font-size: var(--fs-sm-plus); font-weight: 600; }

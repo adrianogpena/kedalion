@@ -2,7 +2,7 @@
    words (navPlacement: 'header'), text document tabs with an underlined active tab, hairline rules,
    sans caps for column and panel heads, tabular figures everywhere. Colours come from the Ledger
    palette family; the boldness is the type. */
-:root[data-layout='ledger'] {
+:root[data-skin='ledger'] {
   /* radius: 0 panes and tables, 2 controls, 4 modals */
   --radius-2xs: 0px; --radius-xs: 2px; --radius-sm: 2px; --radius-md: 2px; --radius-lg: 2px;
   --radius-xl: 2px; --radius-2xl: 2px; --radius-3xl: 2px; --radius-4xl: 0px; --radius-5xl: 4px;
@@ -11,70 +11,70 @@
   --nav-header-h: 40px; --tabbar-h: 32px; --statusbar-h: 22px; --header-h: 32px; --panel-head-h: 34px;
 }
 
-:root[data-layout='ledger'],
-:root[data-layout='ledger'] body { overflow: clip; }
-:root[data-layout='ledger'] body { font-variant-numeric: tabular-nums; }
+:root[data-skin='ledger'],
+:root[data-skin='ledger'] body { overflow: clip; }
+:root[data-skin='ledger'] body { font-variant-numeric: tabular-nums; }
 
 /* Sans caps replace the mono caption. */
-:root[data-layout='ledger'] .mono-label { font-family: var(--font-sans); font-weight: 600; letter-spacing: .08em; }
+:root[data-skin='ledger'] .mono-label { font-family: var(--font-sans); font-weight: 600; letter-spacing: .08em; }
 
 /* Masthead: brand in caps, nav as words, active word in accent with an underline. */
-:root[data-layout='ledger'] .header-nav { gap: var(--space-12); background: var(--bg); border-bottom: 1px solid var(--text); }
-:root[data-layout='ledger'] .header-brand { font-size: var(--fs-md); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; padding-right: var(--space-16); }
-:root[data-layout='ledger'] .header-tab { padding: 0 var(--space-10); font-size: var(--fs-md); color: var(--text-2); }
-:root[data-layout='ledger'] .header-tab:hover { background: transparent; color: var(--text); text-decoration: underline; text-underline-offset: 4px; }
-:root[data-layout='ledger'] .header-tab.active { color: var(--accent); font-weight: 600; }
-:root[data-layout='ledger'] .header-tab.active::after { left: var(--space-10); right: var(--space-10); height: 2px; border-radius: 0; }
-:root[data-layout='ledger'] .header-nav.icons-only .header-tab { padding: 0; }
-:root[data-layout='ledger'] .header-tools .btn-icon { width: var(--control-h); height: var(--control-h); }
+:root[data-skin='ledger'] .header-nav { gap: var(--space-12); background: var(--bg); border-bottom: 1px solid var(--text); }
+:root[data-skin='ledger'] .header-brand { font-size: var(--fs-md); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; padding-right: var(--space-16); }
+:root[data-skin='ledger'] .header-tab { padding: 0 var(--space-10); font-size: var(--fs-md); color: var(--text-2); }
+:root[data-skin='ledger'] .header-tab:hover { background: transparent; color: var(--text); text-decoration: underline; text-underline-offset: 4px; }
+:root[data-skin='ledger'] .header-tab.active { color: var(--accent); font-weight: 600; }
+:root[data-skin='ledger'] .header-tab.active::after { left: var(--space-10); right: var(--space-10); height: 2px; border-radius: 0; }
+:root[data-skin='ledger'] .header-nav.icons-only .header-tab { padding: 0; }
+:root[data-skin='ledger'] .header-tools .btn-icon { width: var(--control-h); height: var(--control-h); }
 
 /* Buttons: text-like, underline on hover. */
-:root[data-layout='ledger'] .btn-ghost:hover:not(:disabled) { background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+:root[data-skin='ledger'] .btn-ghost:hover:not(:disabled) { background: transparent; text-decoration: underline; text-underline-offset: 3px; }
 
 /* Document tabs: text tabs on paper, underline marks the active one. */
-:root[data-layout='ledger'] .tabbar { background: var(--bg); border-bottom-color: var(--border); }
-:root[data-layout='ledger'] .pane.focused .tabbar { box-shadow: none; }
-:root[data-layout='ledger'] .tab-chip { margin-top: 0; border: 0; border-radius: 0; }
-:root[data-layout='ledger'] .tab-chip:hover { background: transparent; }
-:root[data-layout='ledger'] .tab-chip.active { background: transparent; }
-:root[data-layout='ledger'] .tab-chip.active::before { top: auto; bottom: 0; left: var(--space-12); right: var(--space-6); border-radius: 0; background: var(--text-3); }
-:root[data-layout='ledger'] .pane.focused .tab-chip.active::before { background: var(--accent); }
+:root[data-skin='ledger'] .tabbar { background: var(--bg); border-bottom-color: var(--border); }
+:root[data-skin='ledger'] .pane.focused .tabbar { box-shadow: none; }
+:root[data-skin='ledger'] .tab-chip { margin-top: 0; border: 0; border-radius: 0; }
+:root[data-skin='ledger'] .tab-chip:hover { background: transparent; }
+:root[data-skin='ledger'] .tab-chip.active { background: transparent; }
+:root[data-skin='ledger'] .tab-chip.active::before { top: auto; bottom: 0; left: var(--space-12); right: var(--space-6); border-radius: 0; background: var(--text-3); }
+:root[data-skin='ledger'] .pane.focused .tab-chip.active::before { background: var(--accent); }
 
 /* Panels and cards: flat paper with hairline rules; heads in sans caps. */
-:root[data-layout='ledger'] .card,
-:root[data-layout='ledger'] .panel { box-shadow: none; }
-:root[data-layout='ledger'] .panel-title { font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-2); }
+:root[data-skin='ledger'] .card,
+:root[data-skin='ledger'] .panel { box-shadow: none; }
+:root[data-skin='ledger'] .panel-title { font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-2); }
 
 /* Table and tree selection: accent left rule plus tint. */
-:root[data-layout='ledger'] .dtable-row.selected,
-:root[data-layout='ledger'] .tree-row.selected { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+:root[data-skin='ledger'] .dtable-row.selected,
+:root[data-skin='ledger'] .tree-row.selected { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
 
 /* Status bar: a quiet footer line. */
-:root[data-layout='ledger'] .status-bar { background: var(--bg); border-top-color: var(--border); }
+:root[data-skin='ledger'] .status-bar { background: var(--bg); border-top-color: var(--border); }
 
 /* xterm paints --bg-sunken; give it a hairline so it reads on paper. */
-:root[data-layout='ledger'] .terminal-host .xterm { outline: 1px solid var(--border); }
+:root[data-skin='ledger'] .terminal-host .xterm { outline: 1px solid var(--border); }
 
 /* ---- screen layer: tables, git list, REST response */
 
 /* DataTable: paper rows, column heads in sans caps over a dark rule. */
-:root[data-layout='ledger'] .dtable-head { background: var(--bg); border-bottom: 1px solid var(--text-3); }
-:root[data-layout='ledger'] .dtable-hcell { font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); }
-:root[data-layout='ledger'] .dtable-hcell.sortable:hover { background: transparent; color: var(--text); }
-:root[data-layout='ledger'] .dtable-row { border-bottom-color: var(--border); }
-:root[data-layout='ledger'] .dtable-cell { font-variant-numeric: tabular-nums; }
+:root[data-skin='ledger'] .dtable-head { background: var(--bg); border-bottom: 1px solid var(--text-3); }
+:root[data-skin='ledger'] .dtable-hcell { font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); }
+:root[data-skin='ledger'] .dtable-hcell.sortable:hover { background: transparent; color: var(--text); }
+:root[data-skin='ledger'] .dtable-row { border-bottom-color: var(--border); }
+:root[data-skin='ledger'] .dtable-cell { font-variant-numeric: tabular-nums; }
 
 /* Git list: section heads as caps with the count as a key figure. */
-:root[data-layout='ledger'] .git-section-head { border-bottom: 1px solid var(--border); }
-:root[data-layout='ledger'] .git-section-head .tree-label { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .08em; color: var(--text-2); }
-:root[data-layout='ledger'] .git-count { background: transparent; padding: 0; color: var(--text); font-size: var(--fs-2xl); font-weight: 600; }
-:root[data-layout='ledger'] .git-branch-line { border-bottom: 1px solid var(--border); padding-bottom: var(--space-6); }
-:root[data-layout='ledger'] .git-history { border-top-color: var(--text-3); }
-:root[data-layout='ledger'] .git-commit-age { font-variant-numeric: tabular-nums; }
+:root[data-skin='ledger'] .git-section-head { border-bottom: 1px solid var(--border); }
+:root[data-skin='ledger'] .git-section-head .tree-label { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .08em; color: var(--text-2); }
+:root[data-skin='ledger'] .git-count { background: transparent; padding: 0; color: var(--text); font-size: var(--fs-2xl); font-weight: 600; }
+:root[data-skin='ledger'] .git-branch-line { border-bottom: 1px solid var(--border); padding-bottom: var(--space-6); }
+:root[data-skin='ledger'] .git-history { border-top-color: var(--text-3); }
+:root[data-skin='ledger'] .git-commit-age { font-variant-numeric: tabular-nums; }
 
 /* REST response: status, size and time as large figures; header table ruled like a ledger. */
-:root[data-layout='ledger'] .resp-status { gap: var(--space-16); }
-:root[data-layout='ledger'] .resp-meta { font-family: var(--font-sans); font-size: var(--fs-2xl); font-weight: 600; color: var(--text); }
-:root[data-layout='ledger'] .resp-headers th { font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid var(--text-3); }
-:root[data-layout='ledger'] .resp-headers td { border-bottom-color: var(--border); }
-:root[data-layout='ledger'] .resp-meta.resp-url { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 400; color: var(--text-3); }
+:root[data-skin='ledger'] .resp-status { gap: var(--space-16); }
+:root[data-skin='ledger'] .resp-meta { font-family: var(--font-sans); font-size: var(--fs-2xl); font-weight: 600; color: var(--text); }
+:root[data-skin='ledger'] .resp-headers th { font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid var(--text-3); }
+:root[data-skin='ledger'] .resp-headers td { border-bottom-color: var(--border); }
+:root[data-skin='ledger'] .resp-meta.resp-url { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 400; color: var(--text-3); }
