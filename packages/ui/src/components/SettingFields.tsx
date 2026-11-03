@@ -77,12 +77,12 @@ export function useRevealSetting(root: RefObject<HTMLElement | null>): (id: stri
 }
 
 /** A boolean as one tick-box row: label on the left, checkbox on the right edge, description below the label. */
-export function OnOffField({ label, hint, value, onChange }: { label: string; hint: ReactNode; value: boolean; onChange: (on: boolean) => void }) {
+export function OnOffField({ label, hint, value, onChange, disabled }: { label: string; hint: ReactNode; value: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
   return (
     <label className="field setting-check">
       <span className="mono-label">{label}</span>
       {hint && <span className="muted">{hint}</span>}
-      <input type="checkbox" checked={value} aria-label={label} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" checked={value} disabled={disabled} aria-label={label} onChange={(e) => onChange(e.target.checked)} />
     </label>
   );
 }

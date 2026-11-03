@@ -1,10 +1,11 @@
 import { type CSSProperties, Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, IconButton, AppearanceFields, DockField, IconsField, LayoutField, MainMenuField, SettingLinksProvider, SettingErrorsContext, type SettingLinks, SettingRow, useRevealSetting, useRovingList, SETTING_ROW_CONTROLS,ZoomField, type ApiError, detectLanguage, type FileAssociation, validFileAssociations, deepEqual, dialogs, ErrorBanner, errorMessage, errorOf, GLOBAL, isDesktop, KeybindingsEditor, LANGUAGES, isModified, Modal, parseSettingsQuery, settingDescriptionText, toggleModifiedFilter, Spinner, useAsync, useKeybindings, tryT, type Language, type SettingDef, type SettingsSectionNode, sectionKey } from '@kedalion/ui';
+import { Button, IconButton, AppearanceFields, SettingLinksProvider, SettingErrorsContext, type SettingLinks, SettingRow, useRevealSetting, useRovingList, SETTING_ROW_CONTROLS,ZoomField, type ApiError, detectLanguage, type FileAssociation, validFileAssociations, deepEqual, dialogs, ErrorBanner, errorMessage, errorOf, GLOBAL, isDesktop, KeybindingsEditor, LANGUAGES, isModified, Modal, parseSettingsQuery, settingDescriptionText, toggleModifiedFilter, Spinner, useAsync, useKeybindings, tryT, type Language, type SettingDef, type SettingsSectionNode, sectionKey } from '@kedalion/ui';
 import { APP } from '../../../app';
 import { views } from '../views';
 import { api, type BackupInfo, type EditorInfo, type ImportResult, type Settings } from '../api';
 import { type MessageKey, t } from '../i18n';
 import { settingsRegistry } from '../settings';
+import { LayoutSettings } from './LayoutSettings';
 import { LinksSettings } from './LinksSettings';
 
 interface Props {
@@ -15,7 +16,7 @@ interface Props {
   onQuit: () => void;
 }
 
-type Change = (patch: Partial<Settings>) => void;
+type Change = (patch: Partial<Settings>) => void | Promise<ApiError | null>;
 
 /** Translates `key` when it is a message, else falls back. */
 const tr = (key: string | undefined, fallback?: string): string => (!key ? (fallback ?? '') : (tryT(key) ?? fallback ?? key));
@@ -159,8 +160,8 @@ export function SettingsModal({ settings, onChange, onReplace, onQuit, onClose, 
   const change: Change = (patch) => {
     const next = { ...settings, ...patch };
     const ids = settingsRegistry.settings().filter((d) => handled(d) && !deepEqual(valueOf(d, settings), valueOf(d, next))).map((d) => d.id);
-    void Promise.resolve(onChange(patch)).then((err) => {
-      if (ids.length === 0) return;
+    return Promise.resolve(onChange(patch)).then((err) => {
+      if (ids.length === 0) return err ?? null;
       setErrors((prev) => {
         const out = { ...prev };
         for (const id of ids) {
@@ -169,6 +170,7 @@ export function SettingsModal({ settings, onChange, onReplace, onQuit, onClose, 
         }
         return out;
       });
+      return err ?? null;
     });
   };
   // Escape returns to the previous view, unless a dialog, a toast or a field used the key.
@@ -196,7 +198,7 @@ export function SettingsModal({ settings, onChange, onReplace, onQuit, onClose, 
   const total = [...hits.values()].reduce((n, h) => n + h.ids.length, 0);
 
   /** Pages with an explicit `render` branch; keep in step with the switch below. */
-  const OWN_PAGES = ['general', 'general.links', 'appearance', 'window', 'editor', 'editor.fileTypes', 'editor.externalEditors', 'keyboard.shortcuts', 'system.updates', 'system.backup'];
+  const OWN_PAGES = ['general', 'general.links', 'appearance', 'appearance.layout', 'window', 'editor', 'editor.fileTypes', 'editor.externalEditors', 'keyboard.shortcuts', 'system.updates', 'system.backup'];
 
   /** Whether the section has settings or a card of its own (else a parent lists links to its children). */
   const hasOwn = (key: string): boolean =>
@@ -206,16 +208,13 @@ export function SettingsModal({ settings, onChange, onReplace, onQuit, onClose, 
     switch (key) {
       case 'general': return <GeneralSection settings={draft} onChange={change} onQuit={onQuit} />;
       case 'general.links': return <LinksSettings settings={draft} onChange={change} />;
+      case 'appearance.layout': return <LayoutSettings value={draft} onChange={change} />;
       case 'appearance':
         return (
           <>
             <section className="section">
               <div className="card form">
                 <AppearanceFields value={draft} onChange={change} />
-                <LayoutField value={draft} onChange={change} />
-                <MainMenuField value={draft} onChange={change} />
-                <DockField value={draft} onChange={change} />
-                <IconsField value={draft} onChange={change} />
               </div>
             </section>
             <SettingRows ids={groupIds('appearance')} settings={draft} onChange={change} />

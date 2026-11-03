@@ -19,6 +19,7 @@ import type { AppearanceSettings, EditorSettings, GeneralSettings, KeyboardSetti
 export const settingsRegistry = createSettingsRegistry<Settings>();
 registerDefaultSections(settingsRegistry);
 settingsRegistry.registerSection({ path: ['general', 'links'], order: 10, label: 'settings.section.general.links' });
+settingsRegistry.registerSection({ path: ['appearance', 'layout'], order: 10, label: 'settings.section.appearance.layout' });
 
 /** Default of a registered setting. */
 export const settingDefault = <V = unknown>(id: string): V => settingsRegistry.setting(id)!.default as V;
