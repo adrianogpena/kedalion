@@ -17,6 +17,7 @@ import {
   useDebouncedSave,
   useViewLayout,
   useDialogs,
+  useViewCompact,
   useViewToast,
 } from '@kedalion/ui';
 import { EXPORT_ROWS, type ExportFormat, exportResults, DEFAULT_RESULTS, SqlResults, useSqlRunner, useSqlSchema, useTableDetails } from '@kedalion/sql-ui';
@@ -39,7 +40,8 @@ const DEFAULT_MAIN: [number, number] = [0.3, 0.7];
 const commandById = (id: string) => workbenchCommands().find((c) => c.id === id)!;
 
 export function WorkbenchScreen({ settings, onSave, client }: { settings: WorkbenchViewSettings; onSave: (patch: Partial<WorkbenchViewSettings>) => void; client: WorkbenchClient }) {
-  const bridge = useViewLayout('workbench') === 'one-surface';
+  const compact = useViewCompact();
+  const bridge = !compact && useViewLayout('workbench') === 'one-surface';
   const [state, setState] = useState<WorkbenchSettings>(() => withWorkbenchDefaults(settings.workbench));
   const [query, setQuery] = useState('');
   const [docError, setDocError] = useState<ApiError>();
@@ -296,6 +298,26 @@ ${sql}` : sql);
           <span className="muted">{t('workbench.exportHint', { count: EXPORT_ROWS })}</span>
       </div>
   );
+  const compactBar = (
+    <div className="row wb-bar">
+      <select value={connection ? connection.id : DEMO_SOURCE} onChange={(e) => changeSource(e.target.value)} aria-label={t('workbench.source')} title={t('workbench.source')}>
+        <option value={DEMO_SOURCE}>{t('workbench.source.demo')}</option>
+        {connections.data?.map((c) => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+        <option value={MANAGE}>{t('workbench.source.manage')}</option>
+      </select>
+      <Button size="sm" variant="primary" icon="play" data-run onClick={run} disabled={busy} title={t('workbench.run')}>{t('workbench.run')}</Button>
+      {runner.running && <Button size="sm" variant="danger" icon="square" onClick={runner.cancel} title={t('workbench.cancel')}>{t('workbench.cancel')}</Button>}
+      {db && (
+        <>
+          {status?.pending && <Badge tone="warn">{t('workbench.tx.pending')}</Badge>}
+          <Button size="sm" icon="check" onClick={runner.commit} disabled={!status?.connected || starting} title={t('workbench.tx.commit')}>{t('workbench.tx.commit')}</Button>
+        </>
+      )}
+      <Button size="sm" variant="ghost" icon="copy" onClick={runner.copy} disabled={tableRows.length === 0} title={t(selection.length > 0 ? 'workbench.copySelected' : 'workbench.copy')}>{t(selection.length > 0 ? 'workbench.copySelected' : 'workbench.copy')}</Button>
+    </div>
+  );
   const banners = (
     <>
       {runner.actionError && <ErrorBanner error={runner.actionError} compact />}
@@ -357,6 +379,18 @@ ${sql}` : sql);
         <HistoryPanel client={client} connection={db} refresh={runsDone} connectionName={connectionName} onInsert={insertSql} onOpen={edit} confirm={confirm} />
   );
   const managingEl = managing && <Connections client={client} onClose={() => setManaging(false)} onChanged={connections.reload} />;
+
+  if (compact) {
+    return (
+      <div className="content wb-compact">
+        {dialogs}
+        {compactBar}
+        {banners}
+        <div className="wb-body">{split(editorEl, resultsEl)}</div>
+        {managingEl}
+      </div>
+    );
+  }
 
   if (bridge) {
     return (

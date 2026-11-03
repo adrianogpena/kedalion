@@ -105,3 +105,10 @@ test('header-nav layouts do not support the dock side', () => {
   expect(supportsDock('original')).toBe(true);
   expect(supportsDock('ribbon')).toBe(false);
 });
+
+test('placement defaults to tab, keeps hidden and side, drops unknown values and views', () => {
+    expect(resolveLayouts({ preset: 'ribbon' }).placement).toEqual({ workbench: 'tab', rest: 'tab', terminal: 'tab', git: 'tab' });
+    const v = validLayouts({ preset: 'ribbon', placement: { workbench: 'side', git: 'hidden', rest: 'bogus', dashboard: 'side' } });
+    expect(v?.placement).toEqual({ workbench: 'side', git: 'hidden' });
+    expect(resolveLayouts(v).placement.workbench).toBe('side');
+});

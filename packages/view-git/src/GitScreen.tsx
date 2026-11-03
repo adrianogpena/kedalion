@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { DiffMode, DiffViewHandle } from '@kedalion/editor';
 import type { GitFile, GitRepoInfo, GitStatus } from '@kedalion/server-core/protocol';
-import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLayout, useViewLink, useViewRequest } from '@kedalion/ui';
+import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLayout, useViewCompact, useViewLink, useViewRequest } from '@kedalion/ui';
 import { type GitProject as Project, gitApi as api } from './client';
 import { gitCommands } from './commands';
 import { t } from './i18n';
@@ -98,7 +98,8 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
   const toast = useToast();
   const tip = useShortcutTip();
   useRovingList(list, '.git-row');
-  const readThrough = useViewLayout('git') === 'read-through';
+  const compact = useViewCompact();
+  const readThrough = !compact && useViewLayout('git') === 'read-through';
 
   const persist = useDebouncedSave((v: View) =>
     onSave({
@@ -430,6 +431,8 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
         )}
       </div>
   );
+
+  if (compact) return <div className="git-compact">{sidebar}</div>;
 
   if (readThrough && root) {
     return (

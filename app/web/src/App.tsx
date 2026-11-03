@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PALETTES } from '@kedalion/server-core/palettes';
-import { effectiveLayouts, layoutsFromLegacy } from '@kedalion/server-core/layouts';
-import { CommandPalette, DEFAULT_LINK_SETTINGS, installLinkRouter, LinkContextMenu, type LinkTarget, DialogHost, detectLanguage, effectiveKeys, ErrorBanner, GLOBAL, AppFrame, IconButton, isDesktop, KeybindingProvider, LayoutProvider, type PaletteItem, popOut, popoutView, usePopouts,setFileAssociations, setLanguage, setViewTitle, Sidebar, Spinner, titleWithBadge, ToastProvider, type ApiError, errorMessage, errorOf, useToast, useAsync, useCommand, useCommandPalette, useHashRoute, useHeartbeat, useKeybindings, useRunCommand, useTheme, useTitleBadge,useViewTitle,useZen, useZoom, DesignSwitcher, useDesignLayout, useBridge, CommandBar, ActivityStrip } from '@kedalion/ui';
+import { effectiveLayouts, layoutsFromLegacy, resolveLayouts, type PlaceableView } from '@kedalion/server-core/layouts';
+import { CommandPalette, DEFAULT_LINK_SETTINGS, installLinkRouter, LinkContextMenu, type LinkTarget, DialogHost, detectLanguage, effectiveKeys, ErrorBanner, GLOBAL, AppFrame, IconButton, isDesktop, KeybindingProvider, LayoutProvider, type PaletteItem, popOut, popoutView, usePopouts,setFileAssociations, setLanguage, setViewTitle, Sidebar, Spinner, titleWithBadge, ToastProvider, type ApiError, errorMessage, errorOf, useToast, useAsync, useCommand, useCommandPalette, useHashRoute, useHeartbeat, useKeybindings, useRunCommand, useTheme, useTitleBadge,useViewTitle,useZen, useZoom, DesignSwitcher, useDesignLayout, useBridge, CommandBar, ActivityStrip, AppSidePanel } from '@kedalion/ui';
 import { EditorOptionsContext } from '@kedalion/editor/options';
 import { APP } from '../../app';
 import { api, type Settings } from './api';
@@ -80,6 +80,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   const designLayout = useDesignLayout();
   const settings = useMemo(() => (designLayout === 'current' ? saved : { ...saved, layouts: layoutsFromLegacy({ layout: designLayout }) }), [saved, designLayout]);
   const layouts = useMemo(() => effectiveLayouts(settings), [settings]);
+  const placement = useMemo(() => resolveLayouts(layouts).placement, [layouts]);
   const [stopped, setStopped] = useState(false);
   useHeartbeat();
   const palette = useCommandPalette();
@@ -166,16 +167,42 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   /** Takes settings already stored on the server (external edit, backup import) as they are: no merge, no save. */
   const replace = useCallback((next: Settings) => setSettings(next), []);
 
-  const navItems = views.nav.flatMap((s) => s.items);
+  const allNavItems = views.nav.flatMap((s) => s.items);
+  const placementOf = (id: string) => (inPopout ? 'tab' : placement[id as PlaceableView] ?? 'tab');
+  /** What the navigation, palette and nav commands list: hidden views are left out (links and the hash still reach them). */
+  const navItems = allNavItems.filter((i) => placementOf(i.id) !== 'hidden');
   // The nav list is a constant, so the hooks run in the same order every render.
-  const firstFree = (skip?: string) => navItems.find((i) => i.id !== skip && !popped.has(i.id))?.id;
+  const firstFree = (skip?: string) => navItems.find((i) => i.id !== skip && !popped.has(i.id) && placementOf(i.id) !== 'side')?.id;
+  /** The view in the side panel (null = closed). */
+  const [sideOpen, setSideOpen] = useState<ScreenId | null>(null);
   const goView = (id: ScreenId) => {
-    if (popped.has(id)) void popOut(id, views.label(id));
+    if (placementOf(id) === 'side') {
+      setOverlay(null);
+      setSideOpen((cur) => (cur === id ? null : id));
+    } else if (popped.has(id)) void popOut(id, views.label(id));
     else {
       setOverlay(null);
+      setSideOpen(null);
       go(id);
     }
   };
+  /** How view links and the views' own `go` navigate: a side view opens its panel instead of a screen. */
+  const goLinked = useCallback((id: string) => {
+    if (placementOf(id) === 'side') {
+      setOverlay(null);
+      setSideOpen(id as ScreenId);
+    } else go(id as ScreenId);
+  }, [go, placement, inPopout]);
+  useEffect(() => {
+    if (sideOpen && placementOf(sideOpen) !== 'side') setSideOpen(null);
+  }, [sideOpen, placement, inPopout]);
+  // A route (hash, start screen) pointing at a side view opens its panel over the first free screen.
+  useEffect(() => {
+    if (placementOf(screen) !== 'side') return;
+    setSideOpen(screen);
+    const free = firstFree();
+    if (free) go(free);
+  }, [screen, placement, inPopout]);
   const popOutShown = () => {
     void popOut(screen, views.label(screen)).then((ok) => {
       const free = ok ? firstFree(screen) : undefined;
@@ -188,7 +215,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
     const free = firstFree();
     if (free) go(free);
   }, [popped, screen, inPopout]);
-  for (const item of navItems) useCommand(commandById(navCommandId(item.id)), () => goView(item.id), { enabled: !inPopout });
+  for (const item of allNavItems) useCommand(commandById(navCommandId(item.id)), () => goView(item.id), { enabled: !inPopout });
   useCommand(commandById(SETTINGS_COMMAND), () => setOverlay('settings'));
   useCommand(commandById(KEYS_COMMAND), () => { if (!inPopout) setOverlay('keys'); });
   useCommand(commandById(POPOUT_COMMAND), popOutShown, { enabled: !inPopout && popouts.supported });
@@ -228,7 +255,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
 
   const sections = views.nav.map((s) => ({
     title: t(s.group as MessageKey),
-    items: s.items.map((i) => ({ ...i, label: views.label(i.id), hint: chordOf(navCommandId(i.id)) })),
+    items: s.items.filter((i) => placementOf(i.id) !== 'hidden').map((i) => ({ ...i, label: views.label(i.id), hint: chordOf(navCommandId(i.id)) })),
   }));
   const settingsChord = chordOf(SETTINGS_COMMAND);
   const settingsTitle = settingsChord ? `${t('nav.settings')} (${settingsChord})` : t('nav.settings');
@@ -251,15 +278,20 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
 
   const bridge = navBridge && !inPopout;
   const sidebarNode = inPopout ? undefined : <Sidebar name={APP.name} sections={sections} current={screen} onSelect={goView} footer={footer} popped={popped as ReadonlySet<ScreenId>} poppedHint={t('window.poppedHint')} />;
-  const viewProps = { settings, onSave: save, go: go as (id: string) => void };
+  const viewProps = { settings, onSave: save, go: goLinked };
   const screenNode = views.render(screen, viewProps);
+  const sideViews = allNavItems.filter((i) => placementOf(i.id) === 'side').map((i) => ({
+    id: i.id, title: views.label(i.id), icon: i.icon, render: () => views.render(i.id, viewProps),
+  }));
   const mainNode = (
+    <AppSidePanel open={sideOpen} views={sideViews} onClose={() => setSideOpen(null)}>
     <main className="main">
       <div className="main-view" data-link-scope={`view:${screen}`} hidden={!!overlay}>{screenNode}</div>
       {overlay && (
         <SettingsModal key={overlay} settings={settings} onChange={save} onReplace={replace} onQuit={() => setStopped(true)} onClose={() => setOverlay(null)} onlyView={inPopout ? screen : undefined} initialSection={inPopout ? undefined : overlay === 'keys' ? 'keyboard.shortcuts' : overlay.startsWith('settings/') ? overlay.slice('settings/'.length) : undefined} />
       )}
     </main>
+    </AppSidePanel>
   );
   const frameSidebar = bridge
     ? <CommandBar name={APP.name} items={navItems.map((i) => ({ id: i.id, label: views.label(i.id), icon: i.icon }))} current={screen} onSelect={(id) => goView(id as ScreenId)} onSearch={() => palette.setOpen(true)} tools={footer} />
@@ -275,7 +307,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
       <LinkContextMenu open={openLink} />
       <SaveErrorToast error={saveError} onShown={() => setSaveError(null)} />
       <EditorOptionsContext.Provider value={editorOptions}>
-      <views.Providers settings={settings} go={go as (id: string) => void}>
+      <views.Providers settings={settings} go={goLinked}>
       <AppFrame
         zen={zen}
         popout={inPopout}

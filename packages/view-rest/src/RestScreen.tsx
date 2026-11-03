@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { PanesLayout } from './layouts/PanesLayout';
 import { draftToSpec, hasAuthHeader, type HttpRequestDraft, type ImportedRequest, RequestEditor, ResponseView, toCurl } from '@kedalion/editor';
 import type { HttpResponseInfo, RestEnvVar } from '@kedalion/server-core/protocol';
-import { type ApiError, Button, dialogs, ErrorBanner, errorOf, IconButton, PageHead, SplitView, useAsync, useCommand, useViewLayout,useDebouncedSave, useDialogs, useShortcutTip, useViewRequest } from '@kedalion/ui';
+import { type ApiError, Button, dialogs, ErrorBanner, errorOf, IconButton, PageHead, SplitView, useAsync, useCommand, useViewLayout,useDebouncedSave, useDialogs, useShortcutTip, useViewCompact, useViewRequest } from '@kedalion/ui';
 import { restCommands } from './commands';
 import { restApi as api } from './client';
 import type { RestSettings, RestViewSettings, SavedRequest } from './settings';
@@ -34,7 +34,10 @@ function uniqueName(name: string, taken: Set<string>): string {
 const DEFAULT_MAIN: [number, number] = [0.5, 0.5];
 
 export function RestScreen({ settings, onSave }: { settings: RestViewSettings; onSave: (patch: Partial<RestViewSettings>) => void }) {
-  const bridge = useViewLayout('rest') === 'panes';
+  const inPanel = useViewCompact();
+  const [expanded, setExpanded] = useState(false);
+  const compact = inPanel && !expanded;
+  const bridge = !inPanel && useViewLayout('rest') === 'panes';
   const saved = useAsync(() => api.requests(), []);
   const { confirm, prompt, element } = useDialogs();
   const [state, setState] = useState<RestSettings>(settings.rest ?? {});
@@ -205,6 +208,7 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
   ) : null;
   const actions = (
         <div className="row">
+          {inPanel && <Button size="sm" variant="ghost" icon={expanded ? 'chevron' : 'list-flat'} pressed={expanded} onClick={() => setExpanded((v) => !v)} title={t(expanded ? 'rest.compact.back' : 'rest.compact.saved')}>{t(expanded ? 'rest.compact.back' : 'rest.compact.saved')}</Button>}
           <Button size="sm" variant="ghost" icon="play" pressed={chainState.open} onClick={() => chainStore.setOpen(!chainState.open)} title={t('rest.chain.toggle')}>{t('rest.chain.toggle')}</Button>
           <Button size="sm" icon="download" onClick={() => setImporting(true)} title={t('rest.import')}>{t('rest.import')}</Button>
           <Button size="sm" variant="ghost" icon="code" onClick={() => void showCurl()} title={t('rest.code')}>{t('rest.code')}</Button>
@@ -252,7 +256,7 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
                 setDragOver(null);
               }}
             >
-              <button className="rest-item-main" onClick={() => restTabs.openSaved(item)} title={item.request.url}>
+              <button className="rest-item-main" onClick={() => { restTabs.openSaved(item); setExpanded(false); }} title={item.request.url}>
                 <span className="rest-method">{item.request.method}</span>
                 <span className="rest-item-name">{item.name}</span>
               </button>
@@ -330,6 +334,22 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
       {element}
     </>
   );
+
+  if (compact) {
+    return (
+      <div className="content rest-compact">
+        <div className="row rest-compact-bar">
+          <Button size="sm" variant="ghost" icon="list-flat" onClick={() => setExpanded(true)} title={t('rest.compact.saved')}>{t('rest.compact.saved')}</Button>
+          <Button size="sm" variant="primary" icon="check" onClick={() => save(false)} title={tip(t('rest.save'), 'rest.save')}>{t('rest.save')}</Button>
+          <Button size="sm" onClick={() => save(true)} title={t('rest.saveAs')}>{t('rest.saveAs')}</Button>
+        </div>
+        {banners}
+        {tabBar}
+        {split(request, response_)}
+        {dialogsEl}
+      </div>
+    );
+  }
 
   if (bridge) {
     return <PanesLayout actions={actions} banners={banners} chain={chain} list={list} tabBar={tabBar} request={request} response={response_} history={history} dialogs={dialogsEl} />;

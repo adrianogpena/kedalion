@@ -122,6 +122,13 @@ export const VIEW_LAYOUTS: Readonly<Record<'git' | 'workbench' | 'rest', readonl
   rest: ['base', 'panes'],
 };
 
+/** Views that can be hidden from the navigation or moved to the side panel; the others always have their own screen. */
+export const PLACEABLE_VIEWS = ['workbench', 'rest', 'terminal', 'git'] as const;
+export type PlaceableView = (typeof PLACEABLE_VIEWS)[number];
+/** 'tab': own screen in the navigation (default); 'hidden': not in the navigation, still opened by links; 'side': compact view in the side panel. */
+export type Placement = 'tab' | 'hidden' | 'side';
+export const PLACEMENTS: readonly Placement[] = ['tab', 'hidden', 'side'];
+
 export interface NavToggles {
   labels?: boolean;
   brand?: boolean;
@@ -133,6 +140,8 @@ export interface NavToggles {
 export interface LayoutsSetting {
   preset: string;
   views?: Partial<Record<string, string>>;
+  /** Per view: absent means 'tab'. */
+  placement?: Partial<Record<PlaceableView, Exclude<Placement, 'tab'>>>;
   navigation?: NavigationId;
   nav?: NavToggles;
   density?: DensityId;
@@ -178,6 +187,7 @@ export interface ResolvedLayouts {
   density: DensityId;
   skin: SkinId;
   views: Record<string, string>;
+  placement: Record<PlaceableView, Placement>;
   structure: LayoutStructure;
   icons: string;
 }
@@ -228,9 +238,14 @@ export function resolveLayouts(s?: LayoutsSetting, iconsOverride?: string): Reso
     const allowed = (VIEW_LAYOUTS as Record<string, readonly string[]>)[view];
     if (allowed && id !== undefined && allowed.includes(id)) views[view] = id;
   }
+  const placement = { workbench: 'tab', rest: 'tab', terminal: 'tab', git: 'tab' } as Record<PlaceableView, Placement>;
+  for (const view of PLACEABLE_VIEWS) {
+    const v = s?.placement?.[view];
+    if (v === 'hidden' || v === 'side') placement[view] = v;
+  }
   const skinIcons = skin === 'material' ? 'material' : skin === 'atlas' ? 'atom' : p.icons;
   const icons = iconsOverride !== undefined && ICON_SET_IDS.includes(iconsOverride) ? iconsOverride : skinIcons;
-  return { preset: p.id, navigation, nav, density, skin, views, structure: structureFor(navigation, nav), icons };
+  return { preset: p.id, navigation, nav, density, skin, views, placement, structure: structureFor(navigation, nav), icons };
 }
 
 function legacyEntry(id: string): LayoutsSetting {
@@ -280,6 +295,14 @@ export function validLayouts(input: unknown): LayoutsSetting | undefined {
     }
     if (Object.keys(views).length) out.views = views;
   }
+  if (typeof o.placement === 'object' && o.placement !== null) {
+    const placement: NonNullable<LayoutsSetting['placement']> = {};
+    for (const view of PLACEABLE_VIEWS) {
+      const v = (o.placement as Record<string, unknown>)[view];
+      if (v === 'hidden' || v === 'side') placement[view] = v;
+    }
+    if (Object.keys(placement).length) out.placement = placement;
+  }
   if ((NAVIGATION_IDS as readonly unknown[]).includes(o.navigation)) out.navigation = o.navigation as NavigationId;
   if (typeof o.nav === 'object' && o.nav !== null) {
     const n = o.nav as Record<string, unknown>;
@@ -319,7 +342,7 @@ export function layoutsConflicts(r: ResolvedLayouts): LayoutConflict[] {
 }
 
 function withOption(c: ResolvedLayouts, row: LayoutRow, option: string): ResolvedLayouts {
-  const next: ResolvedLayouts = { ...c, nav: { ...c.nav }, views: { ...c.views } };
+  const next: ResolvedLayouts = { ...c, nav: { ...c.nav }, views: { ...c.views }, placement: { ...c.placement } };
   if (row === 'preset') return resolveLayouts({ preset: option });
   if (row === 'navigation') next.navigation = option as NavigationId;
   else if (row === 'density') next.density = option as DensityId;

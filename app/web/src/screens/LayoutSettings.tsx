@@ -7,6 +7,7 @@ import {
   NAVIGATION_IDS,
   navToggleApplies,
   optionConflicts,
+  PLACEMENTS,
   PRESETS,
   resolveLayouts,
   SKIN_IDS,
@@ -14,6 +15,8 @@ import {
   type LayoutRow,
   type LayoutsSetting,
   type NavToggles,
+  type PlaceableView,
+  type Placement,
   type ResolvedLayouts,
 } from '@kedalion/server-core/layouts';
 import { type ApiError, errorMessage, NavigationPreview, OnOffField, PaletteField, SettingErrorsContext, SettingItem, Tabs, tryT, ViewLayoutPreview } from '@kedalion/ui';
@@ -23,8 +26,9 @@ import { t } from '../i18n';
 
 type Change = (patch: Partial<Settings>) => void | Promise<ApiError | null>;
 
-type ViewId = keyof typeof VIEW_LAYOUTS;
-const VIEWS = Object.keys(VIEW_LAYOUTS) as ViewId[];
+type ViewId = PlaceableView;
+const VIEWS: readonly ViewId[] = ['workbench', 'rest', 'terminal', 'git'];
+const layoutsOf = (view: ViewId): readonly string[] | undefined => (VIEW_LAYOUTS as Record<string, readonly string[]>)[view];
 const name = (key: string, id: string): string => tryT(`settings.layout.${key}.${id}`) ?? id;
 
 interface Ctx {
@@ -190,21 +194,39 @@ function ViewTab({ view, ctx }: { view: ViewId; ctx: Ctx }) {
     const { views: _drop, ...rest } = layouts;
     save(Object.keys(views).length ? { ...rest, views } : rest);
   };
-  const current = resolved.views[view] ?? VIEW_LAYOUTS[view][0]!;
+  const options = layoutsOf(view);
+  const current = resolved.views[view] ?? options?.[0] ?? 'base';
+  const setPlacement = (p: Placement | undefined) => {
+    const placement = { ...layouts.placement };
+    if (p === undefined || p === 'tab') delete placement[view];
+    else placement[view] = p;
+    const { placement: _drop, ...rest } = layouts;
+    save(Object.keys(placement).length ? { ...rest, placement } : rest);
+  };
+  const placed = resolved.placement[view];
   return (
     <div className="settings-format">
-      <aside className="settings-format-preview">
-        <h4 className="mono-label">{t('settings.layout.preview')}</h4>
-        <span className="muted">{t('settings.layout.preview.hint')}</span>
-        <ViewLayoutPreview view={view} layout={current} resolved={resolved} />
-      </aside>
+      {options && (
+        <aside className="settings-format-preview">
+          <h4 className="mono-label">{t('settings.layout.preview')}</h4>
+          <span className="muted">{t('settings.layout.preview.hint')}</span>
+          <ViewLayoutPreview view={view as 'git' | 'workbench' | 'rest'} layout={current} resolved={resolved} />
+        </aside>
+      )}
       <div className="settings-format-options">
         <section className="section">
           <div className="card form">
+            {options && (
+              <ChoiceRow
+                id={`layouts.views.${view}`} label={t('settings.layout.viewLayout')} value={current} options={options}
+                optionName={(o) => name('viewLayout', o)} row={`view.${view}`} ctx={ctx} modified={modified.includes(`view.${view}`)}
+                onPick={setView} onReset={() => setView(undefined)}
+              />
+            )}
             <ChoiceRow
-              id={`layouts.views.${view}`} label={t('settings.layout.viewLayout')} value={current} options={VIEW_LAYOUTS[view]}
-              optionName={(o) => name('viewLayout', o)} row={`view.${view}`} ctx={ctx} modified={modified.includes(`view.${view}`)}
-              onPick={setView} onReset={() => setView(undefined)}
+              id={`layouts.placement.${view}`} label={t('settings.layout.placement')} hint={t(`settings.layout.placement.hint.${placed}`)} value={placed} options={PLACEMENTS}
+              optionName={(o) => name('placement', o)} ctx={ctx} modified={placed !== 'tab'}
+              onPick={(o) => setPlacement(o as Placement)} onReset={() => setPlacement(undefined)}
             />
           </div>
         </section>

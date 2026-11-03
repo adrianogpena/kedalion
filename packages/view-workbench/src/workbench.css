@@ -48,3 +48,5 @@
 .wb-bar { flex-wrap: wrap; align-items: center; min-width: 0; }
 .wb-maxrows { display: flex; align-items: center; gap: var(--space-6); font-size: var(--fs-sm); }
 .wb-max { width: 96px; flex: none; }
+.wb-compact { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.wb-compact > .wb-body { flex: 1; min-height: 0; }
