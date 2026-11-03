@@ -4,6 +4,8 @@
 @import '@fontsource/geist/700.css';
 @import '@fontsource/geist-mono/400.css';
 @import '@fontsource/geist-mono/500.css';
+@import '@fontsource/fraunces/latin-500.css';
+@import '@fontsource/fraunces/latin-600.css';
 
 /* Layouts: layout files are imported here as @import './layouts/<id>.css';, each scoped under
    :root[data-layout='<id>'], overriding the size variables below and any rule. 'original' is
@@ -19,6 +21,8 @@
 @import './layouts/bridge.css';
 @import './layouts/ledger.css';
 @import './layouts/atlas.css';
+@import './layouts/dossier-skin.css';
+@import './layouts/dossier.css';
 
 :root,
 :root[data-theme='dark'] {
@@ -112,6 +116,8 @@
 /* Size tokens: structural sizes a layout file can override. */
 :root {
   --font-sans: 'Geist', 'Segoe UI', system-ui, sans-serif;
+  /* display face for page and chapter titles; layouts may set their own */
+  --font-display: var(--font-sans);
   /* radius scale */
   --radius-2xs: 2px; --radius-xs: 4px; --radius-sm: 5px; --radius-md: 6px; --radius-lg: 7px;
   --radius-xl: 8px; --radius-2xl: 9px; --radius-3xl: 10px; --radius-4xl: 12px; --radius-5xl: 14px;
@@ -1109,6 +1115,8 @@ html[data-status-bar="false"] .status-bar { display: none; }
 /* Settings as a full page in the app content area; the view underneath stays mounted but hidden. */
 .main-view { display: contents; }
 .main-view[hidden] { display: none; }
+/* DossierPage wrappers outside the Dossier layout: kept in the tree so a layout switch does not remount the view. */
+.dossier-host, .dossier-host-body { display: contents; }
 .settings-screen { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-12) var(--space-16) 0; }
 .settings-head { display: flex; align-items: center; gap: var(--space-12); }
 .settings-head h2 { margin: 0; font-size: var(--fs-xl); font-weight: 600; }

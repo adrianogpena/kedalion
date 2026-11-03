@@ -21,9 +21,10 @@
     "./styles.css": "./src/styles.css"
   },
   "dependencies": {
-    "@kedalion/server-core": "workspace:*",
+    "@fontsource/fraunces": "^5.3.0",
     "@fontsource/geist": "^5.1.0",
     "@fontsource/geist-mono": "^5.1.0",
+    "@kedalion/server-core": "workspace:*",
     "react-grid-layout": "^2.3.0"
   },
   "peerDependencies": {

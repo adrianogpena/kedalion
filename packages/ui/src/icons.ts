@@ -1,5 +1,7 @@
 // 24x24 stroke icons (Feather/Lucide style) for `Icon`. Add paths here as needed; plain data, so
 // non-React modules (grid.ts) can use `IconName`.
+import { inkPaths } from './icons-dossier';
+
 export const PATHS = {
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   alert: 'M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
@@ -513,6 +515,8 @@ export const ICON_SETS: Record<string, IconSet> = {
   original: { id: 'original', mode: 'stroke', viewBox: '0 0 24 24', paths: PATHS },
   material: { id: 'material', mode: 'fill', viewBox: '0 0 24 24', paths: MATERIAL_PATHS },
   atom: { id: 'atom', mode: 'fill', viewBox: '0 0 24 24', paths: ATOM_PATHS, markup: true, fileVariants: ATOM_FILE_VARIANTS },
+  // Ink take on the original strokes (icons-dossier.ts); the dossier layout thins the stroke to 1.6 in dossier-skin.css.
+  dossier: { id: 'dossier', mode: 'stroke', viewBox: '0 0 24 24', paths: inkPaths(PATHS) },
 };
 
 export function iconSetById(id: string): IconSet {

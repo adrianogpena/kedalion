@@ -47,6 +47,7 @@ const RAW_BUTTONS: Record<string, number> = {
   'packages/ui/src/components/Resource.tsx': 1,
   'packages/ui/src/components/SettingFields.tsx': 2,
   'packages/ui/src/components/Sidebar.tsx': 1,
+  'packages/ui/src/components/DossierShell.tsx': 3,
   'packages/ui/src/components/StatusBar.tsx': 1,
   'packages/ui/src/components/Tabs.tsx': 1,
   'packages/ui/src/components/TabWorkspace.tsx': 1,

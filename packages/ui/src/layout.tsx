@@ -4,6 +4,7 @@ import { setFileIconVariants } from './file-icons';
 import { iconSetById } from './icons';
 import { AtlasAppFrame, BaseAppFrame, IslandsAppFrame, type AppFrameProps } from './components/AppFrame';
 import { AtlasSidebar, BaseSidebar, type SidebarProps } from './components/Sidebar';
+import { DossierAppFrame, DossierSidebar } from './components/DossierShell';
 import { BaseStatusBar, IslandsStatusBar, ModelineStatusBar, type StatusBarProps } from './components/StatusBar';
 import { BaseTabBar, type TabBarProps } from './components/TabWorkspace';
 
@@ -24,6 +25,7 @@ export function registerShell(layoutId: string, parts: Partial<ShellComponents>)
 registerShell('islands', { Frame: IslandsAppFrame, StatusBar: IslandsStatusBar });
 registerShell('modeline', { StatusBar: ModelineStatusBar });
 registerShell('atlas', { Frame: AtlasAppFrame, Sidebar: AtlasSidebar });
+registerShell('dossier', { Frame: DossierAppFrame, Sidebar: DossierSidebar });
 
 export interface LayoutContext {
   layout: Layout;

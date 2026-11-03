@@ -68,3 +68,6 @@ export * from './design';
 export * from './design-shell';
 export * from './components/Inspector';
 export * from './bridge';
+export * from './dossier';
+export * from './components/DossierShell';
+export * from './components/DossierCover';

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { DiffMode, DiffViewHandle } from '@kedalion/editor';
 import type { GitFile, GitRepoInfo, GitStatus } from '@kedalion/server-core/protocol';
-import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLink, useViewRequest } from '@kedalion/ui';
+import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLink, useViewRequest, useDossier, useDossierFollow } from '@kedalion/ui';
+import { DossierGitPage } from './git/DossierGitPage';
 import { type GitProject as Project, gitApi as api } from './client';
 import { gitCommands } from './commands';
 import { t } from './i18n';
@@ -176,6 +177,13 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
     setClosedFolders(new Set());
     void refresh();
   };
+
+  const dossier = useDossier().active;
+  // Dossier layout: the screen follows the shared project, and a pick here becomes it.
+  useDossierFollow(root, projects?.map((p) => p.id), (id) => {
+    const target = projects?.find((p) => p.id === id);
+    if (target) pick(target);
+  });
 
   // A commit sent by another screen (Agents): switch to its project, open History and reveal it.
   const { request: pendingCommit, take: takeCommit } = useViewRequest<GitCommitRequest>('git');
@@ -362,18 +370,16 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
   };
 
   const project = projects?.find((p) => p.id === root);
-  const sidebar = (
-    <div className="xp-pane">
-      <ProjectPicker projects={projects ?? []} current={project} onPick={pick} onReorder={reorderProjects} actions={actions} />
-      {loadError && <ErrorBanner error={loadError} onRetry={() => void refresh()} compact />}
-      {status && (
+  const errorBanner = loadError && <ErrorBanner error={loadError} onRetry={() => void refresh()} compact />;
+  const branchLine = status && (
         <div className="git-branch-line" title={info?.upstream}>
           <Icon name="git-branch" size={14} />
           <span className="git-branch-name">{status.branch}</span>
           {!!status.ahead && <span title={t('git.ahead')}>↑{status.ahead}</span>}
           {!!status.behind && <span title={t('git.behind')}>↓{status.behind}</span>}
         </div>
-      )}
+  );
+  const changes = (
       <div className="xp-pane-body">
         <div className="tree git-list" ref={list}>
           {projects?.length === 0 && <p className="git-reason">{t('git.noProjects')}</p>}
@@ -395,21 +401,43 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
           })}
         </div>
       </div>
+  );
+  /** The History panel; the Dossier page keeps it open as its main column (`main`). */
+  const historyPanel = (main: boolean) => (
       <HistoryPanel
         root={info?.repo ? root : undefined}
         tick={tick}
-        open={view.historyOpen}
-        size={view.historySize}
-        onToggle={() => update((v) => ({ ...v, historyOpen: !v.historyOpen }))}
-        onResize={(historySize) => update((v) => ({ ...v, historySize }))}
+        open={main || view.historyOpen}
+        size={main ? 1 : view.historySize}
+        onToggle={main ? () => {} : () => update((v) => ({ ...v, historyOpen: !v.historyOpen }))}
+        onResize={main ? () => {} : (historySize) => update((v) => ({ ...v, historySize }))}
         reveal={reveal}
         onRevealed={() => setReveal(undefined)}
         selected={selected?.commit !== undefined ? { commit: selected.commit, path: selected.file.path } : undefined}
         onSelect={(commit, file) => root && setSelected({ root, commit: commit.hash, file })}
         onOpen={(file) => root && file.status !== 'D' && toExplorer({ root, commit: '', file }, true)}
       />
+  );
+  const sidebar = (
+    <div className="xp-pane">
+      <ProjectPicker projects={projects ?? []} current={project} onPick={pick} onReorder={reorderProjects} actions={actions} />
+      {errorBanner}
+      {branchLine}
+      {changes}
+      {historyPanel(false)}
     </div>
   );
+  const diffPane = (
+      <div className="git-diff">
+        {selected ? (
+          <GitDiffPane key={`${selected.root}\0${selectionKey(selected)}`} ref={diff} root={selected.root} source={selected} tick={tick} mode={mode} onModeChange={setMode} />
+        ) : (
+          <Empty title={t('git.pick')} />
+        )}
+      </div>
+  );
+  // Dossier layout: the project's history page (commit list, diff, state sidebar); the spine picks the project.
+  if (dossier) return <DossierGitPage history={historyPanel(true)} diff={diffPane} state={<>{errorBanner}{branchLine}{changes}</>} actions={actions} />;
 
   const screen = (
     <Explorer
@@ -422,13 +450,7 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
       scope="git"
       className="screen-edges"
     >
-      <div className="git-diff">
-        {selected ? (
-          <GitDiffPane key={`${selected.root}\0${selectionKey(selected)}`} ref={diff} root={selected.root} source={selected} tick={tick} mode={mode} onModeChange={setMode} />
-        ) : (
-          <Empty title={t('git.pick')} />
-        )}
-      </div>
+      {diffPane}
     </Explorer>
   );
   return screen;

@@ -1,7 +1,7 @@
 import './explorer.css';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { editorSettingsOf, type ExplorerSettings, type ExplorerViewSettings as Settings, generalSettingsOf, windowSettingsOf } from './settings';
-import { gitSettingsOf, setZen, useZen } from '@kedalion/ui';
+import { gitSettingsOf, setZen, useDossierFollow, useZen } from '@kedalion/ui';
 import { openEditorSearch } from '@kedalion/editor';
 import {
   activate,
@@ -321,6 +321,9 @@ export function ExplorerScreen({ settings, onSave }: { settings: Settings; onSav
         expanded: s.expanded[id] ? s.expanded : { ...s.expanded, [id]: [nodeId(id, '')] },
       };
     });
+
+  // Dossier layout: the first tree follows the shared project, and a pick there becomes it.
+  useDossierFollow(projects.data ? shownIds(state, list)[0] : undefined, projects.data?.map((p) => p.id), (id) => pickProject(id));
 
   /** Shows a second tree below, on the project after the first (the same one when it is the only one). */
   const splitTree = () =>

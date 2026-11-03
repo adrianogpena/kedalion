@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { defineView, fileSettingsOf } from '@kedalion/ui';
+import { defineView, DossierPage, fileSettingsOf } from '@kedalion/ui';
 import { bindExplorerClient, type ExplorerClients } from './client';
 import { explorerViewCommands } from './commands';
 import { explorerClients } from './default-client';
@@ -30,7 +30,9 @@ export function explorerView({ group, order, client = explorerClients, multiDele
     render: ({ settings, onSave }) => (
       <>
         <MarkdownSettingsHost markdown={settings.markdown} toc={fileSettingsOf(settings.files).markdownToc} />
-        <ExplorerScreen settings={settings} onSave={onSave} />
+        <DossierPage chapter="code">
+          <ExplorerScreen settings={settings} onSave={onSave} />
+        </DossierPage>
       </>
     ),
     commands: explorerViewCommands,

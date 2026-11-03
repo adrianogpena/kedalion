@@ -30,7 +30,7 @@ export function applyMainMenu(s: LayoutStructure, mode?: MainMenu): LayoutStruct
 }
 
 /** Layouts whose navigation is a header (or otherwise not a side dock): the dock side does not apply. */
-export const HEADER_NAV_LAYOUTS: readonly string[] = ['ribbon', 'ledger', 'bridge'];
+export const HEADER_NAV_LAYOUTS: readonly string[] = ['ribbon', 'ledger', 'bridge', 'dossier'];
 
 export function supportsDock(layoutId: string): boolean {
   return !HEADER_NAV_LAYOUTS.includes(layoutId);
@@ -83,12 +83,17 @@ export const LAYOUTS: readonly Layout[] = [
   },
   // Files-first: labelled sectioned sidebar (mainMenu 'icons' still collapses it), coloured Atom icons, tools in a status row.
   { id: 'atlas', label: 'Atlas', icons: 'atom', structure: { ...ORIGINAL_STRUCTURE, sidebarMode: 'expanded', sidebarBrand: false, navFooter: 'none' } },
+  // Project-first (preview): a left spine of projects, the screens as chapters of the project's dossier, tools in the dossier header.
+  { id: 'dossier', label: 'Dossier', icons: 'dossier', structure: { ...ORIGINAL_STRUCTURE, sidebarMode: 'expanded', sidebarBrand: false, navFooter: 'none', statusBar: true } },
 ];
 
 /** Layouts offered in Settings; the others stay defined (for building new layouts) but are not listed. */
 export const SELECTABLE_LAYOUT_IDS: readonly string[] = ['ribbon', 'bridge'];
 
-export const ICON_SET_IDS: readonly string[] = ['original', 'material', 'atom'];
+export const ICON_SET_IDS: readonly string[] = ['original', 'material', 'atom', 'dossier'];
+
+/** Icon sets of preview layouts: valid, but not listed in Settings unless already chosen. */
+export const PREVIEW_ICON_SET_IDS: readonly string[] = ['dossier'];
 
 export function layoutById(id: string): Layout | undefined {
   return LAYOUTS.find((l) => l.id === id);

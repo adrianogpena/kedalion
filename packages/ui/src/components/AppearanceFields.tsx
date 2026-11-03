@@ -1,5 +1,5 @@
 import { effectiveKind, familySibling, PALETTES, resolvePalette, type ThemeKind, type ThemePreference, type ThemeSettings, ZOOM_LEVELS } from '@kedalion/server-core/palettes';
-import { DEFAULT_LAYOUT, hasLabelledMenu, ICON_SET_IDS, LAYOUTS, resolveLayout, SELECTABLE_LAYOUT_IDS, supportsDock } from '@kedalion/server-core/layouts';
+import { DEFAULT_LAYOUT, hasLabelledMenu, ICON_SET_IDS, LAYOUTS, PREVIEW_ICON_SET_IDS, resolveLayout, SELECTABLE_LAYOUT_IDS, supportsDock } from '@kedalion/server-core/layouts';
 import { isDesktop } from '../api';
 import { t, tryT } from '../i18n';
 import { SettingItem } from './SettingFields';
@@ -106,7 +106,7 @@ export function IconsField({ value, onChange }: Props) {
         <span className="mono-label">{t('theme.icons')}</span>
         <select value={value.icons ?? ''} onChange={(e) => onChange({ icons: e.target.value })}>
           <option value="">{t('icons.layoutDefault', { name: name(own) })}</option>
-          {ICON_SET_IDS.map((id) => <option key={id} value={id}>{name(id)}</option>)}
+          {ICON_SET_IDS.filter((id) => !PREVIEW_ICON_SET_IDS.includes(id) || id === value.icons).map((id) => <option key={id} value={id}>{name(id)}</option>)}
         </select>
       </label>
     </SettingItem>

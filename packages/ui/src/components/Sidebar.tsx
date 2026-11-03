@@ -56,18 +56,7 @@ export function BaseSidebar<Id extends string>({ name, sections, current, onSele
   const { structure } = useLayout();
   const collapsed = collapsedProp ?? structure.sidebarMode === 'collapsed';
   const footer = structure.navFooter === 'none' ? undefined : footerProp;
-  const ids = sections.flatMap((s) => s.items.map((i) => i.id));
-  const currentLine = ids.indexOf(current);
-  const currentLabel = sections.flatMap((s) => s.items).find((i) => i.id === current)?.label;
-  // Screen hooks on <html> for layouts that style per screen (e.g. a per-screen accent).
-  useEffect(() => {
-    const root = document.documentElement;
-    root.dataset.screen = current;
-    if (currentLine >= 0) root.dataset.line = String(lineOf(currentLine));
-    else delete root.dataset.line;
-    if (currentLabel) root.dataset.screenLabel = currentLabel;
-    else delete root.dataset.screenLabel;
-  }, [current, currentLine, currentLabel]);
+  const ids = useScreenHooks(sections, current);
   return (
     <nav className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       {structure.sidebarBrand && (
@@ -116,6 +105,22 @@ export function BaseSidebar<Id extends string>({ name, sections, current, onSele
       )}
     </nav>
   );
+}
+
+/** Screen hooks on <html> for layouts that style per screen (e.g. a per-screen accent); returns the flat nav ids. */
+export function useScreenHooks<Id extends string>(sections: NavSection<Id>[], current: Id): Id[] {
+  const ids = sections.flatMap((s) => s.items.map((i) => i.id));
+  const currentLine = ids.indexOf(current);
+  const currentLabel = sections.flatMap((s) => s.items).find((i) => i.id === current)?.label;
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.screen = current;
+    if (currentLine >= 0) root.dataset.line = String(lineOf(currentLine));
+    else delete root.dataset.line;
+    if (currentLabel) root.dataset.screenLabel = currentLabel;
+    else delete root.dataset.screenLabel;
+  }, [current, currentLine, currentLabel]);
+  return ids;
 }
 
 /** Atlas groups the nav by what it works on; ids not listed join the last group, in their order. */
