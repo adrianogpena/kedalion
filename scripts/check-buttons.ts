@@ -14,6 +14,7 @@ const MARKER = /<button\b|createElement\(\s*['"]button['"]/g;
 
 const RAW_BUTTONS: Record<string, number> = {
   'packages/ui/src/design.tsx': 5,
+  'packages/view-git/src/git/ReadThroughView.tsx': 2,
   'app/web/src/screens/SettingsModal.tsx': 10,
   'packages/editor/src/MarkdownToc.tsx': 2,
   'packages/view-browser/src/Favorites.tsx': 1,

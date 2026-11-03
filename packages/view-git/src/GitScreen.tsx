@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { DiffMode, DiffViewHandle } from '@kedalion/editor';
 import type { GitFile, GitRepoInfo, GitStatus } from '@kedalion/server-core/protocol';
-import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLink, useViewRequest } from '@kedalion/ui';
+import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLayout, useViewLink, useViewRequest } from '@kedalion/ui';
 import { type GitProject as Project, gitApi as api } from './client';
 import { gitCommands } from './commands';
 import { t } from './i18n';
@@ -9,6 +9,7 @@ import type { GitSection, GitViewSettings, GitViewState } from './settings';
 import { type ChangeFolder, changeTree, folderPaths } from './git/change-tree';
 import { type GitDiffSource, GitDiffPane } from './git/GitDiffPane';
 import { HistoryPanel } from './git/HistoryPanel';
+import { ReadThroughView } from './git/ReadThroughView';
 import './git.css';
 
 const commandById = (id: string) => gitCommands().find((c) => c.id === id)!;
@@ -97,6 +98,7 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
   const toast = useToast();
   const tip = useShortcutTip();
   useRovingList(list, '.git-row');
+  const readThrough = useViewLayout('git') === 'read-through';
 
   const persist = useDebouncedSave((v: View) =>
     onSave({
@@ -428,6 +430,36 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
         )}
       </div>
   );
+
+  if (readThrough && root) {
+    return (
+      <ReadThroughView
+        root={root}
+        branch={status?.branch}
+        files={status?.files ?? []}
+        openKey={selected && selected.root === root && selected.commit === undefined ? keyOf(selected.file) : undefined}
+        commitOpen={selected?.commit !== undefined}
+        onSelect={(file) => setSelected({ root, file })}
+        onOpenFile={(file) => toExplorer({ root, file }, true)}
+        diffPane={diffPane}
+        drawer={
+          <div className="xp-pane">
+            <ProjectPicker projects={projects ?? []} current={project} onPick={pick} onReorder={reorderProjects} actions={actions} />
+            {errorBanner}
+            {branchLine}
+            {historyPanel(true)}
+          </div>
+        }
+        empty={
+          <>
+            {info && !info.repo && <p className="git-reason">{info.error ?? t('git.notRepo')}</p>}
+            {statusError && <ErrorBanner error={statusError} compact />}
+            {status && status.files.length === 0 && <p className="git-reason">{t('git.clean')}</p>}
+          </>
+        }
+      />
+    );
+  }
 
   const screen = (
     <Explorer
