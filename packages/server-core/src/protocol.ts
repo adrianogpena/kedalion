@@ -320,6 +320,9 @@ export interface GitFile {
   index: GitCode;
   worktree: GitCode;
   group: 'staged' | 'unstaged' | 'untracked' | 'conflict';
+  /** Added and removed line counts; undefined for binary or oversized files and when git could not count. */
+  added?: number;
+  removed?: number;
 }
 
 /** `GET /api/git/status`. */

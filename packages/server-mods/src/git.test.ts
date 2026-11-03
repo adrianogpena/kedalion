@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RunResult } from '@kedalion/platform';
-import { gitRoutes, parseLog, parseNameStatus, parsePorcelainV2 } from './git.ts';
+import { gitRoutes, parseLog, parseNameStatus, parseNumstat, parsePorcelainV2 } from './git.ts';
 
 const done = (stdout: string, code = 0, stderr = ''): RunResult => ({ kind: 'done', code, stdout, stderr });
 const roots = async () => [{ id: 'r1', path: 'C:/proj' }];
@@ -111,6 +111,16 @@ test('parseLog reads commits with refs and a subject holding the separator', () 
     { hash: 'a1', short: 'a', author: 'Ana', date: '2026-01-02T03:04:05+00:00', refs: 'HEAD -> main', subject: 'Fix x' },
     { hash: 'b2', short: 'b', author: 'Bo', date: '2026-01-01T00:00:00+00:00', subject: 'one\x1ftwo' },
   ]);
+});
+
+test('parseNumstat reads plain lines, binary files and renames', () => {
+  const out = ['3\t1\tsrc/a.ts', '-\t-\timg.png', '0\t0\t', 'old.ts', 'new.ts', '5\t2\tb.txt', ''].join('\0');
+  const map = parseNumstat(out);
+  expect(map.get('src/a.ts')).toEqual({ added: 3, removed: 1 });
+  expect(map.get('img.png')).toEqual({});
+  expect(map.get('new.ts')).toEqual({ added: 0, removed: 0 });
+  expect(map.get('b.txt')).toEqual({ added: 5, removed: 2 });
+  expect(map.has('old.ts')).toBe(false);
 });
 
 test('parseNameStatus reads plain entries and renames', () => {

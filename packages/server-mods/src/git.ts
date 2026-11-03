@@ -27,6 +27,7 @@ const STATUS_TIMEOUT_MS = 10_000;
 const QUICK_TIMEOUT_MS = 5_000;
 const MAX_FILE_BYTES = 2_000_000;
 const MAX_DIFF_CHARS = 1_000_000;
+const MAX_UNTRACKED_BYTES = 1_000_000;
 const LOG_PAGE = 50;
 const MAX_LOG_PAGE = 200;
 const HASH = /^[0-9a-f]{7,40}$/;
@@ -88,6 +89,25 @@ export function parsePorcelainV2(text: string): PorcelainStatus {
     }
   }
   return out;
+}
+
+/** Parses `git diff --numstat -z` output into counts by (new) path; binary files (`-\t-`) get no counts. */
+export function parseNumstat(out: string): Map<string, { added?: number; removed?: number }> {
+  const map = new Map<string, { added?: number; removed?: number }>();
+  const tokens = out.split('\0');
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]!;
+    if (!t) continue;
+    const m = /^(-|\d+)\t(-|\d+)\t(.*)$/s.exec(t);
+    if (!m) continue;
+    let path = m[3]!;
+    if (path === '') {
+      i++;
+      path = tokens[++i] ?? '';
+    }
+    map.set(path, m[1] === '-' || m[2] === '-' ? {} : { added: Number(m[1]), removed: Number(m[2]) });
+  }
+  return map;
 }
 
 /** Parses `git log -z --format=<LOG_FORMAT>` output. */
@@ -217,7 +237,39 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
     if (!untracked) return { ...parsed, files: [] };
     const prefix = await prefixOf(root);
     const strip = (p: string) => (prefix && p.startsWith(prefix) ? p.slice(prefix.length) : p);
-    const files = parsed.files.map((f) => ({ ...f, path: strip(f.path), ...(f.origPath !== undefined && { origPath: strip(f.origPath) }) }));
+    const numstat = async (cached: boolean) => {
+      try {
+        const r = await git(root, [...(await filterOverrides(root)), 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-z', '--no-ext-diff', '--no-textconv', '-M', '--relative', '--', '.'], STATUS_TIMEOUT_MS);
+        return r.code === 0 ? parseNumstat(r.stdout) : new Map<string, { added?: number; removed?: number }>();
+      } catch {
+        return new Map<string, { added?: number; removed?: number }>();
+      }
+    };
+    const [work, cached] = await Promise.all([numstat(false), numstat(true)]);
+    const countUntracked = async (path: string): Promise<{ added?: number; removed?: number }> => {
+      try {
+        const file = Bun.file(`${root.path}/${path}`);
+        if (file.size > MAX_UNTRACKED_BYTES) return {};
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (isBinary(bytes.subarray(0, 8192))) return {};
+        let n = 0;
+        for (const b of bytes) if (b === 10) n++;
+        if (bytes.length && bytes[bytes.length - 1] !== 10) n++;
+        return { added: n, removed: 0 };
+      } catch {
+        return {};
+      }
+    };
+    const files = await Promise.all(
+      parsed.files.map(async (f) => {
+        const path = strip(f.path);
+        const base = { ...f, path, ...(f.origPath !== undefined && { origPath: strip(f.origPath) }) };
+        if (f.group === 'staged') return { ...base, ...cached.get(path) };
+        if (f.group === 'unstaged') return { ...base, ...work.get(path) };
+        if (f.group === 'untracked') return { ...base, ...(await countUntracked(path)) };
+        return base;
+      }),
+    );
     return { ...parsed, files, ...(ignored && { ignored: (parsed.ignored ?? []).map(strip) }) };
   }
 
