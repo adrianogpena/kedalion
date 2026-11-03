@@ -61,7 +61,7 @@ test('network request lifecycle merges into one entry', () => {
   emit(client, 'Network.responseReceived', { requestId: 'r1', type: 'XHR', response: { status: 201, mimeType: 'application/json', headers: { b: '2' } } });
   emit(client, 'Network.dataReceived', { requestId: 'r1', dataLength: 40 });
   emit(client, 'Network.loadingFinished', { requestId: 'r1', timestamp: 10.25, encodedDataLength: 55 });
-  expect(log.entries()).toEqual([{ id: 1, requestId: 'r1', method: 'POST', url: 'http://x/api', type: 'xhr', status: 201, mime: 'application/json', size: 55, timing: 250, done: true }]);
+  expect(log.entries()).toMatchObject([{ id: 1, requestId: 'r1', method: 'POST', url: 'http://x/api', type: 'xhr', status: 201, mime: 'application/json', size: 55, timing: 250, done: true }]);
 });
 
 test('failed requests carry the reason', () => {

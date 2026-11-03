@@ -3,6 +3,9 @@ import type { CdpSession } from './client.ts';
 export const CONSOLE_CAP = 2000;
 export const NETWORK_CAP = 1000;
 export const BODY_LIMIT = 1024 * 1024;
+/** Per-body size cap (characters) of the bodies recorded as requests finish, so they survive navigations. */
+export const RECORD_BODY_LIMIT = 512 * 1024;
+const SKIP_RECORD_TYPES = new Set(['image', 'font', 'media', 'stylesheet']);
 
 export interface QueryOptions<F> {
   since?: number;
@@ -159,6 +162,8 @@ export interface NetworkEntry {
   timing?: number;
   failed?: string;
   done: boolean;
+  /** Wall-clock ms when the request started. */
+  startedAt?: number;
 }
 
 export interface NetworkFilter {
@@ -181,6 +186,8 @@ export interface NetworkDetail {
 export interface NetworkLog {
   entries(o?: QueryOptions<NetworkFilter>): NetworkEntry[];
   detail(id: number): Promise<NetworkDetail | undefined>;
+  /** Request and response text recorded when the request finished (capped at RECORD_BODY_LIMIT); synchronous. */
+  recorded(id: number): { postData?: string; body?: string } | undefined;
   clear(): void;
   preserve: boolean;
   on(event: 'entry', cb: (e: NetworkEntry) => void): () => void;
@@ -192,6 +199,8 @@ interface Extra {
   requestHeaders: Record<string, string>;
   responseHeaders: Record<string, string>;
   hasPostData: boolean;
+  postData?: string;
+  body?: string;
 }
 
 export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {}): NetworkLog {
@@ -232,7 +241,8 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
       const x = extras.get(id);
       if (!e || !x) return undefined;
       const d: NetworkDetail = { requestHeaders: x.requestHeaders, responseHeaders: x.responseHeaders };
-      if (x.hasPostData) {
+      if (x.postData !== undefined) d.postData = x.postData;
+      else if (x.hasPostData) {
         try {
           d.postData = (await session.send('Network.getRequestPostData', { requestId: e.requestId })).postData;
         } catch {
@@ -248,10 +258,16 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
             if (!r.base64Encoded) d.body = r.body.slice(0, BODY_LIMIT);
           } else d.body = r.body;
         } catch {
-          // body not available (redirect, evicted)
+          // body not available (redirect, evicted, page navigated away)
         }
+        if (d.body === undefined && !d.base64 && x.body !== undefined) d.body = x.body;
       }
       return d;
+    },
+    recorded(id) {
+      const x = extras.get(id);
+      if (!x) return undefined;
+      return { ...(x.postData !== undefined ? { postData: x.postData } : {}), ...(x.body !== undefined ? { body: x.body } : {}) };
     },
     clear: reset,
     on: (_event, cb) => ring.on(cb),
@@ -276,8 +292,15 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
         ...(p.type ? { type: String(p.type).toLowerCase() } : {}),
         size: 0,
         done: false,
+        startedAt: Date.now(),
       };
-      extras.set(e.id, { start: p.timestamp ?? 0, requestHeaders: p.request.headers ?? {}, responseHeaders: {}, hasPostData: !!p.request.hasPostData });
+      extras.set(e.id, {
+        start: p.timestamp ?? 0,
+        requestHeaders: p.request.headers ?? {},
+        responseHeaders: {},
+        hasPostData: !!p.request.hasPostData,
+        ...(typeof p.request.postData === 'string' ? { postData: p.request.postData.slice(0, RECORD_BODY_LIMIT) } : {}),
+      });
       byRequest.set(p.requestId, e);
       ring.push(e);
     }),
@@ -300,6 +323,17 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
       if (!e) return;
       if (p.encodedDataLength !== undefined) e.size = p.encodedDataLength;
       finish(e, p.timestamp);
+      const x = extras.get(e.id);
+      if (x && !SKIP_RECORD_TYPES.has(e.type ?? '')) {
+        void (async () => {
+          try {
+            const r = await session.send('Network.getResponseBody', { requestId: p.requestId });
+            if (!r?.base64Encoded && typeof r?.body === 'string') x.body = r.body.slice(0, RECORD_BODY_LIMIT);
+          } catch {
+            // body not available
+          }
+        })();
+      }
     }),
     session.on('Network.loadingFailed', (p) => {
       const e = byRequest.get(p.requestId);

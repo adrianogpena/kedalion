@@ -5,6 +5,8 @@ import { createDebugState } from './server/mcp/debug-state.ts';
 import { MCP_INSTRUCTIONS } from './server/mcp/instructions.ts';
 import { mcpRoutes } from './server/mcp/rpc.ts';
 import { debugTools } from './server/mcp/tools-debug.ts';
+import { stepTools } from './server/mcp/tools-steps.ts';
+import { actTools } from './server/mcp/tools-act.ts';
 import { pageTools } from './server/mcp/tools-page.ts';
 import { stateTools } from './server/mcp/tools-state.ts';
 import { browserRoutes } from './server/routes.ts';
@@ -37,7 +39,7 @@ export function browserServerView(opts: BrowserServerViewOptions) {
   const secret = randomBytes(24).toString('hex');
   const mcpFile = createMcpConfigFile({ dataDir: opts.dataDir, secret, origin: opts.origin });
   const debug = createDebugState();
-  const tools = [...pageTools, ...stateTools, ...debugTools];
+  const tools = [...pageTools, ...actTools,...stateTools, ...debugTools, ...stepTools];
   const refresh = async () => {
     if (load) current = browserSettingsOf(await load().catch(() => ({})));
     if (current.agentTools) mcpFile.write();

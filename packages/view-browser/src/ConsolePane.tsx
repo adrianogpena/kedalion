@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConsoleEntry, NetworkEntry } from '@kedalion/cdp';
 import { Button, IconButton, request } from '@kedalion/ui';
 import { t } from './i18n';
+import { errorsSinceMark, requestsBefore, type NetMark } from './netview';
 import type { BrowserSocket } from './web/useBrowserSocket';
 
 export type LogKind = 'console' | 'network';
@@ -21,6 +22,9 @@ export interface BrowserLogs {
   preserve: Record<LogKind, boolean>;
   setPreserve(kind: LogKind, on: boolean): void;
   clear(kind: LogKind): void;
+  /** Last mark of the tab: the newest request id and the time it was set. */
+  mark: NetMark | null;
+  setMark(): void;
 }
 
 const PRESERVE_KEY = 'kedalion.browser.preserve';
@@ -109,7 +113,13 @@ export function useBrowserLogs(socket: BrowserSocket, tab: string | undefined, u
   const consoleEntries = useMemo(() => (tab ? (consoleRows[tab] ?? []) : []), [consoleRows, tab]);
   const networkEntries = useMemo(() => (tab ? (networkRows[tab] ?? []) : []), [networkRows, tab]);
   const errors = useMemo(() => consoleEntries.filter((e) => e.level === 'error').length, [consoleEntries]);
-  return { consoleEntries, networkEntries, errors, preserve, setPreserve, clear };
+  const [marks, setMarks] = useState<Record<string, NetMark>>({});
+  const mark = tab ? (marks[tab] ?? null) : null;
+  const setMark = useCallback(() => {
+    if (!tab) return;
+    setMarks((prev) => ({ ...prev, [tab]: { id: networkEntries[networkEntries.length - 1]?.id ?? 0, ts: Date.now() } }));
+  }, [tab, networkEntries]);
+  return { consoleEntries, networkEntries, errors, preserve, setPreserve, clear, mark, setMark };
 }
 
 type Level = 'verbose' | 'info' | 'warnings' | 'errors';
@@ -148,6 +158,7 @@ export function ConsolePane({ tab, logs, onSource }: ConsolePaneProps) {
   const [filter, setFilter] = useState('');
   const [local, setLocal] = useState<Local[]>([]);
   const [draft, setDraft] = useState('');
+  const [linked, setLinked] = useState<number | null>(null);
   const history = useRef<string[]>([]);
   const cursor = useRef(-1);
   const nextLocal = useRef(1);
@@ -209,6 +220,7 @@ export function ConsolePane({ tab, logs, onSource }: ConsolePaneProps) {
         </select>
         <input className="browser-filter" type="text" spellCheck={false} aria-label={t('browser.logs.filter')} placeholder={t('browser.logs.filter')} value={filter} onChange={(e) => setFilter(e.target.value)} />
         <Button size="sm" pressed={logs.preserve.console} onClick={() => logs.setPreserve('console', !logs.preserve.console)}>{t('browser.logs.preserve')}</Button>
+        {logs.mark && <span className="browser-count" role="status">{t('browser.console.errorsSinceMark', { n: errorsSinceMark(logs.consoleEntries, logs.mark) })}</span>}
       </div>
       <div
         ref={list}
@@ -219,16 +231,37 @@ export function ConsolePane({ tab, logs, onSource }: ConsolePaneProps) {
         }}
       >
         {rows.length === 0 && local.length === 0 && <div className="browser-pane-empty">{t('browser.console.empty')}</div>}
-        {rows.map((e) => (
+        {rows.map((e) => {
+          const near = e.level === 'error' ? requestsBefore(logs.networkEntries, e.ts) : [];
+          return (
           <div key={e.id} className={`console-row lvl-${e.level}`}>
-            <pre className="console-text">{e.stack && !e.text.includes(e.stack) ? `${e.text}\n${e.stack}` : e.text}</pre>
+            <div className="console-main">
+              <pre className="console-text">{e.stack && !e.text.includes(e.stack) ? `${e.text}\n${e.stack}` : e.text}</pre>
+              {near.length > 0 && (
+                <>
+                  <Button variant="ghost" size="xs" aria-expanded={linked === e.id} onClick={() => setLinked(linked === e.id ? null : e.id)}>
+                    {t('browser.console.requestsBefore', { n: near.length })}
+                  </Button>
+                  {linked === e.id && (
+                    <ul className="console-requests">
+                      {near.map((r) => (
+                        <li key={r.id} title={r.url}>
+                          {r.method} {fileOf(r.url)} {r.failed ? t('browser.network.failed') : (r.status ?? '')}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
             {e.source && (
               <Button variant="ghost" size="xs" className="console-source" title={`${e.source.url}:${e.source.line}`} onClick={() => onSource(e.source!.url, e.source!.line)}>
                 {fileOf(e.source.url)}:{e.source.line}
               </Button>
             )}
           </div>
-        ))}
+          );
+        })}
         {local.map((x) => (
           <div key={`l${x.id}`} className="console-local">
             <div className="console-row lvl-input"><pre className="console-text">{`> ${x.input}`}</pre></div>

@@ -57,15 +57,28 @@ export async function runtimeEval(
   expression: string,
   o: { awaitPromise?: boolean; returnByValue?: boolean; timeoutMs?: number } = {},
 ): Promise<EvalOutcome> {
+  const wait = o.awaitPromise ?? true;
+  const byValue = o.returnByValue ?? false;
   const r = await withTimeout(
-    session.send('Runtime.evaluate', {
-      expression,
-      awaitPromise: o.awaitPromise ?? true,
-      returnByValue: o.returnByValue ?? false,
-      generatePreview: true,
-      userGesture: true,
-      replMode: true,
-    }),
+    (async () => {
+      const first: any = await session.send('Runtime.evaluate', {
+        expression,
+        awaitPromise: wait,
+        returnByValue: wait ? false : byValue,
+        generatePreview: true,
+        userGesture: true,
+        replMode: true,
+      });
+      const res = first.result;
+      if (!wait || first.exceptionDetails || !res) return first;
+      if (res.subtype === 'promise' && res.objectId) {
+        return session.send('Runtime.awaitPromise', { promiseObjectId: res.objectId, returnByValue: byValue, generatePreview: true });
+      }
+      if (byValue && res.objectId) {
+        return session.send('Runtime.callFunctionOn', { objectId: res.objectId, functionDeclaration: 'function(){return this}', returnByValue: true });
+      }
+      return first;
+    })(),
     o.timeoutMs ?? EVAL_TIMEOUT_MS,
     `The page did not answer within ${(o.timeoutMs ?? EVAL_TIMEOUT_MS) / 1000}s (it may be busy or paused at a breakpoint)`,
   );

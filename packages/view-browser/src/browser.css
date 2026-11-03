@@ -75,6 +75,15 @@
 .net-row:hover, .net-row:focus-visible { background: var(--bg-hover, rgba(127, 127, 127, 0.12)); outline: 0; }
 .net-row.selected { background: var(--accent-soft, rgba(127, 127, 255, 0.2)); }
 .net-row.failed { color: var(--danger, #e5484d); }
+.net-row.stuck { color: var(--warning, #b7791f); font-weight: 600; }
+.net-ops { max-width: 320px; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); }
+.browser-count { font-size: var(--fs-xs-plus); color: var(--text-3); white-space: nowrap; }
+.browser-secs { width: 56px; font-size: var(--fs-xs-plus); }
+.net-find { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4); }
+.net-hit { background: var(--warning-soft, rgba(255, 200, 0, 0.4)); color: inherit; }
+.net-ops-list { margin: 0 0 var(--space-4); padding-left: var(--space-16, 20px); font-family: var(--font-mono); word-break: break-word; }
+.console-main { flex: 1; min-width: 0; }
+.console-requests { margin: 2px 0 0; padding-left: var(--space-16, 20px); color: var(--text-3); }
 .net-detail { width: 45%; min-width: 240px; display: flex; flex-direction: column; border-left: 1px solid var(--border-soft); }
 .net-detail-head { display: flex; align-items: center; gap: var(--space-4); border-bottom: 1px solid var(--border-soft); }
 .net-detail-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-4) var(--space-8); font-size: var(--fs-xs-plus); }

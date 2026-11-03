@@ -1,6 +1,9 @@
 import { normalizeAddress } from '../../address.ts';
+import { decodeOperations, prettyBody, summarizeRequest } from '../../ops.ts';
+import { stepLogFor } from './steps.ts';
 import { bool, num, pageSession, resolveTab, runtimeEval, str, withTimeout } from './page-util.ts';
-import { DEFAULT_SNAPSHOT_CHARS, type PageSnapshot, renderSnapshot } from './snapshot.ts';
+import { PAGE_LIB } from './page-lib.ts';
+import { DEFAULT_SNAPSHOT_CHARS, type PageSnapshot, renderSnapshot, SNAPSHOT_SECTIONS, type SnapshotSection } from './snapshot.ts';
 import { failResult, type McpTool, textResult, type ToolSchema } from './types.ts';
 
 const TAB = { type: 'string', description: 'Tab id from browser_tabs; default the active tab.' } as const;
@@ -10,41 +13,35 @@ const schema = (properties: ToolSchema['properties'], required: string[] = []): 
   ...(required.length ? { required } : {}),
 });
 
-const SNAPSHOT_SCRIPT = `(() => {
-  const clean = (s) => String(s ?? '').replace(/\\s+/g, ' ').trim();
-  const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
-  const css = (el) => { if (el.id) return '#' + CSS.escape(el.id); const n = el.getAttribute('name'); const t = el.tagName.toLowerCase(); return n ? t + '[name="' + n.replace(/"/g, '\\\\"') + '"]' : t; };
-  const labelOf = (el) => clean(el.labels?.[0]?.textContent || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '');
-  return {
-    title: document.title,
-    url: location.href,
-    headings: [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(visible).map((h) => ({ level: Number(h.tagName[1]), text: clean(h.textContent) })).filter((h) => h.text),
-    links: [...document.querySelectorAll('a[href]')].filter(visible).map((a) => ({ text: clean(a.textContent || a.getAttribute('aria-label')), href: a.href })),
-    fields: [...document.querySelectorAll('input,select,textarea,button')].filter(visible).map((f) => {
-      const tag = f.tagName.toLowerCase();
-      const type = f.getAttribute('type') || undefined;
-      const isButton = tag === 'button' || type === 'submit' || type === 'button';
-      return { tag, type, name: f.getAttribute('name') || undefined, label: isButton ? clean(f.textContent || f.value) : labelOf(f), value: isButton || type === 'password' ? undefined : String(f.value ?? ''), selector: css(f) };
-    }),
-    text: clean(document.body?.innerText),
-  };
-})()`;
+const BODY_SLICE = 8000;
+const BODY_SLICE_MAX = 15_000;
+const REQUEST_BODY_SLICE = 3000;
+const GREP_CONTEXT = 2;
 
-/** Page center of the element (scrolled into view), or null. */
-const centerScript = (selector: string) => `(() => {
-  const el = document.querySelector(${JSON.stringify(selector)});
-  if (!el) return null;
-  el.scrollIntoView({ block: 'center', inline: 'center' });
-  const r = el.getBoundingClientRect();
-  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-})()`;
-
-async function point(session: Parameters<typeof runtimeEval>[0], selector: string): Promise<{ x: number; y: number }> {
-  const r = await runtimeEval(session, centerScript(selector), { returnByValue: true, awaitPromise: false });
-  if (!r.ok) throw new Error(r.text);
-  const p = r.value as { x: number; y: number } | null | undefined;
-  if (!p) throw new Error(`No element matches ${selector}`);
-  return p;
+/** One slice of a response body (or only its lines matching `grep`), with how to read the rest. */
+function sliceBody(body: string, note: string, offset: number, limit: number, grep?: string): string {
+  if (grep) {
+    const lines = body.split('\n');
+    const needle = grep.toLowerCase();
+    const keep = new Set<number>();
+    lines.forEach((l, i) => {
+      if (l.toLowerCase().includes(needle)) for (let k = Math.max(i - GREP_CONTEXT, 0); k <= Math.min(i + GREP_CONTEXT, lines.length - 1); k++) keep.add(k);
+    });
+    if (!keep.size) return `Response body${note}: no line contains "${grep}" (${lines.length} lines, ${body.length} chars).`;
+    const out: string[] = [];
+    let prev = -2;
+    for (const i of [...keep].sort((x, y) => x - y)) {
+      if (i !== prev + 1) out.push('--');
+      out.push(`${i + 1}: ${lines[i]!.length > 500 ? `${lines[i]!.slice(0, 500)}...` : lines[i]}`);
+      prev = i;
+    }
+    return `Response body${note}, lines matching "${grep}" (line numbers):\n${out.join('\n')}`;
+  }
+  const start = Math.min(Math.max(offset, 0), body.length);
+  const size = Math.min(Math.max(limit, 1), BODY_SLICE_MAX);
+  const end = Math.min(start + size, body.length);
+  const tail = end < body.length ? `\n... [response body chars ${start}-${end} of ${body.length}] pass bodyOffset=${end} (bodyLimit up to ${BODY_SLICE_MAX}) for the next part, or grep=<text> for matching lines` : '';
+  return `Response body${note}:\n${body.slice(start, end)}${tail}`;
 }
 
 const tabLine = (t: { id: string; title: string; url: string; loading: boolean }, active: boolean) => `${active ? '*' : ' '} ${t.id}  ${t.title || '(untitled)'}  ${t.url}${t.loading ? '  (loading)' : ''}`;
@@ -119,14 +116,24 @@ export const pageTools: McpTool[] = [
   },
   {
     name: 'browser_snapshot',
-    description: 'Text snapshot of the page: title, url, headings, form fields with values, links and visible text, pruned to maxChars.',
-    inputSchema: schema({ maxChars: { type: 'integer', description: `Budget of the snapshot, default ${DEFAULT_SNAPSHOT_CHARS}.` } }),
+    description:
+      'Text snapshot of the page: title, url, headings, form fields (ref, password values masked), Clickable elements (buttons, links, tabs, td/div clickables, menu items, each with a ref e1.. usable by browser_click/type/fill/select until the next snapshot or navigation), links (30 per page) and visible text, pruned to maxChars. scope limits it to a container (selector or its text); section limits it to headings, fields, clickable, links or text; limit and offset page Clickable and Links.',
+    inputSchema: schema({
+      maxChars: { type: 'integer', description: `Budget of the snapshot, default ${DEFAULT_SNAPSHOT_CHARS}.` },
+      scope: { type: 'string', description: 'CSS selector or text of a container.' },
+      section: { type: 'string', enum: SNAPSHOT_SECTIONS, description: 'Only this section.' },
+      limit: { type: 'integer', description: 'Items of Clickable and Links, default 60 and 30.' },
+      offset: { type: 'integer', description: 'Items of Clickable and Links to skip.' },
+    }),
     async run(a, ctx) {
       const { session } = await pageSession(ctx, a);
-      const r = await runtimeEval(session, SNAPSHOT_SCRIPT, { returnByValue: true, awaitPromise: false });
+      const section = str(a, 'section') as SnapshotSection | undefined;
+      const sections = section ? [section] : undefined;
+      const r = await runtimeEval(session, `(() => { const kd = ${PAGE_LIB}; return kd.snapshot(${JSON.stringify(str(a, 'scope') ?? null)}, ${!sections || section === 'clickable'}); })()`, { returnByValue: true, awaitPromise: false });
       if (!r.ok) return failResult(r.text);
-      const max = Math.min(Math.max(num(a, 'maxChars') ?? DEFAULT_SNAPSHOT_CHARS, 200), 19_000);
-      return textResult(renderSnapshot(r.value as PageSnapshot, max), 'Pass a smaller maxChars.');
+      if ((r.value as { error?: string }).error) return failResult((r.value as { error: string }).error);
+      const maxChars = Math.min(Math.max(num(a, 'maxChars') ?? DEFAULT_SNAPSHOT_CHARS, 200), 19_000);
+      return textResult(renderSnapshot(r.value as PageSnapshot, { maxChars, sections, limit: num(a, 'limit'), offset: num(a, 'offset') }), 'Pass a smaller maxChars.');
     },
   },
   {
@@ -164,6 +171,9 @@ export const pageTools: McpTool[] = [
       failedOnly: { type: 'boolean' },
       limit: { type: 'integer', description: 'Default 50.' },
       offset: { type: 'integer', description: 'Skip this many matches, default 0.' },
+      body: { type: 'string', description: 'Only requests whose decoded request body or recorded response body contains this text (case-insensitive).' },
+      sinceMark: { type: 'string', description: 'Only requests after the named browser_network_mark.' },
+      pendingOver: { type: 'integer', description: 'Only requests still pending after more than this many ms; shows their age.' },
     }),
     async run(a, ctx) {
       const tab = await resolveTab(ctx, a);
@@ -171,22 +181,55 @@ export const pageTools: McpTool[] = [
       if (!logs) return failResult(`Unknown tab: ${tab}`);
       const url = str(a, 'url');
       const type = str(a, 'type');
-      const all = logs.network.entries({
+      const markName = str(a, 'sinceMark');
+      let since: number | undefined;
+      if (markName) {
+        since = stepLogFor(ctx.service).networkMarks.get(markName);
+        if (since === undefined) return failResult(`No network mark named ${markName}. Create it with browser_network_mark.`);
+      }
+      const bodyText = str(a, 'body')?.toLowerCase();
+      const pendingOver = num(a, 'pendingOver');
+      const now = Date.now();
+      const rec = (id: number) => logs.network.recorded(id);
+      let all = logs.network.entries({
+        ...(since !== undefined ? { since } : {}),
         filter: { ...(url ? { text: url } : {}), ...(type ? { type } : {}), ...(num(a, 'status') !== undefined ? { status: num(a, 'status')! } : {}), ...(bool(a, 'failedOnly') ? { failed: true } : {}) },
       });
+      if (pendingOver !== undefined) all = all.filter((e) => !e.done && now - (e.startedAt ?? now) > pendingOver);
+      if (bodyText) {
+        all = all.filter((e) => {
+          const r = rec(e.id);
+          if (!r) return false;
+          const req = r.postData ? `${r.postData}\n${prettyBody(r.postData, 'application/x-www-form-urlencoded')}` : '';
+          return req.toLowerCase().includes(bodyText) || (r.body?.toLowerCase().includes(bodyText) ?? false);
+        });
+      }
       if (!all.length) return textResult('No matching requests.');
       const offset = Math.max(num(a, 'offset') ?? 0, 0);
       const limit = Math.max(num(a, 'limit') ?? 50, 1);
       const page = all.slice(offset, offset + limit);
-      const lines = page.map((e) => `#${e.id} ${e.method} ${e.status ?? (e.failed ? 'FAILED' : '...')} ${e.type ?? ''} ${e.url}${e.failed ? `  (${e.failed})` : ''}${e.timing !== undefined ? `  ${Math.round(e.timing)}ms` : ''}`);
+      const lines = page.map((e) => {
+        const ops = summarizeRequest({ url: e.url, postData: rec(e.id)?.postData });
+        const age = !e.done && e.startedAt !== undefined ? `  pending ${Math.round((now - e.startedAt) / 1000)}s` : '';
+        return `#${e.id} ${e.method} ${e.status ?? (e.failed ? 'FAILED' : '...')} ${e.type ?? ''} ${e.url}${e.failed ? `  (${e.failed})` : ''}${e.timing !== undefined ? `  ${Math.round(e.timing)}ms` : ''}${age}${ops ? `  | ${ops}` : ''}`;
+      });
       const more = offset + page.length < all.length ? `\n... ${all.length - offset - page.length} more; pass offset=${offset + page.length}` : '';
       return textResult(`${lines.join('\n')}${more}`, `Pass a smaller limit or offset=${offset + page.length}.`);
     },
   },
   {
     name: 'browser_network_detail',
-    description: 'Headers, request body and response body of one request from browser_network.',
-    inputSchema: schema({ id: { type: 'integer', description: 'Request id from browser_network.' } }, ['id']),
+    description: 'Headers, request body and response body of one request from browser_network. Bodies of requests from before a navigation are kept (preserve logs on), capped per body.',
+    inputSchema: schema(
+      {
+        id: { type: 'integer', description: 'Request id from browser_network.' },
+        decoded: { type: 'boolean', description: 'Default true: url-decoded, indented request body and the list of RPC operations.' },
+        bodyOffset: { type: 'integer', description: 'Response body: first character to show, default 0.' },
+        bodyLimit: { type: 'integer', description: `Response body: characters to show, default ${BODY_SLICE}, max ${BODY_SLICE_MAX}.` },
+        grep: { type: 'string', description: 'Response body: only the lines containing this text (case-insensitive), with 2 lines of context.' },
+      },
+      ['id'],
+    ),
     async run(a, ctx) {
       const tab = await resolveTab(ctx, a);
       const logs = ctx.service.logs(tab);
@@ -195,9 +238,35 @@ export const pageTools: McpTool[] = [
       if (!d) return failResult(`No request with id ${a.id}`);
       const headers = (h: Record<string, string>) => Object.entries(h).map(([k, v]) => `${k}: ${v}`).join('\n');
       const parts = [`Request headers:\n${headers(d.requestHeaders)}`, `Response headers:\n${headers(d.responseHeaders)}`];
-      if (d.postData) parts.push(`Request body:\n${d.postData}`);
-      if (d.body !== undefined) parts.push(d.base64 ? `Response body: binary, ${d.body.length} base64 chars (not shown)` : `Response body${d.truncated ? ' (truncated by the app)' : ''}:\n${d.body}`);
-      return textResult(parts.join('\n\n'), 'The response body is cut; fetch the resource with browser_eval for a slice.');
+      if (d.postData) {
+        if (a.decoded === false) parts.push(`Request body:\n${d.postData}`);
+        else {
+          const contentType = d.requestHeaders['Content-Type'] ?? d.requestHeaders['content-type'] ?? '';
+          const grep = str(a, 'grep');
+          const ops = decodeOperations(d.postData).map((o, i) => ({ ...o, n: i + 1 }));
+          const shown = grep ? ops.filter((o) => `${o.operation} ${o.args}`.toLowerCase().includes(grep.toLowerCase())) : ops;
+          if (ops.length) parts.push(`Operations (${grep ? `${shown.length} of ${ops.length} match "${grep}"` : ops.length}):\n${shown.map((o) => `${o.n}. ${o.operation}  ${o.args}`).join('\n')}`);
+          parts.push(sliceBody(prettyBody(d.postData, contentType), '', 0, REQUEST_BODY_SLICE, grep).replace(/^Response body/, 'Request body (decoded)'));
+        }
+      }
+      if (d.body !== undefined) {
+        if (d.base64) parts.push(`Response body: binary, ${d.body.length} base64 chars (not shown)`);
+        else parts.push(sliceBody(d.body, d.truncated ? ' (truncated by the app)' : '', num(a, 'bodyOffset') ?? 0, num(a, 'bodyLimit') ?? BODY_SLICE, str(a, 'grep')));
+      }
+      return textResult(parts.join('\n\n'), 'Output is cut; use bodyOffset/bodyLimit or grep to read the response body in parts.');
+    },
+  },
+  {
+    name: 'browser_network_mark',
+    description: 'Remember the current end of the network log under a name; browser_network sinceMark=<name> then lists only later requests.',
+    inputSchema: schema({ name: { type: 'string' } }, ['name']),
+    async run(a, ctx) {
+      const tab = await resolveTab(ctx, a);
+      const logs = ctx.service.logs(tab);
+      if (!logs) return failResult(`Unknown tab: ${tab}`);
+      const id = logs.network.entries({ limit: 1 }).at(-1)?.id ?? 0;
+      stepLogFor(ctx.service).networkMarks.set(a.name as string, id);
+      return textResult(`Mark ${a.name} set after request #${id}.`);
     },
   },
   {
@@ -243,61 +312,47 @@ export const pageTools: McpTool[] = [
     },
   },
   {
-    name: 'browser_click',
-    description: 'Click an element (selector) or a point of the viewport (x and y, CSS pixels).',
-    inputSchema: schema({ selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }),
-    async run(a, ctx) {
-      const { session } = await pageSession(ctx, a);
-      const selector = str(a, 'selector');
-      if (!selector && (num(a, 'x') === undefined || num(a, 'y') === undefined)) return failResult('Pass selector, or both x and y.');
-      const p = selector ? await point(session, selector) : { x: num(a, 'x')!, y: num(a, 'y')! };
-      await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...p });
-      await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...p, button: 'left', clickCount: 1 });
-      await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...p, button: 'left', clickCount: 1 });
-      return textResult(`Clicked ${selector ?? `${p.x},${p.y}`}`);
-    },
-  },
-  {
-    name: 'browser_type',
-    description: 'Focus a field, replace its content with text, and optionally press Enter (submit).',
-    inputSchema: schema({ selector: { type: 'string' }, text: { type: 'string' }, submit: { type: 'boolean' } }, ['selector', 'text']),
-    async run(a, ctx) {
-      const { session } = await pageSession(ctx, a);
-      const selector = a.selector as string;
-      const r = await runtimeEval(
-        session,
-        `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.scrollIntoView({ block: 'center' }); el.focus(); if (el.select) el.select(); return true; })()`,
-        { returnByValue: true, awaitPromise: false },
-      );
-      if (!r.ok) return failResult(r.text);
-      if (r.value !== true) return failResult(`No element matches ${selector}`);
-      if (a.text === '') await session.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 });
-      else await session.send('Input.insertText', { text: a.text });
-      if (bool(a, 'submit')) {
-        await session.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
-        await session.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
-      }
-      return textResult(`Typed into ${selector}${bool(a, 'submit') ? ' and pressed Enter' : ''}`);
-    },
-  },
-  {
     name: 'browser_wait_for',
-    description: 'Wait until an element (selector) exists or the page text contains text; fails after timeoutMs.',
-    inputSchema: schema({ selector: { type: 'string' }, text: { type: 'string' }, timeoutMs: { type: 'integer', description: 'Default 10000, at most 60000.' } }),
+    description:
+      'Wait until an element (selector) exists or the page text contains text; fails after timeoutMs. gone=true waits until that text or selector is no longer visible (e.g. a "Loading..." overlay). idle=true waits until no XHR/fetch request has been pending for 500ms (alone or after the other condition).',
+    inputSchema: schema({
+      selector: { type: 'string' },
+      text: { type: 'string' },
+      gone: { type: 'boolean', description: 'Wait until the text or selector is no longer visible.' },
+      idle: { type: 'boolean', description: 'Wait until no XHR/fetch is pending for 500ms.' },
+      timeoutMs: { type: 'integer', description: 'Default 10000, at most 60000.' },
+    }),
     async run(a, ctx) {
-      const { session } = await pageSession(ctx, a);
+      const { tab, session } = await pageSession(ctx, a);
       const selector = str(a, 'selector');
       const text = str(a, 'text');
-      if (!selector && !text) return failResult('Pass selector or text.');
-      const expression = selector ? `!!document.querySelector(${JSON.stringify(selector)})` : `(document.body?.innerText ?? '').includes(${JSON.stringify(text)})`;
+      const gone = bool(a, 'gone');
+      const idle = bool(a, 'idle');
+      if (!selector && !text && !idle) return failResult('Pass selector, text or idle.');
+      const what = selector ? `element ${selector}` : `text "${text}"`;
+      const present = selector
+        ? `(() => { try { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; if (!${gone}) return true; const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; } catch (e) { return false; } })()`
+        : `(document.body?.innerText ?? '').includes(${JSON.stringify(text)})`;
+      const logs = ctx.service.logs(tab);
+      const pending = () => (logs ? logs.network.entries().filter((e) => !e.done && !e.failed && /^(xhr|fetch)$/i.test(e.type ?? '') && Date.now() - (e.startedAt ?? Date.now()) < 30_000).length : 0);
       const timeout = Math.min(num(a, 'timeoutMs') ?? 10_000, 60_000);
       const deadline = Date.now() + timeout;
+      let quietSince = 0;
+      let conditionMet = !selector && !text;
       for (;;) {
-        const r = await runtimeEval(session, expression, { returnByValue: true, awaitPromise: false, timeoutMs: 5000 });
-        if (!r.ok) return failResult(r.text);
-        if (r.value === true) return textResult(`Found ${selector ? `element ${selector}` : `text "${text}"`}`);
-        if (Date.now() >= deadline) return failResult(`Timed out after ${timeout}ms waiting for ${selector ? `element ${selector}` : `text "${text}"`}`);
-        await new Promise((res) => setTimeout(res, 200));
+        if (!conditionMet) {
+          const r = await runtimeEval(session, present, { returnByValue: true, awaitPromise: false, timeoutMs: 5000 });
+          if (!r.ok) return failResult(r.text);
+          conditionMet = gone ? r.value !== true : r.value === true;
+        }
+        if (conditionMet && idle) {
+          if (pending() === 0) {
+            quietSince ||= Date.now();
+            if (Date.now() - quietSince >= 500) return textResult(`${selector || text ? `${what} ${gone ? 'gone' : 'found'}; ` : ''}network idle`);
+          } else quietSince = 0;
+        } else if (conditionMet) return textResult(gone ? `Gone: ${what}` : `Found ${what}`);
+        if (Date.now() >= deadline) return failResult(`Timed out after ${timeout}ms waiting for ${conditionMet ? 'network idle' : `${what}${gone ? ' to disappear' : ''}`}`);
+        await new Promise((res) => setTimeout(res, 150));
       }
     },
   },

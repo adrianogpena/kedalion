@@ -6,8 +6,16 @@ Workflow
 - Every tool takes an optional tab id (browser_tabs lists them); the default is the active tab. The user sees what you do, live.
 - Local dev servers with self-signed certificates on localhost work when the user's setting allows it.
 
+Driving pages (also SmartGWT-style pages with id-less td/div buttons)
+- browser_snapshot lists Clickable elements with refs (e1..); scope (selector or container text), section, limit/offset narrow and page it. Refs stay valid until the next snapshot or navigation.
+- browser_click takes text (visible text, exact match preferred), ref, selector, target or x/y; browser_type/browser_fill take label (label, placeholder, aria-label or preceding text), ref, selector or target (browser_type's text is the content, browser_fill's is value). An ambiguous match is an error listing candidates with refs.
+- Actions scroll the target into view and wait (timeoutMs, default 5000) until it is visible, uncovered and still; the error names what covers it (e.g. a Loading overlay: use browser_wait_for gone=true or idle=true first). They return the effect: focus and value, appeared/disappeared text, requests started, new console errors.
+- browser_select {label|ref, option} picks from native and custom dropdowns; browser_expand {text|ref} opens a tree node; browser_target {action: set|list|remove, name, text|selector|label} saves names per site, usable as target=<name>.
+
 Debugging
-- browser_console (level, text, since) and browser_network (url, status, failedOnly) show what the page logged and requested; browser_network_detail gives headers and bodies of one request by id. Logs reset on navigation unless browser_preserve_logs on.
+- browser_console (level, text, since) and browser_network (url, status, failedOnly) show what the page logged and requested; browser_network_detail gives headers and bodies of one request by id. Logs reset on navigation unless browser_preserve_logs on; with it on, request and response bodies recorded as requests finished (up to 512 KB each) stay readable by browser_network_detail after navigations.
+- RPC apps (SmartGWT IDACall): browser_network rows show the decoded operations ("IDACall: Interface.method +14"); browser_network body=<text> searches decoded request bodies and recorded responses, sinceMark=<name> (set with browser_network_mark) lists only later requests, pendingOver=<ms> lists stuck requests with their age. browser_network_detail shows the decoded request body and operation list (decoded=false for raw) and slices the response with bodyOffset/bodyLimit or grep=<text> (matching lines, 2 lines context).
+- Every browser tool call is recorded: browser_steps (limit, clear) lists them; browser_steps_mark <name> starts a named run, browser_steps_diff a b compares two runs, browser_steps_export (json|md, path?) saves them to Downloads.
 - browser_eval runs JavaScript in the page. browser_breakpoint_* and browser_debugger_* pause and step the page's JavaScript; browser_trace_start/stop records a performance trace.
 
 Clean state for a test

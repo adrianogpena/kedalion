@@ -2,6 +2,8 @@ import type { Emulation, InterceptRule } from '@kedalion/cdp';
 import { openExternal } from '@kedalion/platform';
 import { invalid, type Routes } from '@kedalion/server-core';
 import { normalizeAddress } from '../address.ts';
+import { bodyMatches } from '../netview.ts';
+import { prettyBody, summarizeRequest } from '../ops.ts';
 import type { BrowserService } from './service.ts';
 
 const bad = () => invalid('badRequest', 'Invalid request.');
@@ -93,6 +95,21 @@ export function browserRoutes({ service, ready, issueTicket, mcpConfig }: Browse
       if (!Number.isInteger(id)) throw bad();
       await ready();
       return { detail: (await logsOf(tab).network.detail(id)) ?? null };
+    },
+    'GET /api/browser/network/ops': async ({ query }) => {
+      const tab = str(query.get('tab'));
+      const text = query.get('text') ?? '';
+      await ready();
+      const net = logsOf(tab).network;
+      const ops: Record<number, string> = {};
+      const matches: number[] = [];
+      for (const e of net.entries()) {
+        const rec = net.recorded(e.id);
+        const summary = rec?.postData ? summarizeRequest({ method: e.method, url: e.url, postData: rec.postData }) : '';
+        if (summary) ops[e.id] = summary;
+        if (text && bodyMatches(rec, text, rec?.postData ? prettyBody(rec.postData) : undefined)) matches.push(e.id);
+      }
+      return { ops, matches: text ? matches : null };
     },
     'POST /api/browser/logs/clear': async ({ json }) => {
       const b = await json<{ id?: unknown; kind?: unknown }>();

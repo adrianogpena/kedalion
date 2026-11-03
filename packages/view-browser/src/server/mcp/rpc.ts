@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { Routes } from '@kedalion/server-core';
+import { addStep, describeRequest, stepLogFor, summarizeArgs, summarizeResult } from './steps.ts';
 import { capText, type McpTool, type ToolArgs, type ToolContext, type ToolResult, type ToolSchema } from './types.ts';
 
 export const MCP_PATH = '/api/browser/mcp';
@@ -33,6 +34,46 @@ export function checkArgs(schema: ToolSchema, args: ToolArgs): string | undefine
     if (prop.enum && !prop.enum.includes(value as string)) return `Argument ${key} must be one of: ${prop.enum.join(', ')}`;
   }
   return undefined;
+}
+
+/** Starts the step record of one tool call; the returned function completes it. Never throws. */
+function beginStep(tool: string, args: ToolArgs, ctx: ToolContext): (result: ToolResult) => void {
+  if (tool.startsWith('browser_steps')) return () => {};
+  const started = Date.now();
+  let logs: ReturnType<ToolContext['service']['logs']>;
+  let netBefore = 0;
+  let conBefore = 0;
+  try {
+    const tab = typeof args.tab === 'string' ? args.tab : ctx.service.activeTab();
+    logs = tab ? ctx.service.logs(tab) : undefined;
+    netBefore = logs?.network.entries({ limit: 1 }).at(-1)?.id ?? 0;
+    conBefore = logs?.console.entries({ limit: 1 }).at(-1)?.id ?? 0;
+  } catch {
+    logs = undefined;
+  }
+  return (result) => {
+    try {
+      const requests: string[] = [];
+      let consoleErrors = 0;
+      if (logs) {
+        for (const e of logs.network.entries({ since: netBefore })) requests.push(describeRequest(e, logs.network.recorded(e.id)?.postData));
+        consoleErrors = logs.console.entries({ since: conBefore, filter: { level: 'error' } }).length;
+      }
+      const text = result.content.map((c) => (c.type === 'text' ? c.text : '[image]')).join(' ');
+      addStep(stepLogFor(ctx.service), {
+        tool,
+        args: summarizeArgs(args),
+        ok: !result.isError,
+        ms: Date.now() - started,
+        at: new Date(started).toISOString(),
+        result: summarizeResult(text),
+        requests,
+        consoleErrors,
+      });
+    } catch {
+      // the step log must never break a tool call
+    }
+  };
 }
 
 function capContent(result: ToolResult): ToolResult {
@@ -74,11 +115,16 @@ export async function handleRpc(msg: unknown, tools: readonly McpTool[], ctx: ()
       if (!isObject(args)) return failure(id, INVALID_PARAMS, 'Arguments must be an object');
       const problem = checkArgs(tool.inputSchema, args);
       if (problem) return failure(id, INVALID_PARAMS, problem);
+      const context = ctx();
+      const record = beginStep(tool.name, args, context);
+      let result: ToolResult;
       try {
-        return success(id, capContent(await tool.run(args, ctx())));
+        result = capContent(await tool.run(args, context));
       } catch (e) {
-        return success(id, { content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }], isError: true });
+        result = { content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }], isError: true };
       }
+      record(result);
+      return success(id, result);
     }
     default:
       return failure(id, METHOD_NOT_FOUND, `Method not found: ${method}`);
