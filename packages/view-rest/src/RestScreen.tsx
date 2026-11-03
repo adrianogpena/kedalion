@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { PanesLayout } from './layouts/PanesLayout';
 import { draftToSpec, hasAuthHeader, type HttpRequestDraft, type ImportedRequest, RequestEditor, ResponseView, toCurl } from '@kedalion/editor';
 import type { HttpResponseInfo, RestEnvVar } from '@kedalion/server-core/protocol';
-import { type ApiError, Button, dialogs, ErrorBanner, errorOf, IconButton, PageHead, SplitView, useAsync, useCommand, useBridge, useDebouncedSave, useDialogs, useShortcutTip, useViewRequest } from '@kedalion/ui';
+import { type ApiError, Button, dialogs, ErrorBanner, errorOf, IconButton, PageHead, SplitView, useAsync, useCommand, useViewLayout,useDebouncedSave, useDialogs, useShortcutTip, useViewRequest } from '@kedalion/ui';
 import { restCommands } from './commands';
 import { restApi as api } from './client';
 import type { RestSettings, RestViewSettings, SavedRequest } from './settings';
@@ -32,7 +32,7 @@ function uniqueName(name: string, taken: Set<string>): string {
 const DEFAULT_MAIN: [number, number] = [0.5, 0.5];
 
 export function RestScreen({ settings, onSave }: { settings: RestViewSettings; onSave: (patch: Partial<RestViewSettings>) => void }) {
-  const bridge = useBridge();
+  const bridge = useViewLayout('rest') === 'panes';
   const saved = useAsync(() => api.requests(), []);
   const { confirm, prompt, element } = useDialogs();
   const [state, setState] = useState<RestSettings>(settings.rest ?? {});

@@ -18,7 +18,7 @@ const bg = (id: string) => paletteById(id)!.tokens['--bg'];
 
 test('dark: the palette tokens go after the stylesheet link, data-theme stays dark', () => {
   const out = themeHtml(HTML, { theme: 'dark', paletteDark: 'nord' });
-  expect(out).toContain('<html lang="en" data-theme="dark" data-layout="ribbon">');
+  expect(out).toContain('<html lang="en" data-theme="dark" data-layout="ribbon" data-nav="header" data-density="normal" data-skin="base">');
   const style = out.indexOf('<style id="kedalion-theme">:root[data-theme]{color-scheme:dark;');
   expect(style).toBeGreaterThan(out.indexOf('<link rel="stylesheet"'));
   expect(style).toBeLessThan(out.indexOf('</head>'));
@@ -28,7 +28,7 @@ test('dark: the palette tokens go after the stylesheet link, data-theme stays da
 
 test('light: data-theme becomes light and the light palette is emitted', () => {
   const out = themeHtml(HTML, { theme: 'light', paletteLight: 'solarized-light' });
-  expect(out).toContain('<html lang="en" data-theme="light" data-layout="ribbon">');
+  expect(out).toContain('<html lang="en" data-theme="light" data-layout="ribbon" data-nav="header" data-density="normal" data-skin="base">');
   expect(out).toContain(`:root[data-theme]{color-scheme:light;--bg:${bg('solarized-light')};`);
 });
 
@@ -60,10 +60,18 @@ test('themeHead reads the saved settings', async () => {
 });
 
 test('data-layout is inserted, replaced, and an unknown id falls back to the default layout', () => {
-  expect(themeHtml(HTML, { theme: 'dark' })).toContain('<html lang="en" data-theme="dark" data-layout="ribbon">');
+  expect(themeHtml(HTML, { theme: 'dark' })).toContain('<html lang="en" data-theme="dark" data-layout="ribbon" data-nav="header" data-density="normal" data-skin="base">');
   const withLayout = HTML.replace('<html lang="en"', '<html lang="en" data-layout="x"');
   const out = themeHtml(withLayout, { theme: 'system', layout: 'original' });
   expect(out).toContain('data-layout="original"');
   expect(out).not.toContain('data-layout="x"');
   expect(themeHtml(HTML, { theme: 'dark', layout: 'nope' })).toContain('data-layout="ribbon"');
+});
+
+test('the four layout attributes follow the layouts setting', () => {
+  const out = themeHtml(HTML, { theme: 'dark', layouts: { preset: 'bridge' } });
+  expect(out).toContain('data-layout="bridge" data-nav="header-command" data-density="normal" data-skin="base"');
+  const legacy = themeHtml(HTML, { theme: 'dark', layout: 'dense' });
+  expect(legacy).toContain('data-layout="dense"');
+  expect(legacy).toContain('data-density="compact"');
 });

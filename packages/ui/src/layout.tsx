@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, type ComponentType, type ReactNode } from 'react';
-import { applyDockSide, applyMainMenu, resolveIconSetId, resolveLayout, supportsDock, type Layout, type LayoutStructure, type MainMenu } from '@kedalion/server-core/layouts';
+import { legacyLayoutId, resolveLayout, resolveLayouts, supportsDock, type Layout, type LayoutsSetting, type LayoutStructure, type MainMenu, type ResolvedLayouts } from '@kedalion/server-core/layouts';
 import { setFileIconVariants } from './file-icons';
 import { iconSetById } from './icons';
 import { AtlasAppFrame, BaseAppFrame, IslandsAppFrame, type AppFrameProps } from './components/AppFrame';
@@ -27,24 +27,27 @@ registerShell('atlas', { Frame: AtlasAppFrame, Sidebar: AtlasSidebar });
 
 export interface LayoutContext {
   layout: Layout;
-  /** The effective structure: the layout's own with `mainMenu` applied. */
+  /** The effective structure of the resolved layouts setting. */
   structure: LayoutStructure;
   mainMenu: MainMenu;
   iconSet: string;
   shell: ShellComponents;
+  resolved: ResolvedLayouts;
 }
 
-type Base = Pick<LayoutContext, 'layout' | 'iconSet' | 'mainMenu'> & { dock?: 'left' | 'right' };
+type Base = Pick<LayoutContext, 'layout' | 'iconSet' | 'mainMenu' | 'resolved'>;
 
-const original = resolveLayout();
-const Ctx = createContext<Base>({ layout: original, iconSet: resolveIconSetId(original), mainMenu: 'labels' });
+const defaultResolved = resolveLayouts();
+const Ctx = createContext<Base>({ layout: resolveLayout(legacyLayoutId(defaultResolved)), iconSet: defaultResolved.icons, mainMenu: 'labels', resolved: defaultResolved });
 
-export function LayoutProvider({ layout, icons, mainMenu = 'labels', dock, children }: { layout?: string; icons?: string; mainMenu?: MainMenu; dock?: 'left' | 'right'; children: ReactNode }) {
-  const resolved = resolveLayout(layout);
-  const iconSet = resolveIconSetId(resolved, icons);
+export function LayoutProvider({ layouts, icons, children }: { layouts?: LayoutsSetting; icons?: string; children: ReactNode }) {
+  const resolved = useMemo(() => resolveLayouts(layouts, icons), [layouts, icons]);
+  const iconSet = resolved.icons;
+  const layout = useMemo(() => resolveLayout(legacyLayoutId(resolved)), [resolved]);
+  const mainMenu: MainMenu = resolved.nav.labels ? 'labels' : 'icons';
   useLayoutEffect(() => setFileIconVariants(Object.keys(iconSetById(iconSet).fileVariants ?? {})), [iconSet]);
-  const value = useMemo(() => ({ layout: resolved, iconSet, mainMenu, dock }), [resolved, iconSet, mainMenu, dock]);
-  const side = supportsDock(resolved.id) ? applyDockSide(resolved.structure, dock).sidebarSide : 'left';
+  const value = useMemo(() => ({ layout, iconSet, mainMenu, resolved }), [layout, iconSet, mainMenu, resolved]);
+  const side = supportsDock(layout.id) ? resolved.nav.dock : 'left';
   useEffect(() => {
     document.documentElement.dataset.dock = side;
   }, [side]);
@@ -52,7 +55,7 @@ export function LayoutProvider({ layout, icons, mainMenu = 'labels', dock, child
 }
 
 export function useLayout(): LayoutContext {
-  const { layout, iconSet, mainMenu, dock } = useContext(Ctx);
+  const { layout, iconSet, mainMenu, resolved } = useContext(Ctx);
   return useMemo(() => {
     const parts = SHELLS[layout.id] ?? {};
     const shell: ShellComponents = {
@@ -61,6 +64,6 @@ export function useLayout(): LayoutContext {
       TabBar: parts.TabBar ?? BaseTabBar,
       StatusBar: parts.StatusBar ?? BaseStatusBar,
     };
-    return { layout, structure: applyMainMenu(supportsDock(layout.id) ? applyDockSide(layout.structure, dock) : layout.structure, mainMenu), mainMenu, iconSet, shell };
-  }, [layout, iconSet, mainMenu, dock]);
+    return { layout, structure: resolved.structure, mainMenu, iconSet, shell, resolved };
+  }, [layout, iconSet, mainMenu, resolved]);
 }

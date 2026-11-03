@@ -15,7 +15,7 @@ import {
   useCommand,
   useShortcutTip,
   useDebouncedSave,
-  useBridge,
+  useViewLayout,
   useDialogs,
   useViewToast,
 } from '@kedalion/ui';
@@ -39,7 +39,7 @@ const DEFAULT_MAIN: [number, number] = [0.3, 0.7];
 const commandById = (id: string) => workbenchCommands().find((c) => c.id === id)!;
 
 export function WorkbenchScreen({ settings, onSave, client }: { settings: WorkbenchViewSettings; onSave: (patch: Partial<WorkbenchViewSettings>) => void; client: WorkbenchClient }) {
-  const bridge = useBridge();
+  const bridge = useViewLayout('workbench') === 'one-surface';
   const [state, setState] = useState<WorkbenchSettings>(() => withWorkbenchDefaults(settings.workbench));
   const [query, setQuery] = useState('');
   const [docError, setDocError] = useState<ApiError>();

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ICON_SET_IDS, ORIGINAL_STRUCTURE, resolveIconSetId, resolveLayout } from '@kedalion/server-core/layouts';
+import { ICON_SET_IDS, legacyLayoutId, ORIGINAL_STRUCTURE, resolveIconSetId, resolveLayout, resolveLayouts } from '@kedalion/server-core/layouts';
 
 describe('layouts', () => {
   test('resolveLayout falls back to the default layout', () => {
@@ -9,6 +9,17 @@ describe('layouts', () => {
 
   test('original structure', () => {
     expect(resolveLayout('original').structure).toEqual(ORIGINAL_STRUCTURE);
+  });
+
+  test('per-view layouts resolve from the preset', () => {
+    const ribbon = resolveLayouts({ preset: 'ribbon' });
+    const bridge = resolveLayouts({ preset: 'bridge' });
+    expect(ribbon.navigation).toBe('header');
+    expect(bridge.navigation).toBe('header-command');
+    expect(bridge.views.workbench).toBe('one-surface');
+    expect(bridge.views.rest).toBe('panes');
+    expect(ribbon.views.workbench ?? 'base').toBe('base');
+    expect(legacyLayoutId(bridge)).toBe('bridge');
   });
 
   test('resolveIconSetId prefers a known override', () => {

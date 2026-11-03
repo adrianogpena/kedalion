@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PALETTES } from '@kedalion/server-core/palettes';
+import { effectiveLayouts, layoutsFromLegacy } from '@kedalion/server-core/layouts';
 import { CommandPalette, DEFAULT_LINK_SETTINGS, installLinkRouter, LinkContextMenu, type LinkTarget, DialogHost, detectLanguage, effectiveKeys, ErrorBanner, GLOBAL, AppFrame, IconButton, isDesktop, KeybindingProvider, LayoutProvider, type PaletteItem, popOut, popoutView, usePopouts,setFileAssociations, setLanguage, setViewTitle, Sidebar, Spinner, titleWithBadge, ToastProvider, type ApiError, errorMessage, errorOf, useToast, useAsync, useCommand, useCommandPalette, useHashRoute, useHeartbeat, useKeybindings, useRunCommand, useTheme, useTitleBadge,useViewTitle,useZen, useZoom, DesignSwitcher, useDesignLayout, useBridge, CommandBar, ActivityStrip } from '@kedalion/ui';
 import { EditorOptionsContext } from '@kedalion/editor/options';
 import { APP } from '../../app';
@@ -77,11 +78,12 @@ interface MainProps {
 
 function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }: MainProps) {
   const designLayout = useDesignLayout();
-  const settings = useMemo(() => (designLayout === 'current' ? saved : { ...saved, layout: designLayout }), [saved, designLayout]);
+  const settings = useMemo(() => (designLayout === 'current' ? saved : { ...saved, layouts: layoutsFromLegacy({ layout: designLayout }) }), [saved, designLayout]);
+  const layouts = useMemo(() => effectiveLayouts(settings), [settings]);
   const [stopped, setStopped] = useState(false);
   useHeartbeat();
   const palette = useCommandPalette();
-  const shellBridge = useBridge(settings.layout);
+  const shellBridge = useBridge(layouts);
 
   const { kind } = useTheme(settings);
   useZoom(settings.zoom);
@@ -267,7 +269,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
     : mainNode;
 
   return (
-    <LayoutProvider layout={settings.layout} icons={settings.icons} mainMenu={settings.mainMenu} dock={settings.dock}>
+    <LayoutProvider layouts={layouts} icons={settings.icons}>
     <ToastProvider defaultTimeout={general.toastDuration}>
       <DialogHost />
       <LinkContextMenu open={openLink} />

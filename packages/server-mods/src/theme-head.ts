@@ -1,4 +1,4 @@
-import { resolveLayout } from '@kedalion/server-core/layouts';
+import { effectiveLayouts, legacyLayoutId, resolveLayouts } from '@kedalion/server-core/layouts';
 import { type Palette, paletteFor, TOKENS } from '@kedalion/server-core/palettes';
 import type { BaseSettings, SettingsStore } from './settings.ts';
 
@@ -14,11 +14,14 @@ function block(palette: Palette): string {
 export function themeHtml(html: string, settings: BaseSettings): string {
   const end = html.indexOf('</head>');
   if (end < 0) return html;
-  const layout = resolveLayout(settings.layout).id;
-  if (/<html\b[^>]*\bdata-layout=/.test(html)) {
-    html = html.replace(/(<html\b[^>]*\bdata-layout=)(["'])[^"']*\2/, `$1$2${layout}$2`);
-  } else {
-    html = html.replace(/<html\b([^>]*)>/, `<html$1 data-layout="${layout}">`);
+  const r = resolveLayouts(effectiveLayouts(settings), settings.icons);
+  const attrs: [string, string][] = [['data-layout', legacyLayoutId(r)], ['data-nav', r.navigation], ['data-density', r.density], ['data-skin', r.skin]];
+  for (const [name, value] of attrs) {
+    if (new RegExp(`<html\\b[^>]*\\b${name}=`).test(html)) {
+      html = html.replace(new RegExp(`(<html\\b[^>]*\\b${name}=)(["'])[^"']*\\2`), `$1$2${value}$2`);
+    } else {
+      html = html.replace(/<html\b([^>]*)>/, `<html$1 ${name}="${value}">`);
+    }
   }
   let css: string;
   if (settings.theme === 'system') {
