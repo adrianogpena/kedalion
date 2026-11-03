@@ -29,7 +29,7 @@ import { Connections } from './workbench/Connections';
 import { HistoryPanel } from './workbench/HistoryPanel';
 import { SchemaPanel } from './workbench/SchemaPanel';
 import './workbench.css';
-import { WorkbenchDesign } from './design/WorkbenchDesign';
+import { OneSurfaceLayout } from './layouts/OneSurfaceLayout';
 
 const SAVE_DELAY = 500;
 const DEMO_SOURCE = 'demo';
@@ -360,7 +360,7 @@ ${sql}` : sql);
 
   if (bridge) {
     return (
-      <WorkbenchDesign
+      <OneSurfaceLayout
         dialogs={dialogs}
         bar={bar}
         banners={banners}

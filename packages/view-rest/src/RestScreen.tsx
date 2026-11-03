@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { RestDesign } from './design/RestDesign';
+import { PanesLayout } from './layouts/PanesLayout';
 import { draftToSpec, hasAuthHeader, type HttpRequestDraft, type ImportedRequest, RequestEditor, ResponseView, toCurl } from '@kedalion/editor';
 import type { HttpResponseInfo, RestEnvVar } from '@kedalion/server-core/protocol';
 import { type ApiError, Button, dialogs, ErrorBanner, errorOf, IconButton, PageHead, SplitView, useAsync, useCommand, useBridge, useDebouncedSave, useDialogs, useShortcutTip, useViewRequest } from '@kedalion/ui';
@@ -322,7 +322,7 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
   );
 
   if (bridge) {
-    return <RestDesign actions={actions} banners={banners} list={list} tabBar={tabBar} request={request} response={response_} history={history} dialogs={dialogsEl} />;
+    return <PanesLayout actions={actions} banners={banners} list={list} tabBar={tabBar} request={request} response={response_} history={history} dialogs={dialogsEl} />;
   }
 
   return (

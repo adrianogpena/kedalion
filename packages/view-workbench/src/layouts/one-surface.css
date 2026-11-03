@@ -1,0 +1,5 @@
+/* Workbench design-preview variant A (one surface). */
+.dzw-line { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) 0; border-bottom: 1px solid var(--border-soft); min-width: 0; }
+.dzw-chips { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-4); overflow-x: auto; }
+.dzw-chips .btn { max-width: 180px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dzw-tools { padding: var(--space-4) 0; border-bottom: 1px solid var(--border-soft); }
