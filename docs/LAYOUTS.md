@@ -1,8 +1,19 @@
 # Layouts
 
-Every layout in every view, in dark and light. Switch layouts in Settings > Appearance. The same section has the Dock position, Layout icon and Icons options.
+Every layout in every view, in dark and light. Pick them in Settings > Appearance > Layout. The same section has the Dock position, Layout icon and Icons options.
 
-## Layouts
+## How layouts are built
+
+A layout is a preset of independent choices, all on the Layout settings page (a Global tab and one tab per view):
+
+- **Navigation**: where the main menu, the document tab bar and the status bar sit. Header, Header with command bar, Sidebar or Atlas sidebar. Toggles: labels, brand, status bar, tab bar position and dock side (each applies only to navigations that have it).
+- **Skin**: the look (tokens, fonts, chrome CSS): Base, Material, Blueprint, Transit, Modeline, Ledger, Atlas, Islands or Rack.
+- **Density**: Normal, Compact or Roomy.
+- **Per-view layouts**: Git (Base, Read-through), Workbench (Base, One-surface) and REST (Base, Panes) each pick their own arrangement.
+
+A combination that was never built is blocked, with the reason shown. The presets below are named combinations of these choices.
+
+## Presets
 
 - **original**: The default layout: a left sidebar next to the main panels, Geist type, and the default palette. Palette: default palette.
 - **dense**: One step denser everywhere: more tree rows, table rows and log lines per screen. Structure and icons are unchanged. Palette: default palette.

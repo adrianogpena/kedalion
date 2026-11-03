@@ -40,9 +40,9 @@ export interface SidebarProps<Id extends string> {
 }
 
 export function Sidebar<Id extends string>(props: SidebarProps<Id>) {
-  const { structure, shell } = useLayout();
+  const { structure, navParts } = useLayout();
   if (structure.navPlacement === 'header') return <HeaderNav {...props} />;
-  const Shell = shell.Sidebar;
+  const Shell = navParts.Sidebar;
   return <Shell {...props} />;
 }
 

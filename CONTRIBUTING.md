@@ -539,9 +539,12 @@ An optional second argument sets the agents dir (default `~/.kedalion/agents`; g
 
 ## Adding a layout
 
-1. Add `packages/ui/src/layouts/<id>.css`, scoped under `:root[data-layout='<id>']`, and `@import` it in `packages/ui/src/styles.css`. Other layouts must look unchanged.
-2. Add `{ id, label, icons, structure }` to `LAYOUTS` in `packages/server-core/src/layouts.ts`. `structure` is a `LayoutStructure` (spread `ORIGINAL_STRUCTURE`: sidebar side/mode/brand, `tabBarPosition`, `statusBar`, `navFooter`, `navPlacement`). A header-nav layout is also listed in `HEADER_NAV_LAYOUTS`.
-3. A different shell: `registerShell('<id>', { Frame, Sidebar, TabBar, StatusBar })` in `packages/ui/src/layout.tsx`.
-4. Icons: `icons` is one of `ICON_SET_IDS`; a new set is registered in `packages/ui/src/icons.ts` (`ICON_SETS`) and covers every `IconName` (`icons.test.ts`).
-5. Label `layout.<id>` in `packages/ui/src/i18n.ts` (`baseEn`, `basePtBR`). Names are plain words (Bridge, Ribbon); CSS and constants use the layout id (`bridge.css`, `BRIDGE_LAYOUT`).
-6. Core behaviours must hold (views, reachability, palette, settings, i18n, accessibility, shortcuts; see [docs/DESIGN.md](docs/DESIGN.md#core-behaviours)). Preview it first with `bun run dev:design` by listing it in `OFFERED_LAYOUTS` (`packages/ui/src/design.tsx`); add it to `SELECTABLE_LAYOUT_IDS` to ship it.
+A layout is a preset of a navigation, nav toggles, a skin, a density and per-view layouts (Settings > Appearance > Layout, Global tab and one tab per view). "Navigation" is the main menu, tab bar and status bar area; do not call it "shell".
+
+1. New skin: add `packages/ui/src/layouts/<id>.css`, scoped under `:root[data-skin='<id>']`, `@import` it in `packages/ui/src/styles.css`, and add the id to `SKIN_IDS` in `packages/server-core/src/layouts.ts`. Other skins must look unchanged. Density rules use `data-density`, navigation rules `data-nav`.
+2. New navigation: add the id to `NavigationId` and `NAVIGATION_IDS`, its structure and toggles in `layouts.ts`, and swap components with `registerNavigation('nav:<id>', { Frame, Sidebar, TabBar, StatusBar })` in `packages/ui/src/layout.tsx` (`skin:<id>` swaps parts for a skin).
+3. New preset: add it to `PRESETS` in `layouts.ts`. Combinations that were never built are listed by `layoutsConflicts` and blocked in the UI with the reason.
+4. New per-view layout: add it to `VIEW_LAYOUTS` and build the arrangement in that view's package.
+5. Icons: a set is one of `ICON_SET_IDS`; a new one is registered in `packages/ui/src/icons.ts` (`ICON_SETS`) and covers every `IconName` (`icons.test.ts`).
+6. Labels go in `app/web/src/i18n/en.ts` and `pt-BR.ts`.
+7. Core behaviours must hold (views, reachability, palette, settings, i18n, accessibility, shortcuts; see [docs/DESIGN.md](docs/DESIGN.md#core-behaviours)). `bun run check:parity` checks every navigation, skin and density. Preview with `bun run dev:design`.

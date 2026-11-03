@@ -66,6 +66,6 @@ export * from './rel-path';
 export * from './roving-list';
 export * from './views';
 export * from './design';
-export * from './design-shell';
+export * from './command-bar';
 export * from './components/Inspector';
 export * from './bridge';

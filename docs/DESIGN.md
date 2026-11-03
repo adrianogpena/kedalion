@@ -138,13 +138,15 @@ Motion stays inside `@media (prefers-reduced-motion: no-preference)`. Popovers u
 
 ## Layouts
 
-A **layout** is one entry in `LAYOUTS` (`packages/server-core/src/layouts.ts`): a skin plus a structure. Settings offers `SELECTABLE_LAYOUT_IDS` (Ribbon is the default, Bridge the other); the rest stay defined for building new ones.
+A **layout** is a preset of independent choices (`PRESETS`, `resolveLayouts` in `packages/server-core/src/layouts.ts`, chosen in Settings > Appearance > Layout): a navigation, nav toggles, a skin, a density and one arrangement per view (`VIEW_LAYOUTS`). Ribbon is the default preset.
 
-- **Skin**: tokens, fonts, icons, density variables, chrome CSS. Can sit on any structure.
-- **Structure**: the shell (`LayoutStructure`: sidebar, nav placement, tab bar, status bar) and the per-view arrangement. Changes only with the layout.
+- **Navigation**: the main menu, document tab bar and status bar area (`NavigationId`: header, header-command, sidebar, atlas). "Shell" is not used for it, since it reads as the terminal.
+- **Skin**: tokens, fonts, icons, chrome CSS (`SkinId`). Can sit on any navigation.
+- **Density**: `normal`, `compact` or `roomy`.
+- **Per-view layout**: Git, Workbench and REST each pick Base or their own arrangement.
 - **Skin test**: a change is skin when tokens, CSS variables, font or icon swaps and component props can do it. Moving or adding panels is structure.
 
-Layout CSS is scoped under `:root[data-layout='<id>']` and restyles shared classes; views never do. Other layouts must look unchanged when one is added.
+Skin CSS (`packages/ui/src/layouts/<skin>.css`) is scoped under `:root[data-skin='<id>']` (navigation under `data-nav`, density under `data-density`) and restyles shared classes; views never do. Other layouts must look unchanged when one is added.
 
 ### Core behaviours
 

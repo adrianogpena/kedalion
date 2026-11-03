@@ -78,7 +78,7 @@ export function PopoutAppFrame({ tools, children }: AppFrameProps) {
 }
 
 export function AppFrame(props: AppFrameProps) {
-  const { Frame } = useLayout().shell;
+  const { Frame } = useLayout().navParts;
   if (props.popout) return <PopoutAppFrame {...props} />;
   return <Frame {...props} />;
 }

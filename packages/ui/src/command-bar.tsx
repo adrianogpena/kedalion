@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import './design-shell.css';
+import './command-bar.css';
 import { Button } from './components/Button';
 import { BrandMark } from './components/ui';
 import type { IconName } from './icons';

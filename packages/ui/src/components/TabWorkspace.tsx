@@ -470,8 +470,8 @@ export function TabWorkspace<R>({ layout, onChange, renderTab, titleOf, menuOf, 
   const commands = tabCommands(scope);
   const command = (name: string) => commands.find((d) => d.id === `${scope}.${name}`)!;
   const keys = useKeybindings();
-  const { shell, structure } = useLayout();
-  const TabBar = shell.TabBar;
+  const { navParts, structure } = useLayout();
+  const TabBar = navParts.TabBar;
   const barBottom = structure.tabBarPosition === 'bottom';
   const maximizeHint = keys ? effectiveKeys(keys.defs, keys.keymap).get(`${scope}.pane.maximize`)?.[0] : undefined;
   useTabKeys(layout, onChange, newRoute, scope, closeById);

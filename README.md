@@ -55,7 +55,7 @@ Any view can pop out into its own window. All dialogs (file pickers, confirms) a
 
 ## Layouts
 
-Eleven layouts change how the app looks and where navigation sits. Details and more screenshots: [docs/LAYOUTS.md](docs/LAYOUTS.md).
+Layouts change how the app looks and where the navigation (main menu, tab bar, status bar) sits; navigation, skin, density and per-view layouts are chosen in Settings > Appearance > Layout. Details and more screenshots: [docs/LAYOUTS.md](docs/LAYOUTS.md).
 
 <table>
 <tr>

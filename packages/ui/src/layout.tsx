@@ -7,28 +7,28 @@ import { AtlasSidebar, BaseSidebar, type SidebarProps } from './components/Sideb
 import { BaseStatusBar, IslandsStatusBar, ModelineStatusBar, type StatusBarProps } from './components/StatusBar';
 import { BaseTabBar, type TabBarProps } from './components/TabWorkspace';
 
-export interface ShellComponents {
+export interface NavigationComponents {
   Frame: ComponentType<AppFrameProps>;
   Sidebar: <Id extends string>(props: SidebarProps<Id>) => ReactNode;
   TabBar: <R>(props: TabBarProps<R>) => ReactNode;
   StatusBar: ComponentType<StatusBarProps>;
 }
 
-const SHELLS: Record<string, Partial<ShellComponents>> = {};
+const NAV_PARTS: Record<string, Partial<NavigationComponents>> = {};
 
-/** Swaps shell parts for a key, `nav:<NavigationId>` or `skin:<SkinId>`; slots left out keep the base components. */
-export function registerShell(key: string, parts: Partial<ShellComponents>): void {
-  SHELLS[key] = { ...SHELLS[key], ...parts };
+/** Swaps navigation parts for a key, `nav:<NavigationId>` or `skin:<SkinId>`; slots left out keep the base components. */
+export function registerNavigation(key: string, parts: Partial<NavigationComponents>): void {
+  NAV_PARTS[key] = { ...NAV_PARTS[key], ...parts };
 }
 
-registerShell('skin:islands', { Frame: IslandsAppFrame, StatusBar: IslandsStatusBar });
-registerShell('skin:modeline', { StatusBar: ModelineStatusBar });
-registerShell('nav:atlas', { Frame: AtlasAppFrame, Sidebar: AtlasSidebar });
+registerNavigation('skin:islands', { Frame: IslandsAppFrame, StatusBar: IslandsStatusBar });
+registerNavigation('skin:modeline', { StatusBar: ModelineStatusBar });
+registerNavigation('nav:atlas', { Frame: AtlasAppFrame, Sidebar: AtlasSidebar });
 
 /** Base parts, then the navigation's, then the skin's. */
-export function resolveShell(navigation: NavigationId, skin: SkinId): ShellComponents {
-  const nav = SHELLS[`nav:${navigation}`] ?? {};
-  const sk = SHELLS[`skin:${skin}`] ?? {};
+export function resolveNavigation(navigation: NavigationId, skin: SkinId): NavigationComponents {
+  const nav = NAV_PARTS[`nav:${navigation}`] ?? {};
+  const sk = NAV_PARTS[`skin:${skin}`] ?? {};
   return {
     Frame: BaseAppFrame,
     Sidebar: BaseSidebar,
@@ -45,7 +45,7 @@ export interface LayoutContext {
   structure: LayoutStructure;
   mainMenu: MainMenu;
   iconSet: string;
-  shell: ShellComponents;
+  navParts: NavigationComponents;
   resolved: ResolvedLayouts;
 }
 
@@ -71,7 +71,7 @@ export function LayoutProvider({ layouts, icons, children }: { layouts?: Layouts
 export function useLayout(): LayoutContext {
   const { layout, iconSet, mainMenu, resolved } = useContext(Ctx);
   return useMemo(() => {
-    const shell = resolveShell(resolved.navigation, resolved.skin);
-    return { layout, structure: resolved.structure, mainMenu, iconSet, shell, resolved };
+    const navParts = resolveNavigation(resolved.navigation, resolved.skin);
+    return { layout, structure: resolved.structure, mainMenu, iconSet, navParts, resolved };
   }, [layout, iconSet, mainMenu, resolved]);
 }

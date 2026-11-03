@@ -83,7 +83,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   const [stopped, setStopped] = useState(false);
   useHeartbeat();
   const palette = useCommandPalette();
-  const shellBridge = useBridge(layouts);
+  const navBridge = useBridge(layouts);
 
   const { kind } = useTheme(settings);
   useZoom(settings.zoom);
@@ -249,7 +249,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   );
   const popoutTools = viewSettingsSection(screen) ? gear : undefined;
 
-  const bridge = shellBridge && !inPopout;
+  const bridge = navBridge && !inPopout;
   const sidebarNode = inPopout ? undefined : <Sidebar name={APP.name} sections={sections} current={screen} onSelect={goView} footer={footer} popped={popped as ReadonlySet<ScreenId>} poppedHint={t('window.poppedHint')} />;
   const viewProps = { settings, onSave: save, go: go as (id: string) => void };
   const screenNode = views.render(screen, viewProps);
@@ -283,7 +283,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
         sidebar={frameSidebar}
       >
         {frameBody}
-        <DesignSwitcher views={['shell', 'dashboard', 'explorer', 'git', 'workbench', 'rest', 'terminal']} />
+        <DesignSwitcher views={['navigation', 'dashboard', 'explorer', 'git', 'workbench', 'rest', 'terminal']} />
         {palette.open && <CommandPalette items={items} initialQuery={palette.initialQuery} onClose={() => palette.setOpen(false)} />}
       </AppFrame>
       </views.Providers>

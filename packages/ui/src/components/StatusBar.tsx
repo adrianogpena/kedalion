@@ -13,7 +13,7 @@ export interface StatusItem {
 
 /** A thin row of status items; clickable ones are buttons. Items keep their order within each side. */
 export function StatusBar(props: StatusBarProps) {
-  const { StatusBar: Shell } = useLayout().shell;
+  const { StatusBar: Shell } = useLayout().navParts;
   return <Shell {...props} />;
 }
 
