@@ -2,6 +2,7 @@ import { afterEach, expect, spyOn, test } from 'bun:test';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { layoutsFromLegacy, resolveLayouts } from '@kedalion/server-core/layouts';
 import { type BaseSettings, settingsStore } from './settings.ts';
 
 const dirs: string[] = [];
@@ -74,18 +75,37 @@ test('icons is saved when known, ignored when unknown, cleared by an empty strin
   expect(await s.save({ icons: '' })).toEqual({ theme: 'dark' });
 });
 
-test('layout is saved when known, ignored when unknown, cleared by an empty string', async () => {
-  const { store: s } = await store();
-  expect(await s.save({ layout: 'original' })).toEqual({ theme: 'dark', layout: 'original' });
-  expect(await s.save({ layout: 'nope' })).toEqual({ theme: 'dark', layout: 'original' });
-  expect(await s.save({ layout: '' })).toEqual({ theme: 'dark' });
+test('stored layout and mainMenu migrate to layouts on load', async () => {
+  const { store: s } = await store({ theme: 'dark', layout: 'material', mainMenu: 'icons' });
+  const loaded = await s.load();
+  expect(loaded).toEqual({ theme: 'dark', layouts: layoutsFromLegacy({ layout: 'material', mainMenu: 'icons' }) });
+  expect(loaded.layouts?.skin).toBe('material');
+  expect(resolveLayouts(loaded.layouts).nav.labels).toBe(false);
 });
 
-test('dock is saved when valid, ignored otherwise, cleared by an empty string', async () => {
+test('a valid layouts patch is saved and the old keys are dropped', async () => {
+  const { dir, store: s } = await store({ theme: 'dark' });
+  const saved = await s.save({ layouts: { preset: 'ribbon' } });
+  expect(saved.layouts).toEqual({ preset: 'ribbon' });
+  expect(JSON.parse(await readFile(join(dir, 'settings.json'), 'utf8'))).toEqual({ theme: 'dark', layouts: { preset: 'ribbon' } });
+  expect(await s.save({ layouts: { preset: 'nope' } })).toEqual(saved);
+  expect(await s.save({ layouts: '' })).toEqual({ theme: 'dark' });
+});
+
+test('a conflicting layouts patch is rejected and nothing is written', async () => {
+  const { dir, store: s } = await store({ theme: 'dark' });
+  const before = await readFile(join(dir, 'settings.json'), 'utf8');
+  await expect(s.save({ layouts: { preset: 'original', navigation: 'sidebar', skin: 'ledger' } })).rejects.toMatchObject({ code: 'layoutConflict' });
+  expect(await readFile(join(dir, 'settings.json'), 'utf8')).toBe(before);
+  expect(await s.load()).toEqual({ theme: 'dark' });
+});
+
+test('legacy layout, mainMenu and dock patches are converted to layouts', async () => {
   const { store: s } = await store();
-  expect(await s.save({ dock: 'right' })).toEqual({ theme: 'dark', dock: 'right' });
-  expect(await s.save({ dock: 'up' })).toEqual({ theme: 'dark', dock: 'right' });
-  expect(await s.save({ dock: '' })).toEqual({ theme: 'dark' });
+  const saved = await s.save({ layout: 'material', mainMenu: 'icons', dock: 'right' });
+  expect(saved).toEqual({ theme: 'dark', layouts: layoutsFromLegacy({ layout: 'material', mainMenu: 'icons', dock: 'right' }) });
+  expect(await s.save({ layout: 'nope' })).toEqual(saved);
+  expect(await s.save({ layout: '' })).toEqual({ theme: 'dark' });
 });
 
 test('reload picks up an edit made outside the app', async () => {

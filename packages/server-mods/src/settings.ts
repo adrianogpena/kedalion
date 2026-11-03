@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { EDITOR_NAMES, type EditorId, findEditor, openInEditor, readJsonFile, revealInFolder, writeJsonAtomic } from '@kedalion/platform';
-import { isRecord, type Routes } from '@kedalion/server-core';
-import { ICON_SET_IDS, layoutById } from '@kedalion/server-core/layouts';
+import { invalid, isRecord, type Routes } from '@kedalion/server-core';
+import { ICON_SET_IDS, layoutById, layoutsConflicts, layoutsFromLegacy, resolveLayouts, validLayouts } from '@kedalion/server-core/layouts';
 import { PALETTES, ZOOM_LEVELS, type ThemeKind, type ThemeSettings } from '@kedalion/server-core/palettes';
 
 /** Settings every app gets; apps extend this with their own fields. */
@@ -39,7 +39,7 @@ export function settingsStore<T extends BaseSettings>(opts: SettingsOptions<T>):
   async function load(): Promise<T> {
     if (cache) return cache;
     const stored = await readJsonFile(file, isRecord);
-    cache = { ...opts.defaults, ...(stored as object | undefined) };
+    cache = migrateLegacy({ ...opts.defaults, ...(stored as object | undefined) } as T);
     return cache;
   }
 
@@ -51,14 +51,9 @@ export function settingsStore<T extends BaseSettings>(opts: SettingsOptions<T>):
     applyPalette(patch.paletteDark, 'dark', next);
     applyPalette(patch.paletteLight, 'light', next);
     if (ZOOM_LEVELS.includes(patch.zoom as never)) next.zoom = patch.zoom as number;
-    if (patch.layout === '') delete next.layout;
-    else if (typeof patch.layout === 'string' && layoutById(patch.layout)) next.layout = patch.layout;
+    applyLayouts(patch, next);
     if (patch.icons === '') delete next.icons;
     else if (typeof patch.icons === 'string' && ICON_SET_IDS.includes(patch.icons)) next.icons = patch.icons;
-    if (patch.mainMenu === '') delete next.mainMenu;
-    else if (patch.mainMenu === 'labels' || patch.mainMenu === 'icons') next.mainMenu = patch.mainMenu;
-    if (patch.dock === '') delete next.dock;
-    else if (patch.dock === 'left' || patch.dock === 'right') next.dock = patch.dock;
     if (typeof patch.language === 'string' && /^[a-z]{2}(-[A-Z]{2})?$/.test(patch.language)) next.language = patch.language;
     opts.apply?.(patch, next);
     cache = next;
@@ -70,7 +65,7 @@ export function settingsStore<T extends BaseSettings>(opts: SettingsOptions<T>):
   async function reload(): Promise<{ changed: boolean; settings: T }> {
     const prev = await load();
     const stored = await readJsonFile(file, isRecord);
-    const next = { ...opts.defaults, ...(stored as object | undefined) } as T;
+    const next = migrateLegacy({ ...opts.defaults, ...(stored as object | undefined) } as T);
     const changed = JSON.stringify(next) !== JSON.stringify(prev);
     if (changed) cache = next;
     return { changed, settings: cache ?? next };
@@ -79,6 +74,57 @@ export function settingsStore<T extends BaseSettings>(opts: SettingsOptions<T>):
   return { dir: opts.dir, file, load, save, reload };
 }
 
+
+/** Stored `layout`/`mainMenu`/`dock` without `layouts` become `layouts`; the old keys are dropped (written on the next save). */
+function migrateLegacy<T extends ThemeSettings>(s: T): T {
+  if (s.layouts === undefined && (s.layout !== undefined || s.mainMenu !== undefined || s.dock !== undefined)) {
+    s.layouts = layoutsFromLegacy({ layout: s.layout, mainMenu: s.mainMenu, dock: s.dock });
+  }
+  delete s.layout;
+  delete s.mainMenu;
+  delete s.dock;
+  return s;
+}
+
+/** Applies `patch.layouts` (validated, conflicts rejected) or the legacy `layout`/`mainMenu`/`dock` patch fields onto `next`. */
+function applyLayouts(patch: Record<string, unknown>, next: ThemeSettings): void {
+  if (patch.layouts === '') {
+    delete next.layouts;
+  } else if (patch.layouts !== undefined) {
+    const v = validLayouts(patch.layouts);
+    if (!v) return;
+    const conflicts = layoutsConflicts(resolveLayouts(v));
+    const first = conflicts[0];
+    if (first) throw invalid('layoutConflict', `${first.row} ${first.option} needs ${first.reason}.`, { row: first.row, option: first.option, blockedBy: first.blockedBy, reason: first.reason });
+    next.layouts = v;
+  } else {
+    const layout = typeof patch.layout === 'string' && layoutById(patch.layout) ? patch.layout : undefined;
+    const mainMenu = patch.mainMenu === 'labels' || patch.mainMenu === 'icons' ? patch.mainMenu : undefined;
+    const dock = patch.dock === 'left' || patch.dock === 'right' ? patch.dock : undefined;
+    if (patch.layout === '' || patch.mainMenu === '' || patch.dock === '') {
+      if (patch.layout === '') delete next.layouts;
+      else if (next.layouts) {
+        const nav = { ...next.layouts.nav };
+        if (patch.mainMenu === '') delete nav.labels;
+        if (patch.dock === '') delete nav.dock;
+        next.layouts = { ...next.layouts, nav };
+        if (Object.keys(nav).length === 0) delete next.layouts.nav;
+      }
+    }
+    if (layout) {
+      next.layouts = layoutsFromLegacy({ layout, mainMenu, dock });
+    } else if (mainMenu || dock) {
+      const base = next.layouts ?? layoutsFromLegacy({});
+      const nav = { ...base.nav };
+      if (mainMenu) nav.labels = mainMenu === 'labels';
+      if (dock) nav.dock = dock;
+      next.layouts = { ...base, nav };
+    }
+  }
+  delete next.layout;
+  delete next.mainMenu;
+  delete next.dock;
+}
 
 /** Saves `value` as the `kind` palette when it is a palette id of that kind; an empty string clears it, anything else is ignored. */
 function applyPalette(value: unknown, kind: ThemeKind, next: ThemeSettings): void {
