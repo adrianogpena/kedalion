@@ -30,7 +30,7 @@ export function applyMainMenu(s: LayoutStructure, mode?: MainMenu): LayoutStruct
 }
 
 /** Layouts whose navigation is a header (or otherwise not a side dock): the dock side does not apply. */
-export const HEADER_NAV_LAYOUTS: readonly string[] = ['ribbon', 'ledger', 'cockpit'];
+export const HEADER_NAV_LAYOUTS: readonly string[] = ['ribbon', 'ledger', 'bridge'];
 
 export function supportsDock(layoutId: string): boolean {
   return !HEADER_NAV_LAYOUTS.includes(layoutId);
@@ -76,7 +76,7 @@ export const LAYOUTS: readonly Layout[] = [
   { id: 'islands', label: 'Islands', icons: 'original', structure: { ...ORIGINAL_STRUCTURE, sidebarMode: 'collapsed', sidebarBrand: false, statusBar: true } },
   { id: 'modeline', label: 'Modeline', icons: 'original', structure: { ...ORIGINAL_STRUCTURE, sidebarBrand: false, tabBarPosition: 'bottom' } },
   { id: 'ribbon', label: 'Ribbon', icons: 'atom', structure: { ...ORIGINAL_STRUCTURE, navPlacement: 'header', navFooter: 'none' } },
-  { id: 'cockpit', label: 'Bridge', icons: 'atom', structure: { ...ORIGINAL_STRUCTURE, navPlacement: 'header', navFooter: 'none' } },
+  { id: 'bridge', label: 'Bridge', icons: 'atom', structure: { ...ORIGINAL_STRUCTURE, navPlacement: 'header', navFooter: 'none' } },
   {
     id: 'ledger', label: 'Ledger', icons: 'original',
     structure: { ...ORIGINAL_STRUCTURE, navFooter: 'none', navPlacement: 'header', tabBarPosition: 'top' },
@@ -86,7 +86,7 @@ export const LAYOUTS: readonly Layout[] = [
 ];
 
 /** Layouts offered in Settings; the others stay defined (for building new layouts) but are not listed. */
-export const SELECTABLE_LAYOUT_IDS: readonly string[] = ['ribbon', 'cockpit'];
+export const SELECTABLE_LAYOUT_IDS: readonly string[] = ['ribbon', 'bridge'];
 
 export const ICON_SET_IDS: readonly string[] = ['original', 'material', 'atom'];
 

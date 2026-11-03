@@ -1,7 +1,0 @@
-/* Cockpit: the combination picked from the design explore. Command-bar shell (design variant A) and
-   Workbench A / REST B inside; the views switch on useBridge() (packages/ui/src/bridge.ts), this file only
-   tunes the header like Ribbon does. */
-:root[data-layout='cockpit'] { --nav-header-h: 44px; --tabbar-h: 34px; }
-:root[data-layout='cockpit'],
-:root[data-layout='cockpit'] body { overflow: clip; }
-:root[data-layout='cockpit'] .tab-chip { margin-top: var(--space-4); }

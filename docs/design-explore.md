@@ -73,6 +73,6 @@ Pick per area; the switcher already does this.
 
 Write down for each row of the tables: keep Cur, A, B or C. That list is the brief for the implementation step (unpicked variants are then deleted).
 
-## Picked (2026-10-31): Cockpit layout
+## Picked (2026-10-31): Bridge layout
 
-Shell A, Workbench A, REST B; Dashboard, Explorer, Git, Terminal stay Cur. Implemented (2026-11-01) as the Bridge layout (id `cockpit`): the views switch on `useBridge()` (`packages/ui/src/bridge.ts`); they are no longer design variants, and the unpicked variants were removed from the code.
+Shell A, Workbench A, REST B; Dashboard, Explorer, Git, Terminal stay Cur. Implemented (2026-11-01) as the Bridge layout (id `bridge`): the views switch on `useBridge()` (`packages/ui/src/bridge.ts`); they are no longer design variants, and the unpicked variants were removed from the code.

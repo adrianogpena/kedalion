@@ -230,7 +230,7 @@ const atlas = (id: string, label: string, kind: ThemeKind, roles: Roles, exact: 
   id, label, family: 'atlas', kind, tokens: { ...fromRoles(kind, roles), ...exact },
 });
 
-export const PALETTES: readonly Palette[] = [
+const RAW_PALETTES: readonly Palette[] = [
   { id: 'kedalion-dark', label: 'Kedalion Dark', family: 'kedalion', kind: 'dark', tokens: KEDALION_DARK },
   { id: 'kedalion-light', label: 'Kedalion Light', family: 'kedalion', kind: 'light', tokens: KEDALION_LIGHT },
   // Ported from session-deck (crates/sdeck/src/theme.rs).
@@ -345,6 +345,97 @@ export const PALETTES: readonly Palette[] = [
     '--ink-on-accent': '#ffffff',
   }),
 ];
+
+export const SURFACES: Token[] = ['--bg', '--bg-elev', '--bg-sunken', '--panel', '--panel-2', '--hover', '--selected', '--side-active'];
+export const CONTRAST_FLOORS: [fg: Token, bgs: Token[], floor: number][] = [
+  ['--text', SURFACES, 4.5],
+  ['--text-2', SURFACES, 4.5],
+  ['--text-3', ['--bg', '--bg-elev', '--panel', '--panel-2'], 3],
+  ['--accent', ['--bg', '--bg-elev', '--panel'], 4.5],
+  ['--ink-on-accent', ['--accent'], 4.5],
+  ['--ok', ['--bg', '--panel'], 4.5],
+  ['--warn', ['--bg', '--panel'], 4.5],
+  ['--err', ['--bg', '--panel'], 4.5],
+  ['--ink-on-err', ['--err'], 4.5],
+  ['--info', ['--bg', '--panel'], 4.5],
+];
+
+export function parseColor(value: string): { rgb: Rgb; a: number } {
+  const v = value.trim().toLowerCase();
+  const m = v.match(/^rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\s*\)$/);
+  if (m) return { rgb: [Number(m[1]), Number(m[2]), Number(m[3])], a: m[4] === undefined ? 1 : Number(m[4]) };
+  let h = v.replace('#', '');
+  if (h.length === 3) h = [...h].map((c) => c + c).join('');
+  return { rgb: rgb(parseInt(h, 16)), a: 1 };
+}
+
+/** The colour `value` shows when painted over the opaque `base`. */
+export function composite(value: string, base: Rgb): Rgb {
+  const { rgb: c, a } = parseColor(value);
+  return c.map((v, i) => v * a + base[i]! * (1 - a)) as Rgb;
+}
+
+function luminance([r, g, b]: Rgb): number {
+  const lin = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+export function contrastRatio(fg: Rgb, bg: Rgb): number {
+  const [hi, lo] = [luminance(fg), luminance(bg)].sort((a, b) => b - a) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function toHsl([r, g, b]: Rgb): [number, number, number] {
+  const [x, y, z] = [r / 255, g / 255, b / 255];
+  const max = Math.max(x, y, z);
+  const min = Math.min(x, y, z);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = max === x ? ((y - z) / d + 6) % 6 : max === y ? (z - x) / d + 2 : (x - y) / d + 4;
+  return [h * 60, s, l];
+}
+
+function fromHsl(h: number, s: number, l: number): Rgb {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r, g, b].map((v) => Math.round((v + m) * 255)) as Rgb;
+}
+
+/** `color` with its lightness moved in `dir` (hue and saturation kept) until `ok` holds; the extreme if never. */
+function nudge(color: Rgb, dir: 1 | -1, ok: (c: Rgb) => boolean): Rgb {
+  const [h, s, l0] = toHsl(color);
+  let c = color;
+  for (let l = l0; l >= 0 && l <= 1 && !ok(c); l += dir * 0.004) c = fromHsl(h, s, Math.min(1, Math.max(0, l)));
+  return c;
+}
+
+/** Palette with the foreground tokens moved just far enough to meet `CONTRAST_FLOORS` on its own surfaces. */
+function legible(p: Palette): Palette {
+  const tokens = { ...p.tokens };
+  const base = composite(tokens['--bg'], [0, 0, 0]);
+  const surface = (t: Token) => composite(tokens[t], base);
+  const dir = p.kind === 'dark' ? 1 : -1;
+  for (const [fg, bgs, floor] of CONTRAST_FLOORS) {
+    const surfaces = bgs.map(surface);
+    const fgOver = (c: Rgb, s: Rgb) => contrastRatio(c, s);
+    let color = composite(tokens[fg], surfaces[0]!);
+    if (surfaces.every((s) => fgOver(color, s) >= floor)) continue;
+    let d: 1 | -1 = dir;
+    if (fg.startsWith('--ink-')) d = contrastRatio([255, 255, 255], surfaces[0]!) >= contrastRatio([0, 0, 0], surfaces[0]!) ? 1 : -1;
+    color = nudge(color, d, (c) => surfaces.every((s) => fgOver(c, s) >= floor));
+    tokens[fg] = hex(color);
+  }
+  return { ...p, tokens };
+}
+
+export const PALETTES: readonly Palette[] = RAW_PALETTES.map(legible);
 
 export function paletteById(id: string | undefined): Palette | undefined {
   return id ? PALETTES.find((p) => p.id === id) : undefined;

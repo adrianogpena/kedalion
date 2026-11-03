@@ -136,6 +136,55 @@ The old Agents Run panel rows were the example to avoid: `<button className="age
 
 Motion stays inside `@media (prefers-reduced-motion: no-preference)`. Popovers use `--shadow`; panels sit flat on borders.
 
+## Layouts
+
+A **layout** is one entry in `LAYOUTS` (`packages/server-core/src/layouts.ts`): a skin plus a structure. Settings offers `SELECTABLE_LAYOUT_IDS` (Ribbon is the default, Bridge the other); the rest stay defined for building new ones.
+
+- **Skin**: tokens, fonts, icons, density variables, chrome CSS. Can sit on any structure.
+- **Structure**: the shell (`LayoutStructure`: sidebar, nav placement, tab bar, status bar) and the per-view arrangement. Changes only with the layout.
+- **Skin test**: a change is skin when tokens, CSS variables, font or icon swaps and component props can do it. Moving or adding panels is structure.
+
+Layout CSS is scoped under `:root[data-layout='<id>']` and restyles shared classes; views never do. Other layouts must look unchanged when one is added.
+
+### Core behaviours
+
+Arrangement and look are free; these hold in every layout:
+
+1. Every view (Dashboard, Explorer, Git, Workbench, REST, Terminal, Browser, Agents) keeps its capabilities, data and actions; a layout may rearrange them, not drop one.
+2. Every view and command is reachable; the navigation form is free.
+3. Command palette with all commands; every action works from the keyboard.
+4. All settings reachable with instant save; layout, palette, dark/light, icons and language can be chosen.
+5. Server APIs, stored data, `~/.kedalion` files and ports never change with a layout.
+6. en and pt-BR; all strings in the i18n files.
+7. Visible focus, keyboard navigation, contrast at least 4.5:1, reduced motion.
+8. Zoom 0.5-2, narrow panes and a small window work.
+9. Shared dialogs (no native dialogs), toasts and context menus.
+10. Dark and light both work.
+11. Default shortcuts are the same everywhere; a layout adds one only for a function that exists only in it.
+12. Remembered per-view state (last file, scroll position) works.
+
+Layout-only extras are fine when they touch none of these.
+
+### Adding and previewing a layout
+
+Steps are in [CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-layout). To compare it with the current look, offer it in the preview run below.
+
+### Preview switchers (`bun run dev:design`)
+
+The run sets `VITE_KEDALION_DESIGN`; without it nothing below renders. The "Design" chip (`DesignSwitcher`, `packages/ui/src/design.tsx`) has:
+
+- **Layout**: `current` or a whole layout listed in `OFFERED_LAYOUTS`. Read with `useDesignLayout()`; key `kedalion.design.layout` in `localStorage`. A stored id that is not offered gives `current`.
+- **Skin**: detail changes on the current structure, `OFFERED_SKINS` maps each skin to the views that support it. Read with `useDesignSkin(view)`; key `kedalion.design.skin`. A view that does not support the skin falls back to `current`.
+- Per-view variants (`useDesign`, `kedalion.design.<view>`): see [design-explore.md](design-explore.md).
+
+### Lifecycle
+
+- **Preview**: offered only behind the design flag; placeholders allowed, wiring comes after the pick.
+- **Shipped**: listed in `SELECTABLE_LAYOUT_IDS` and so in Settings.
+- **Retired**: removed from Settings and the offered lists; the file may stay as a starting point or be deleted.
+
+Assets: fonts bundled, licensed and small (single offline exe); icon sets cover all of `IconName` (`icons.test.ts`); a new palette needs every token (`palettes.test.ts`). `scripts/check-contrast.ts` checks palette contrast.
+
 ## Alignment backlog
 
 Found by the audit of 2026-10-21. Fixing these makes the views match this document.

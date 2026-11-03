@@ -539,5 +539,9 @@ An optional second argument sets the agents dir (default `~/.kedalion/agents`; g
 
 ## Adding a layout
 
-Add `packages/ui/src/layouts/<id>.css`, scoped under `:root[data-layout='<id>']`, and an entry
-`{ id, label, icons, structure }` to `LAYOUTS` in `packages/server-core/src/layouts.ts`.
+1. Add `packages/ui/src/layouts/<id>.css`, scoped under `:root[data-layout='<id>']`, and `@import` it in `packages/ui/src/styles.css`. Other layouts must look unchanged.
+2. Add `{ id, label, icons, structure }` to `LAYOUTS` in `packages/server-core/src/layouts.ts`. `structure` is a `LayoutStructure` (spread `ORIGINAL_STRUCTURE`: sidebar side/mode/brand, `tabBarPosition`, `statusBar`, `navFooter`, `navPlacement`). A header-nav layout is also listed in `HEADER_NAV_LAYOUTS`.
+3. A different shell: `registerShell('<id>', { Frame, Sidebar, TabBar, StatusBar })` in `packages/ui/src/layout.tsx`.
+4. Icons: `icons` is one of `ICON_SET_IDS`; a new set is registered in `packages/ui/src/icons.ts` (`ICON_SETS`) and covers every `IconName` (`icons.test.ts`).
+5. Label `layout.<id>` in `packages/ui/src/i18n.ts` (`baseEn`, `basePtBR`). Names are plain words (Bridge, Ribbon); CSS and constants use the layout id (`bridge.css`, `BRIDGE_LAYOUT`).
+6. Core behaviours must hold (views, reachability, palette, settings, i18n, accessibility, shortcuts; see [docs/DESIGN.md](docs/DESIGN.md#core-behaviours)). Preview it first with `bun run dev:design` by listing it in `OFFERED_LAYOUTS` (`packages/ui/src/design.tsx`); add it to `SELECTABLE_LAYOUT_IDS` to ship it.

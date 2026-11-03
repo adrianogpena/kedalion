@@ -34,7 +34,7 @@ test('kedalion-dark is the dark block of styles.css plus the new tokens', () => 
   const { '--font-mono': _, ...css } = cssBlock(":root[data-theme='dark'] {");
   const tokens = resolvePalette('dark', 'kedalion-dark').tokens as Record<string, string>;
   expect(tokens).toEqual(css);
-  expect([tokens['--side-active'], tokens['--backdrop'], tokens['--ink-on-err']]).toEqual(['#1f1c33', 'rgba(3, 7, 12, 0.55)', '#fff']);
+  expect([tokens['--side-active'], tokens['--backdrop'], tokens['--ink-on-err']]).toEqual(['#1f1c33', 'rgba(3, 7, 12, 0.55)', '#333333']);
 });
 
 test('resolve: saved id of the kind wins, else the other side family, else the default', () => {

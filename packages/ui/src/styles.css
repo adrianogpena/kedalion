@@ -16,7 +16,7 @@
 @import './layouts/islands.css';
 @import './layouts/modeline.css';
 @import './layouts/ribbon.css';
-@import './layouts/cockpit.css';
+@import './layouts/bridge.css';
 @import './layouts/ledger.css';
 @import './layouts/atlas.css';
 
@@ -47,7 +47,7 @@
   --warn-soft: rgba(245, 184, 61, 0.13);
   --err: #ff6b6b;
   --err-soft: rgba(255, 107, 107, 0.13);
-  --ink-on-err: #fff;
+  --ink-on-err: #333333;
   --info: #5fb4ff;
   --info-soft: rgba(95, 180, 255, 0.13);
   --debug: #8b93a1;
