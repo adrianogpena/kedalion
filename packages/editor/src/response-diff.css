@@ -1,0 +1,12 @@
+.resp-diff { display: flex; flex-direction: column; min-height: 0; }
+.resp-diff.dim { opacity: 0.5; }
+.resp-diff-strip { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.resp-diff-strip dt { color: var(--muted); font-family: var(--font-mono, monospace); text-transform: uppercase; font-size: 11px; }
+.resp-diff-strip dd { margin: 0; font-family: var(--font-mono, monospace); }
+.resp-diff-add { color: var(--ok); }
+.resp-diff-del { color: var(--err); }
+.resp-diff-lines { margin: 0; padding: 8px 12px; font-family: var(--font-mono, monospace); font-size: 12px; white-space: pre-wrap; overflow: auto; }
+.resp-diff-lines .resp-diff-add::before { content: '+ '; }
+.resp-diff-lines .resp-diff-del::before { content: '- '; }
+.resp-diff-lines .same::before { content: '  '; }
+.resp-diff-note { padding: 8px 12px; color: var(--muted); font-size: 12px; }

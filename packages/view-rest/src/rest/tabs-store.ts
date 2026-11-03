@@ -24,6 +24,9 @@ export interface TabRuntime {
   error?: ApiError;
   sending: boolean;
   savedPath?: string;
+  /** Pinned response the Diff view compares the live one with; kept across sends, dropped on unpin or close. */
+  baseline?: HttpResponseInfo;
+  view?: 'live' | 'diff';
 }
 
 interface Snapshot {
@@ -237,6 +240,17 @@ export const restTabs = {
     });
   },
   setRuntime,
+  /** Stores tab `id`'s current response as its baseline. */
+  pinBaseline(id: string) {
+    const response = runtimeOf(id).response;
+    if (response) setRuntime(id, { baseline: response });
+  },
+  unpinBaseline(id: string) {
+    setRuntime(id, { baseline: undefined, view: 'live' });
+  },
+  setResponseView(id: string, view: 'live' | 'diff') {
+    setRuntime(id, { view });
+  },
   /** Sends tab `id` with REST environment `environment` (id); `extraHeaders` (e.g. a typed Authorization value) go after the draft's headers. */
   async send(id: string, extraHeaders?: Array<[string, string]>, environment?: string) {
     const tab = snap.tabs.find((t) => t.id === id);

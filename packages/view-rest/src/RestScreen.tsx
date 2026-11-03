@@ -41,7 +41,7 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
   const tab = tabs.find((t) => t.id === active) ?? tabs[0]!;
   const draft = tab.draft;
   const loaded = tab.savedId ? saved.data?.find((r) => r.id === tab.savedId) : undefined;
-  const { auth, imported, response, error, sending, savedPath } = runtimeOf(tab.id);
+  const { auth, imported, response, error, sending, savedPath, baseline, view } = runtimeOf(tab.id);
   const [importing, setImporting] = useState(false);
   const [curl, setCurl] = useState<string>();
   const [actionError, setActionError] = useState<ApiError>();
@@ -118,6 +118,9 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
     }
   };
   useCommand(restCommands()[0]!, () => void save(false));
+  const togglePin = () => (baseline ? restTabs.unpinBaseline(tab.id) : restTabs.pinBaseline(tab.id));
+  useCommand(restCommands()[1]!, togglePin);
+  useCommand(restCommands()[2]!, () => baseline && restTabs.setResponseView(tab.id, view === 'diff' ? 'live' : 'diff'));
   const tip = useShortcutTip();
 
   const remove = async (item: SavedRequest) => {
@@ -301,7 +304,7 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
   const response_ = (
           <div key="response" className="rest-pane">
             {savedPath && <p className="muted">{t('rest.responseSaved', { path: savedPath })}</p>}
-            <ResponseView response={response} error={error} sending={sending} onSave={response ? () => saveResponse(response) : undefined} />
+            <ResponseView response={response} error={error} sending={sending} onSave={response ? () => saveResponse(response) : undefined} baseline={baseline} view={view} onView={(v) => restTabs.setResponseView(tab.id, v)} onPin={togglePin} />
           </div>
   );
   const history = historyOpen ? <HistoryPanel refresh={historyTick} confirm={confirm} onClose={() => setHistoryOpen(false)} /> : null;

@@ -84,6 +84,8 @@ export const en = {
   'rest.history.close': 'Close history',
   'rest.import.warn.unresolvedVar': 'The variable {arg} is not defined.',
   'keys.rest.save': 'Save request',
+  'keys.rest.pinBaseline': 'Pin as baseline',
+  'keys.rest.toggleDiff': 'Toggle response diff',
   'error.badEnvironmentName': 'The name must have 1 to 80 characters.',
   'error.badRequestName': 'The name must have 1 to 80 characters.',
 };
@@ -172,6 +174,8 @@ export const ptBR: Messages<typeof en> = {
   'rest.history.close': 'Fechar histórico',
   'rest.import.warn.unresolvedVar': 'A variável {arg} não está definida.',
   'keys.rest.save': 'Salvar requisição',
+  'keys.rest.pinBaseline': 'Fixar como base',
+  'keys.rest.toggleDiff': 'Alternar diff da resposta',
   'error.badEnvironmentName': 'O nome deve ter de 1 a 80 caracteres.',
   'error.badRequestName': 'O nome deve ter de 1 a 80 caracteres.',
 };
