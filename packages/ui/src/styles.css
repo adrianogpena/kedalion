@@ -282,7 +282,9 @@ kbd {
 .side-item.popped, .header-tab.popped { position: relative; }
 .side-item .popped-mark, .header-tab .popped-mark { display: inline-flex; margin-left: auto; opacity: .65; }
 .header-tab .popped-mark { margin-left: var(--space-4); vertical-align: middle; }
-.sidebar.collapsed .side-item .popped-mark, .header-nav.icons-only .header-tab .popped-mark { position: absolute; top: 2px; right: 2px; margin: 0; }
+.sidebar.collapsed .side-item .popped-mark, .header-nav.icons-only .header-tab .popped-mark { position: absolute; top: 0; right: 0; margin: 0; width: 9px; height: 9px; opacity: 1; background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 100%); border-top-right-radius: inherit; }
+.sidebar.collapsed .side-item .popped-mark .icon, .header-nav.icons-only .header-tab .popped-mark .icon { display: none; }
+.sidebar.collapsed .side-item.popped, .header-nav.icons-only .header-tab.popped { outline: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: -3px; }
 .app.zen { grid-template-columns: 1fr; }
 .app.zen > .sidebar, .app.zen .status-bar { display: none; }
 .app.sidebar-right { grid-template-columns: 1fr var(--sidebar-w); }
