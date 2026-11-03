@@ -13,6 +13,8 @@ import { CurlDialog } from './rest/CurlDialog';
 import { HistoryPanel } from './rest/HistoryPanel';
 import { EnvironmentsDialog } from './rest/EnvironmentsDialog';
 import { RestTabBar } from './rest/RestTabBar';
+import { ChainStrip } from './rest/ChainStrip';
+import { chainStore, useChainState } from './rest/chain-store';
 import { openRestTab, restTabs, runtimeOf, useRestTabs } from './rest/tabs-store';
 
 const NO_VARS: RestEnvVar[] = [];
@@ -197,8 +199,13 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
     }
   };
 
+  const chainState = useChainState();
+  const chain = chainState.open ? (
+    <ChainStrip saved={saved.data} environment={environments.data ? activeEnv?.id : environment || undefined} activeSavedId={tab.savedId} prompt={prompt} confirm={confirm} />
+  ) : null;
   const actions = (
         <div className="row">
+          <Button size="sm" variant="ghost" icon="play" pressed={chainState.open} onClick={() => chainStore.setOpen(!chainState.open)} title={t('rest.chain.toggle')}>{t('rest.chain.toggle')}</Button>
           <Button size="sm" icon="download" onClick={() => setImporting(true)} title={t('rest.import')}>{t('rest.import')}</Button>
           <Button size="sm" variant="ghost" icon="code" onClick={() => void showCurl()} title={t('rest.code')}>{t('rest.code')}</Button>
           <Button size="sm" variant="primary" icon="check" onClick={() => save(false)} title={tip(t('rest.save'), 'rest.save')}>{t('rest.save')}</Button>
@@ -325,13 +332,14 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
   );
 
   if (bridge) {
-    return <PanesLayout actions={actions} banners={banners} list={list} tabBar={tabBar} request={request} response={response_} history={history} dialogs={dialogsEl} />;
+    return <PanesLayout actions={actions} banners={banners} chain={chain} list={list} tabBar={tabBar} request={request} response={response_} history={history} dialogs={dialogsEl} />;
   }
 
   return (
     <div className="content screen-edges">
       <PageHead title={t('nav.rest')}>{actions}</PageHead>
       {banners}
+      {chain}
       <div className="rest-body">
         {list}
         <div className="rest-main">

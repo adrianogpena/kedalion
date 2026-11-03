@@ -184,6 +184,11 @@ export function openRestTab(draft: HttpRequestDraft, auth?: string, name?: strin
   return added ? id : null;
 }
 
+/** Id of the open tab showing saved request `savedId`. */
+export function tabOfSaved(savedId: string): string | undefined {
+  return snap.tabs.find((t) => t.savedId === savedId)?.id;
+}
+
 export const restTabs = {
   /** The REST screen passes its saved list so the cap knows which tabs are clean. */
   setSaved(list: SavedRequest[] | undefined) {
@@ -252,7 +257,7 @@ export const restTabs = {
     setRuntime(id, { view });
   },
   /** Sends tab `id` with REST environment `environment` (id); `extraHeaders` (e.g. a typed Authorization value) go after the draft's headers. */
-  async send(id: string, extraHeaders?: Array<[string, string]>, environment?: string) {
+  async send(id: string, extraHeaders?: Array<[string, string]>, environment?: string, vars?: Record<string, string>) {
     const tab = snap.tabs.find((t) => t.id === id);
     if (!tab || runtimeOf(id).sending) return;
     const abort = new AbortController();
@@ -261,7 +266,7 @@ export const restTabs = {
     try {
       const spec = draftToSpec(tab.draft);
       if (extraHeaders) spec.headers.push(...extraHeaders);
-      const response = await api.send(spec, tab.savedId, abort.signal, { environment: environment || undefined, draft: tab.draft });
+      const response = await api.send(spec, tab.savedId, abort.signal, { environment: environment || undefined, draft: tab.draft, ...(vars && Object.keys(vars).length ? { vars } : {}) });
       if (!abort.signal.aborted) setRuntime(id, { response });
     } catch (err) {
       if (!abort.signal.aborted) setRuntime(id, { response: undefined, error: errorOf(err) });

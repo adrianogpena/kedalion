@@ -6,6 +6,8 @@ export interface PanesLayoutProps {
   /** Existing page actions (import, code, save, save as). */
   actions: ReactNode;
   banners: ReactNode;
+  /** The chain strip, when a chain is open. */
+  chain?: ReactNode;
   list: ReactNode;
   tabBar: ReactNode;
   request: ReactNode;
@@ -71,6 +73,7 @@ export function PanesLayout(p: PanesLayoutProps) {
         {closed.length === 0 && <Button size="sm" icon="plus" disabled title="Add pane">+ pane</Button>}
       </div>
       {p.banners}
+      {p.chain}
       <div className="dzr-canvas">
         {order.filter(open).map((id, i, shown) => {
           const head = (title: string) => (

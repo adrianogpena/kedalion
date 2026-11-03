@@ -34,3 +34,16 @@
 .rest-body > :last-child { flex: 1; min-width: 0; }
 .rest-main { display: flex; flex-direction: column; min-height: 0; }
 .rest-main > :last-child { flex: 1; min-height: 0; }
+.chain { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--border-soft); min-width: 0; }
+.chain-head, .chain-capture { display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap; }
+.chain-spacer { flex: 1; }
+.chain-strip { list-style: none; margin: 0; padding: var(--space-2) 0; display: flex; align-items: center; gap: var(--space-4); overflow-x: auto; }
+.chain-item { display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
+.chain-step { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chain-step:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+.chain-link { color: var(--text-3); font-family: var(--font-mono); font-size: var(--fs-xs-plus); white-space: nowrap; }
+.chain-link em { font-style: normal; color: var(--text-2); }
+.chain-dot { display: inline-block; width: 8px; height: 8px; margin-right: var(--space-4); border-radius: 50%; background: var(--text-3); }
+.chain-dot.ok { background: var(--ok); }
+.chain-dot.err { background: var(--err); }
+.chain-chip { display: inline-flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-6); border: 1px solid var(--border-soft); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: var(--fs-xs-plus); }
