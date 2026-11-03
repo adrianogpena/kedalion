@@ -3,7 +3,7 @@ import { useLayout } from '../layout';
 import { t } from '../i18n';
 import { IconButton } from './Button';
 import { HeaderNav } from './HeaderNav';
-import { BrandMark, Icon, type IconName } from './ui';
+import { BrandMark, Icon, NavIcon, type IconName } from './ui';
 
 export interface NavItem<Id extends string = string> {
   id: Id;
@@ -82,7 +82,7 @@ export function BaseSidebar<Id extends string>({ name, sections, current, onSele
                   title={title}
                   {...(collapsed ? { 'aria-label': title } : {})}
                 >
-                  <Icon name={item.icon} size={14} />
+                  <NavIcon viewId={item.id} name={item.icon} size={14} />
                   {!collapsed && <span className="side-label">{item.label}</span>}
                   {isPopped && (
                     <span className="popped-mark">

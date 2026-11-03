@@ -3,7 +3,7 @@ import { t } from '../i18n';
 import { useLayout } from '../layout';
 import { ContextMenu } from './ContextMenu';
 import type { NavItem, SidebarProps } from './Sidebar';
-import { BrandMark, Icon } from './ui';
+import { BrandMark, Icon, NavIcon } from './ui';
 
 /**
  * The main menu as a header strip of screen tabs (`navPlacement: 'header'`): brand, tabs, then the
@@ -64,7 +64,7 @@ export function HeaderNav<Id extends string>({ name, sections, current, onSelect
         {...(measure ? { tabIndex: -1 } : { onClick: () => onSelect(item.id), 'aria-current': active ? ('page' as const) : undefined })}
         {...(iconsOnly ? { 'aria-label': title } : {})}
       >
-        {iconsOnly ? <Icon name={item.icon} size={16} /> : <span className="header-tab-label">{item.label}</span>}
+        {iconsOnly ? <NavIcon viewId={item.id} name={item.icon} size={16} /> : <span className="header-tab-label">{item.label}</span>}
         {isPopped && (
           <span className="popped-mark">
             <Icon name="popout" size={iconsOnly ? 9 : 12} />

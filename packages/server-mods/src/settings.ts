@@ -54,6 +54,8 @@ export function settingsStore<T extends BaseSettings>(opts: SettingsOptions<T>):
     applyLayouts(patch, next);
     if (patch.icons === '') delete next.icons;
     else if (typeof patch.icons === 'string' && ICON_SET_IDS.includes(patch.icons)) next.icons = patch.icons;
+    if (patch.navIcons === '') delete next.navIcons;
+    else if (patch.navIcons === 'mythology') next.navIcons = 'mythology';
     if (typeof patch.language === 'string' && /^[a-z]{2}(-[A-Z]{2})?$/.test(patch.language)) next.language = patch.language;
     opts.apply?.(patch, next);
     cache = next;

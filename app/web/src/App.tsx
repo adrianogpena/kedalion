@@ -269,7 +269,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
     : mainNode;
 
   return (
-    <LayoutProvider layouts={layouts} icons={settings.icons}>
+    <LayoutProvider layouts={layouts} icons={settings.icons} navIcons={settings.navIcons}>
     <ToastProvider defaultTimeout={general.toastDuration}>
       <DialogHost />
       <LinkContextMenu open={openLink} />

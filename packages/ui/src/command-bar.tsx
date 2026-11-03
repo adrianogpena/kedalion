@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import './command-bar.css';
 import { Button } from './components/Button';
-import { BrandMark } from './components/ui';
+import { BrandMark, NavIcon } from './components/ui';
 import type { IconName } from './icons';
 
 /** Design preview, shell variants. Placeholder controls have no handlers; only the search and chips work. */
@@ -21,7 +21,7 @@ export function CommandBar({ name, items, current, onSelect, onSearch, tools }: 
       </Button>
       <nav className="design-cmdbar-chips" aria-label="Views">
         {items.map((i) => (
-          <Button key={i.id} size="xs" variant="ghost" icon={i.icon} pressed={i.id === current} onClick={() => onSelect(i.id)}>{i.label}</Button>
+          <Button key={i.id} size="xs" variant="ghost" pressed={i.id === current} onClick={() => onSelect(i.id)}><NavIcon viewId={i.id} name={i.icon} size={14} />{i.label}</Button>
         ))}
       </nav>
       <div className="design-cmdbar-tools">{tools}</div>

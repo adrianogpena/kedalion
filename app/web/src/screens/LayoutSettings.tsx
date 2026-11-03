@@ -154,6 +154,15 @@ function GlobalTab({ value, onChange, ctx }: { value: Settings; onChange: Change
                 </select>
               </label>
             </SettingItem>
+            <SettingItem id="theme.navIcons" modified={!!value.navIcons} onReset={() => onChange({ navIcons: '' })}>
+              <label className="field">
+                <span className="mono-label">{t('settings.layout.navIcons')}</span>
+                <select value={value.navIcons ?? ''} aria-label={t('settings.layout.navIcons')} onChange={(e) => onChange({ navIcons: e.target.value as '' | 'mythology' })}>
+                  <option value="">{t('settings.layout.navIcons.set')}</option>
+                  <option value="mythology">{t('settings.layout.navIcons.mythology')}</option>
+                </select>
+              </label>
+            </SettingItem>
             <ChoiceRow
               id="layouts.density" label={t('settings.layout.density')} value={resolved.density} options={DENSITY_IDS}
               optionName={(o) => name('density', o)} ctx={ctx} modified={modified.includes('density')}

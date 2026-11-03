@@ -3,7 +3,7 @@ import { errorMessage, type ApiError } from '../api';
 import { copyText } from '../hooks';
 import { t } from '../i18n';
 import { Button, IconButton } from './Button';
-import { Icon } from './Icon';
+import { Icon, NavIcon } from './Icon';
 
 export type Tone = 'ok' | 'warn' | 'err' | 'info' | 'muted';
 
@@ -399,4 +399,4 @@ export function BrandMark({ size = 30 }: { size?: number }) {
   );
 }
 
-export { Icon };
+export { Icon, NavIcon };

@@ -45,22 +45,24 @@ export interface LayoutContext {
   structure: LayoutStructure;
   mainMenu: MainMenu;
   iconSet: string;
+  /** Icons of the view entries in the Navigation: '' = the icon set, 'mythology' = the view icons. */
+  navIcons: '' | 'mythology';
   navParts: NavigationComponents;
   resolved: ResolvedLayouts;
 }
 
-type Base = Pick<LayoutContext, 'layout' | 'iconSet' | 'mainMenu' | 'resolved'>;
+type Base = Pick<LayoutContext, 'layout' | 'iconSet' | 'navIcons' | 'mainMenu' | 'resolved'>;
 
 const defaultResolved = resolveLayouts();
-const Ctx = createContext<Base>({ layout: resolveLayout(legacyLayoutId(defaultResolved)), iconSet: defaultResolved.icons, mainMenu: 'labels', resolved: defaultResolved });
+const Ctx = createContext<Base>({ layout: resolveLayout(legacyLayoutId(defaultResolved)), iconSet: defaultResolved.icons, navIcons: '', mainMenu: 'labels', resolved: defaultResolved });
 
-export function LayoutProvider({ layouts, icons, children }: { layouts?: LayoutsSetting; icons?: string; children: ReactNode }) {
+export function LayoutProvider({ layouts, icons, navIcons = '', children }: { layouts?: LayoutsSetting; icons?: string; navIcons?: '' | 'mythology'; children: ReactNode }) {
   const resolved = useMemo(() => resolveLayouts(layouts, icons), [layouts, icons]);
   const iconSet = resolved.icons;
   const layout = useMemo(() => resolveLayout(legacyLayoutId(resolved)), [resolved]);
   const mainMenu: MainMenu = resolved.nav.labels ? 'labels' : 'icons';
   useLayoutEffect(() => setFileIconVariants(Object.keys(iconSetById(iconSet).fileVariants ?? {})), [iconSet]);
-  const value = useMemo(() => ({ layout, iconSet, mainMenu, resolved }), [layout, iconSet, mainMenu, resolved]);
+  const value = useMemo(() => ({ layout, iconSet, navIcons, mainMenu, resolved }), [layout, iconSet, navIcons, mainMenu, resolved]);
   const side = supportsDock(layout.id) ? resolved.nav.dock : 'left';
   useEffect(() => {
     document.documentElement.dataset.dock = side;
@@ -69,9 +71,9 @@ export function LayoutProvider({ layouts, icons, children }: { layouts?: Layouts
 }
 
 export function useLayout(): LayoutContext {
-  const { layout, iconSet, mainMenu, resolved } = useContext(Ctx);
+  const { layout, iconSet, navIcons, mainMenu, resolved } = useContext(Ctx);
   return useMemo(() => {
     const navParts = resolveNavigation(resolved.navigation, resolved.skin);
-    return { layout, structure: resolved.structure, mainMenu, iconSet, navParts, resolved };
-  }, [layout, iconSet, mainMenu, resolved]);
+    return { layout, structure: resolved.structure, mainMenu, iconSet, navIcons, navParts, resolved };
+  }, [layout, iconSet, navIcons, mainMenu, resolved]);
 }

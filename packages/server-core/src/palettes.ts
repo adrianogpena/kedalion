@@ -17,6 +17,8 @@ export interface ThemeSettings {
   layout?: string;
   /** Icon-set id from ICON_SET_IDS; unset means the layout's own set. */
   icons?: string;
+  /** Icons of the view entries in the Navigation: unset uses the icon set, 'mythology' the view icons of docs/ICONS.md. */
+  navIcons?: '' | 'mythology';
   /** Main menu style for layouts with a labelled menu; unset means 'labels'. */
   mainMenu?: 'labels' | 'icons';
   /** Side of the main menu dock; unset means the layout's own. */
