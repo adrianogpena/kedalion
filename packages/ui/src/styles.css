@@ -21,8 +21,6 @@
 @import './layouts/bridge.css';
 @import './layouts/ledger.css';
 @import './layouts/atlas.css';
-@import './layouts/dossier-skin.css';
-@import './layouts/dossier.css';
 
 :root,
 :root[data-theme='dark'] {
@@ -1115,8 +1113,6 @@ html[data-status-bar="false"] .status-bar { display: none; }
 /* Settings as a full page in the app content area; the view underneath stays mounted but hidden. */
 .main-view { display: contents; }
 .main-view[hidden] { display: none; }
-/* DossierPage wrappers outside the Dossier layout: kept in the tree so a layout switch does not remount the view. */
-.dossier-host, .dossier-host-body { display: contents; }
 .settings-screen { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-12) var(--space-16) 0; }
 .settings-head { display: flex; align-items: center; gap: var(--space-12); }
 .settings-head h2 { margin: 0; font-size: var(--fs-xl); font-weight: 600; }

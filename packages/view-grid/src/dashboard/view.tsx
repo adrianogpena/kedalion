@@ -1,4 +1,4 @@
-import { defineView, DossierPage } from '@kedalion/ui';
+import { defineView } from '@kedalion/ui';
 import { en as gridEn, ptBR as gridPtBR } from '../i18n';
 import type { AnyPanelKind } from '../panel';
 import { en as calendarEn, ptBR as calendarPtBR } from '../panels/calendar/i18n';
@@ -30,10 +30,8 @@ export function dashboardView({ group, order, panels }: DashboardViewOptions) {
   return defineView<'dashboard', DashboardViewSettings, 'nav.dashboard'>({
     id: 'dashboard',
     nav: { group, icon: 'cube', label: 'nav.dashboard', order },
-    render: ({ settings, onSave, go }) => (
-      <DossierPage chapter="cover" go={go}>
+    render: ({ settings, onSave }) => (
         <DashboardScreen settings={settings} onSave={onSave} panels={panels} />
-      </DossierPage>
     ),
     commands: dashboardCommands,
     messages: {

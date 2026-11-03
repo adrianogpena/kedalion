@@ -13,7 +13,7 @@ export const DESIGN_NAMES: Record<DesignVariant, string> = {
 const OFFERED: Readonly<Record<string, readonly DesignVariant[]>> = {};
 
 /** Whole Reimagine layouts a dev:design run offers (layout switcher); empty = Current only. */
-export const OFFERED_LAYOUTS: readonly string[] = ['dossier'];
+export const OFFERED_LAYOUTS: readonly string[] = [];
 /** Skins a dev:design run offers, and the views each supports (detail changes on the current structure); an unsupported view falls back to `current`. */
 export const OFFERED_SKINS: Readonly<Record<string, readonly string[]>> = {};
 

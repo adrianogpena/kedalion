@@ -81,7 +81,7 @@ export async function checkParity(layouts: readonly Layout[] = LAYOUTS): Promise
     const reachable = l.id === 'atlas' ? new Set([...atlasIds.filter((id) => viewIds.has(id)), ...views.ids.filter((id) => !atlasIds.includes(id))]) : viewIds;
     for (const id of views.ids) if (!reachable.has(id)) add(`view ${id} is not reachable from the navigation`);
     if (l.id === 'atlas') for (const id of atlasIds) if (!viewIds.has(id)) add(`ATLAS_GROUPS lists unknown view ${id}`);
-    if (l.structure.navFooter === 'none' && l.structure.navPlacement === 'sidebar' && l.id !== 'atlas' && l.id !== 'dossier') add('navFooter none without a swapped shell hides Settings and tools');
+    if (l.structure.navFooter === 'none' && l.structure.navPlacement === 'sidebar' && l.id !== 'atlas') add('navFooter none without a swapped shell hides Settings and tools');
     for (const e of extras) add(`shortcut ${e} is not a default shortcut of the command list`);
   }
   void ORIGINAL_STRUCTURE;

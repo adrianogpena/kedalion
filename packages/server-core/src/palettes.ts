@@ -230,11 +230,6 @@ const atlas = (id: string, label: string, kind: ThemeKind, roles: Roles, exact: 
   id, label, family: 'atlas', kind, tokens: { ...fromRoles(kind, roles), ...exact },
 });
 
-/** Dossier family: ink-blue night with brass (dark), cream paper with ink-blue text and oxblood (light); exact surface and ink values. */
-const dossier = (id: string, label: string, kind: ThemeKind, roles: Roles, exact: Partial<Record<Token, string>>): Palette => ({
-  id, label, family: 'dossier', kind, tokens: { ...fromRoles(kind, roles), ...exact },
-});
-
 const RAW_PALETTES: readonly Palette[] = [
   { id: 'kedalion-dark', label: 'Kedalion Dark', family: 'kedalion', kind: 'dark', tokens: KEDALION_DARK },
   { id: 'kedalion-light', label: 'Kedalion Light', family: 'kedalion', kind: 'light', tokens: KEDALION_LIGHT },
@@ -349,26 +344,6 @@ const RAW_PALETTES: readonly Palette[] = [
     '--border': '#d6d9df', '--text': '#1c1f25', '--text-2': '#535966', '--text-3': '#8a909c', '--accent': '#0e8a7e',
     '--ink-on-accent': '#ffffff',
   }),
-  dossier('dossier-dark', 'Dossier Night', 'dark', [
-    0x18202e, 0x1f2838, 0x3a4559, 0xece4d4, 0x8f8878, 0xc9a25a, 0xc39fc9, 0x8fb1d9, 0x9cc28a, 0xe8a55a, 0xd98a5a, 0xec7a6e], {
-    '--bg-sunken': '#121925', '--bg': '#18202e', '--bg-elev': '#1f2838', '--panel': '#1f2838', '--panel-2': '#253043',
-    '--hover': '#2b364a', '--selected': '#33384a', '--side-active': '#383b48',
-    '--border': '#3a4559', '--border-soft': '#2c3647', '--row-border': '#252f40', '--keycap': '#46526a',
-    '--text': '#ece4d4', '--text-2': '#c2b9a7', '--text-3': '#8f8878', '--accent': '#c9a25a', '--accent-2': '#dcc08a',
-    '--accent-soft': 'rgba(201, 162, 90, 0.14)', '--ink-on-accent': '#18202e',
-    '--y-key': '#8fb1d9', '--y-comment': '#6f7a8c', '--mark': 'rgba(201, 162, 90, 0.32)',
-    '--shadow': '0 20px 50px rgba(5, 8, 14, 0.6)', '--backdrop': 'rgba(8, 11, 18, 0.6)',
-  }),
-  dossier('dossier-light', 'Dossier Paper', 'light', [
-    0xf3ecdc, 0xf9f5ea, 0xd3c6a8, 0x1f2a44, 0x7a7563, 0x8c3b2e, 0x7a3f86, 0x2d5b8f, 0x3d6b3a, 0x8a5a00, 0x9a5a12, 0xb8262b], {
-    '--bg-sunken': '#e8dfc9', '--bg': '#f3ecdc', '--bg-elev': '#f9f5ea', '--panel': '#f9f5ea', '--panel-2': '#f5efe0',
-    '--hover': '#ebe3cf', '--selected': '#ecdccb', '--side-active': '#e9d6c4',
-    '--border': '#d3c6a8', '--border-soft': '#e2d8c0', '--row-border': '#e6ddc7', '--keycap': '#c8b994',
-    '--text': '#1f2a44', '--text-2': '#46506a', '--text-3': '#7a7563', '--accent': '#8c3b2e', '--accent-2': '#6f2b21',
-    '--accent-soft': 'rgba(140, 59, 46, 0.1)', '--ink-on-accent': '#fbf6ea', '--warn': '#82540a',
-    '--y-key': '#2d5b8f', '--y-comment': '#9a927f', '--mark': 'rgba(201, 162, 90, 0.4)',
-    '--shadow': '0 16px 40px rgba(60, 44, 20, 0.18)', '--backdrop': 'rgba(40, 30, 15, 0.35)',
-  }),
 ];
 
 export const SURFACES: Token[] = ['--bg', '--bg-elev', '--bg-sunken', '--panel', '--panel-2', '--hover', '--selected', '--side-active'];
@@ -387,10 +362,6 @@ export const CONTRAST_FLOORS: [fg: Token, bgs: Token[], floor: number][] = [
 
 /** Extra floors of one palette family, for surfaces its layout paints text on (other families keep their values). */
 export const FAMILY_FLOORS: Readonly<Record<string, [fg: Token, bgs: Token[], floor: number][]>> = {
-  dossier: [
-    ['--accent', ['--bg-sunken'], 4.5],
-    ['--warn', ['--selected', '--bg-sunken'], 4.5],
-  ],
 };
 
 export function parseColor(value: string): { rgb: Rgb; a: number } {

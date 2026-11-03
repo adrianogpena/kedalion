@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PALETTES } from '@kedalion/server-core/palettes';
-import { CommandPalette, DEFAULT_LINK_SETTINGS, installLinkRouter, LinkContextMenu, type LinkTarget, DialogHost, detectLanguage, effectiveKeys, ErrorBanner, GLOBAL, AppFrame, IconButton, isDesktop, KeybindingProvider, LayoutProvider, type PaletteItem, popOut, popoutView, usePopouts,setFileAssociations, setLanguage, setViewTitle, Sidebar, Spinner, titleWithBadge, ToastProvider, type ApiError, errorMessage, errorOf, useToast, useAsync, useCommand, useCommandPalette, useHashRoute, useHeartbeat, useKeybindings, useRunCommand, useTheme, useTitleBadge,useViewTitle,useZen, useZoom, DesignSwitcher, useDesignLayout, useBridge, CommandBar, ActivityStrip, useDossier, chapterOfScreen, DossierChapterPage } from '@kedalion/ui';
+import { CommandPalette, DEFAULT_LINK_SETTINGS, installLinkRouter, LinkContextMenu, type LinkTarget, DialogHost, detectLanguage, effectiveKeys, ErrorBanner, GLOBAL, AppFrame, IconButton, isDesktop, KeybindingProvider, LayoutProvider, type PaletteItem, popOut, popoutView, usePopouts,setFileAssociations, setLanguage, setViewTitle, Sidebar, Spinner, titleWithBadge, ToastProvider, type ApiError, errorMessage, errorOf, useToast, useAsync, useCommand, useCommandPalette, useHashRoute, useHeartbeat, useKeybindings, useRunCommand, useTheme, useTitleBadge,useViewTitle,useZen, useZoom, DesignSwitcher, useDesignLayout, useBridge, CommandBar, ActivityStrip } from '@kedalion/ui';
 import { EditorOptionsContext } from '@kedalion/editor/options';
 import { APP } from '../../app';
 import { api, type Settings } from './api';
@@ -82,7 +82,6 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   useHeartbeat();
   const palette = useCommandPalette();
   const shellBridge = useBridge(settings.layout);
-  const shellDossier = useDossier(settings.layout).active;
 
   const { kind } = useTheme(settings);
   useZoom(settings.zoom);
@@ -251,12 +250,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   const bridge = shellBridge && !inPopout;
   const sidebarNode = inPopout ? undefined : <Sidebar name={APP.name} sections={sections} current={screen} onSelect={goView} footer={footer} popped={popped as ReadonlySet<ScreenId>} poppedHint={t('window.poppedHint')} />;
   const viewProps = { settings, onSave: save, go: go as (id: string) => void };
-  // Dossier: the Requests chapter shows both of its screens on one page; the pane in use is the current screen.
-  const chapter = shellDossier && !inPopout ? chapterOfScreen(screen) : undefined;
-  const pair = chapter?.id === 'requests' ? chapter.screens.filter((id) => views.has(id) && !(popped as ReadonlySet<string>).has(id)) : [];
-  const screenNode = pair.length === 2
-    ? <DossierChapterPage chapter="requests" current={screen} onFocusPane={(id) => goView(id as ScreenId)} panes={pair.map((id) => ({ id, label: views.label(id as ScreenId), node: views.render(id, viewProps) }))} />
-    : views.render(screen, viewProps);
+  const screenNode = views.render(screen, viewProps);
   const mainNode = (
     <main className="main">
       <div className="main-view" data-link-scope={`view:${screen}`} hidden={!!overlay}>{screenNode}</div>

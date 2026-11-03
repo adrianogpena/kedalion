@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { DiffMode, DiffViewHandle } from '@kedalion/editor';
 import type { GitFile, GitRepoInfo, GitStatus } from '@kedalion/server-core/protocol';
-import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLink, useViewRequest, useDossier, useDossierFollow } from '@kedalion/ui';
-import { DossierGitPage } from './git/DossierGitPage';
+import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLink, useViewRequest } from '@kedalion/ui';
 import { type GitProject as Project, gitApi as api } from './client';
 import { gitCommands } from './commands';
 import { t } from './i18n';
@@ -177,13 +176,6 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
     setClosedFolders(new Set());
     void refresh();
   };
-
-  const dossier = useDossier().active;
-  // Dossier layout: the screen follows the shared project, and a pick here becomes it.
-  useDossierFollow(root, projects?.map((p) => p.id), (id) => {
-    const target = projects?.find((p) => p.id === id);
-    if (target) pick(target);
-  });
 
   // A commit sent by another screen (Agents): switch to its project, open History and reveal it.
   const { request: pendingCommit, take: takeCommit } = useViewRequest<GitCommitRequest>('git');
@@ -402,7 +394,7 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
         </div>
       </div>
   );
-  /** The History panel; the Dossier page keeps it open as its main column (`main`). */
+  /** The History panel. */
   const historyPanel = (main: boolean) => (
       <HistoryPanel
         root={info?.repo ? root : undefined}
@@ -436,8 +428,6 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
         )}
       </div>
   );
-  // Dossier layout: the project's history page (commit list, diff, state sidebar); the spine picks the project.
-  if (dossier) return <DossierGitPage history={historyPanel(true)} diff={diffPane} state={<>{errorBanner}{branchLine}{changes}</>} actions={actions} />;
 
   const screen = (
     <Explorer
