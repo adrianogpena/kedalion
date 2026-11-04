@@ -716,7 +716,10 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
           const id = url?.searchParams.get('sessionId') ?? '';
           for (const a of accounts()) {
             const file = findSessionFile(a.dir, id);
-            if (file) return { steps: readTrace(file) };
+            if (file) {
+              let windows: Map<string, number> | undefined;
+              return { steps: readTrace(file, (m) => (windows ??= usageReader.read(accounts(), undefined).windows).get(m)) };
+            }
           }
           return { steps: [] };
         },

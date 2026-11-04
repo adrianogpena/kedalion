@@ -334,10 +334,52 @@ export type AgentsFrame =
 
 /** One step of a session trace (user prompt, assistant reply or tool call with its result). */
 export interface AgentTraceStep {
-  kind: 'user' | 'assistant' | 'tool';
+  kind: 'user' | 'assistant' | 'tool' | 'thinking';
   label: string;
   detail: string;
+  /** User step that the person did not type: an expanded skill, a subagent hand-back, a background-task notice or a system reminder. */
+  source?: 'skill' | 'agent' | 'task' | 'system';
   error?: boolean;
+  /** Time of the transcript entry, ms since epoch. */
+  ts?: number;
+  /** Tool: call to result. Assistant / thinking: the wait since the previous entry. */
+  durationMs?: number;
+  /** Tool name, e.g. `Bash`. */
+  tool?: string;
+  toolUseId?: string;
+  /** Tool call with no result yet. */
+  pending?: boolean;
+  /** File a Read / Edit / Write touched. */
+  file?: string;
+  /** Edit / Write / MultiEdit changes of `file`. */
+  edits?: AgentTraceEdit[];
+  /** Bash command. */
+  command?: string;
+  /** Token usage of the assistant message (on its first step only). */
+  tokens?: AgentTraceTokens;
+  /** Context tokens the request carried (input + cache read + cache write). */
+  context?: number;
+  /** `context` as a percent of the model's window (the statusLine window of the model, else 200k, 1M above that). */
+  contextPercent?: number;
+  model?: string;
+  /** Id of the assistant message (one request) the step came from; parallel tool calls share it and only the first carries `tokens`. */
+  messageId?: string;
+  /** Length of the tool result text; about a quarter of it is the tokens it adds to the next request. */
+  resultChars?: number;
+  /** Written by a subagent. */
+  sidechain?: boolean;
+}
+
+export interface AgentTraceEdit {
+  old: string;
+  new: string;
+}
+
+export interface AgentTraceTokens {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
 }
 
 export type AgentSkillState = 'on' | 'name-only' | 'user-invocable-only' | 'off';

@@ -34,6 +34,8 @@ export interface ProjectWorkspaceProps {
 interface AgentView {
   sessionId: string;
   terminal?: string;
+  /** "Show on session" request from the Trajectory (see `StepFocus`). */
+  focus?: PanelParams;
   /** Changes when another session is shown, so the panel remounts; a `/clear` follow keeps it. */
   nonce: number;
 }
@@ -73,7 +75,8 @@ export function ProjectWorkspace({ project, hidden, register, onFocusedAgent }: 
       const sessionId = typeof params.sessionId === 'string' ? params.sessionId : '';
       const terminal = typeof params.terminal === 'string' ? params.terminal : undefined;
       if (sessionId) {
-        setAgent((cur) => (cur?.sessionId === sessionId ? { ...cur, ...(terminal ? { terminal } : {}) } : { sessionId, terminal, nonce: ++nonce.current }));
+        const focus = params.focus && typeof params.focus === 'object' ? (params.focus as PanelParams) : undefined;
+        setAgent((cur) => (cur?.sessionId === sessionId ? { ...cur, ...(terminal ? { terminal } : {}), focus } : { sessionId, terminal, focus, nonce: ++nonce.current }));
         setTools([]);
       }
       return kind;
@@ -165,7 +168,7 @@ export function ProjectWorkspace({ project, hidden, register, onFocusedAgent }: 
       <div className="agents-dock-view" hidden={tool !== undefined}>
         <PanelBoundary>
           {agent && agentMod ? (
-            <agentMod.Panel key={agent.nonce} {...panelProps('agent', { sessionId: agent.sessionId, terminal: agent.terminal }, !tool, updateAgent)} />
+            <agentMod.Panel key={agent.nonce} {...panelProps('agent', { sessionId: agent.sessionId, terminal: agent.terminal, focus: agent.focus }, !tool, updateAgent)} />
           ) : (
             <EmptyCard onNewSession={() => host.newSession(project)} />
           )}
@@ -190,14 +193,14 @@ export function ProjectWorkspace({ project, hidden, register, onFocusedAgent }: 
             const isFolded = folded.includes(kind);
             const toggleLabel = isFolded ? t('agents.section.expand') : t('agents.section.collapse');
             return (
-              <section key={kind} className={`agents-dock-side-item${isFolded ? ' collapsed' : ''}`} onContextMenu={(e) => { e.preventDefault(); setSideMenu({ at: { x: e.clientX, y: e.clientY }, items: [
+              <section key={kind} className={`agents-dock-side-item${isFolded ? ' collapsed' : ''}`}>
+                <div className="agents-section-head agents-dock-side-head" onContextMenu={(e) => { e.preventDefault(); setSideMenu({ at: { x: e.clientX, y: e.clientY }, items: [
                 { id: 'moveUp', label: t('agents.tree.moveUp'), disabled: at === 0, run: () => moveInSide(kind, at - 1) },
                 { id: 'moveDown', label: t('agents.tree.moveDown'), disabled: at === side.length - 1, run: () => moveInSide(kind, at + 1) },
                 { id: 'toLeft', label: t('agents.section.toLeft'), run: () => moveToLeft(kind) },
-              ] }); }}>
-                <div className="agents-section-head agents-dock-side-head"><button type="button" className="agents-section-toggle" aria-expanded={!isFolded} title={toggleLabel} onClick={() => toggleFolded(kind)}><span className="agents-section-chevron" aria-hidden="true"><Icon name="chevron" size={14} /></span><span className="agents-label">{mod ? t(mod.titleKey) : kind}</span></button><span className="agents-section-actions"><SectionButton icon="close" label={t('agents.section.hide')} onClick={() => setSide((cur) => cur.filter((k) => k !== kind))} /></span></div>
+              ] }); }}><button type="button" className="agents-section-toggle" aria-expanded={!isFolded} title={toggleLabel} onClick={() => toggleFolded(kind)}><span className="agents-section-chevron" aria-hidden="true"><Icon name="chevron" size={14} /></span><span className="agents-label">{mod ? t(mod.titleKey) : kind}</span></button><span className="agents-section-actions"><SectionButton icon="close" label={t('agents.section.hide')} onClick={() => setSide((cur) => cur.filter((k) => k !== kind))} /></span></div>
                 <div className="agents-dock-side-body" hidden={isFolded}>
-                  <PanelBoundary>{mod ? <mod.Panel {...panelProps(kind, {}, !isFolded, () => undefined)} /> : <MissingPanel kind={kind} />}</PanelBoundary>
+                  <PanelBoundary>{mod ? <mod.Panel {...panelProps(kind, { side: true }, !isFolded, () => undefined)} /> : <MissingPanel kind={kind} />}</PanelBoundary>
                 </div>
               </section>
             );

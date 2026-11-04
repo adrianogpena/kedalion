@@ -2,7 +2,8 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import { MarkdownView } from '@kedalion/editor';
 import type { ChatEvent } from '../../chat-protocol.ts';
 import { t } from '../../i18n';
-import { toolSummary, transcriptItems, type ToolResult, type TranscriptItem } from './chat-model';
+import type { StepFocus } from '../trajectory/model';
+import { focusIndex, toolSummary, transcriptItems, type ToolResult, type TranscriptItem } from './chat-model';
 
 function ResultBody({ result }: { result: ToolResult }) {
   return (
@@ -59,15 +60,24 @@ function EventRow({ event }: { event: Extract<TranscriptItem, { kind: 'event' }>
 }
 
 /** The chat transcript: history then live events. Tool calls collapse; thinking is not shown. */
-export function Transcript({ events }: { events: ChatEvent[] }) {
+export function Transcript({ events, focus }: { events: ChatEvent[]; focus?: StepFocus }) {
   const items = useMemo(() => transcriptItems(events), [events]);
   const ref = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  const done = useRef<number>();
+  const at = useMemo(() => focusIndex(items, focus), [items, focus]);
 
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [items]);
+    if (!el) return;
+    if (focus && at >= 0 && done.current !== focus.at) {
+      done.current = focus.at;
+      pinned.current = false;
+      el.querySelector<HTMLElement>(`[data-item="${at}"]`)?.scrollIntoView({ block: 'center' });
+      return;
+    }
+    if (pinned.current) el.scrollTop = el.scrollHeight;
+  }, [items, focus, at]);
 
   return (
     <div
@@ -81,16 +91,18 @@ export function Transcript({ events }: { events: ChatEvent[] }) {
       }}
     >
       {items.length === 0 && <p className="agents-empty chat-empty">{t('agents.chat.empty')}</p>}
-      {items.map((item, i) =>
-        item.kind === 'tool' ? <ToolCall key={item.use.id} item={item} />
-        : item.kind === 'orphan' ? (
-          <details key={`r${i}`} className={`chat-tool ${item.result.isError ? 'error' : 'ok'}`}>
-            <summary><span className="chat-tool-name">{t('agents.chat.tool.result')}</span></summary>
-            <ResultBody result={item.result} />
-          </details>
-        )
-        : <EventRow key={i} event={item.event} />,
-      )}
+      {items.map((item, i) => (
+        <div key={item.kind === 'tool' ? item.use.id : item.kind === 'orphan' ? `r${i}` : i} data-item={i} className={i === at && focus ? 'chat-item chat-focus' : 'chat-item'}>
+          {item.kind === 'tool' ? <ToolCall item={item} />
+          : item.kind === 'orphan' ? (
+            <details className={`chat-tool ${item.result.isError ? 'error' : 'ok'}`}>
+              <summary><span className="chat-tool-name">{t('agents.chat.tool.result')}</span></summary>
+              <ResultBody result={item.result} />
+            </details>
+          )
+          : <EventRow event={item.event} />}
+        </div>
+      ))}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { ExternalPane } from '../../ExternalPane';
 import { ResumeBar } from '../../ResumeBar';
 import { SessionHead } from '../../SessionHead';
 import { StoppedPane } from '../../StoppedPane';
+import { readFocus } from '../../trajectory/model';
 import { useAgentsHost } from '../../workspace/host';
 import type { PanelModule, PanelProps } from '../../workspace/types';
 import './style.css';
@@ -22,6 +23,7 @@ function AgentPanel({ params, api, update }: PanelProps) {
   const dialogs = useDialogs();
   const sessionId = text(params.sessionId) ?? '';
   const hint = text(params.terminal);
+  const focus = readFocus(params.focus);
   const session = host.sessions.find((s) => s.id === sessionId);
   const [terminal, setTerminal] = useState<string | undefined>(hint);
   const [resolved, setResolved] = useState(hint !== undefined);
@@ -158,12 +160,13 @@ function AgentPanel({ params, api, update }: PanelProps) {
         )}
         {inExternal && (
           <div className="agents-pane">
-            <ExternalPane sessionId={session.id} updatedAt={session.updatedAt} external={session.external === true} hanging={session.hanging === true} onTakeOver={() => void takeOver()} />
+            <ExternalPane focus={focus} sessionId={session.id} updatedAt={session.updatedAt} external={session.external === true} hanging={session.hanging === true} onTakeOver={() => void takeOver()} />
           </div>
         )}
         {inPreview && !terminal && (
           <div className="agents-pane">
             <StoppedPane
+              focus={focus}
               session={session}
               branch={host.git[session.cwd]?.branch}
               onStart={() => void startPreview()}

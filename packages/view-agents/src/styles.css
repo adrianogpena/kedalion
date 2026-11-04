@@ -163,6 +163,9 @@
 
 /* Chat mode */
 .chat-transcript { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px max(16px, calc((100% - 860px) / 2)); }
+.chat-item { display: flex; flex-direction: column; }
+.chat-focus { border-radius: var(--radius-xs); box-shadow: 0 0 0 2px var(--accent); animation: chat-focus-fade 2.4s ease-out forwards; }
+@keyframes chat-focus-fade { 0%, 60% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 .chat-empty { margin: auto; }
 .chat-user { align-self: flex-end; max-width: 80%; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-assistant { min-width: 0; overflow-wrap: anywhere; }
@@ -281,8 +284,11 @@
 .agents-traj-step:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
 .agents-traj-kind { flex-shrink: 0; color: var(--text-3); }
 .agents-traj-user .agents-traj-kind { color: var(--accent); }
+.agents-traj-assistant .agents-traj-kind { color: var(--ok); }
+.agents-traj-src-skill .agents-traj-kind { color: var(--warn); }
+.agents-traj-src-agent .agents-traj-kind, .agents-traj-src-task .agents-traj-kind { color: var(--text-2); }
+.agents-traj-src-system .agents-traj-kind { color: var(--text-3); }
 .agents-traj-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agents-traj-mark { flex-shrink: 0; color: var(--err); }
 .agents-traj-error .agents-traj-label { color: var(--err); }
 .agents-traj-detail { flex: 1; min-width: 0; margin: 0; padding: var(--space-4) var(--space-6); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text); background: var(--bg); border-radius: var(--radius-xs); }
 .agents-traj-detail:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }

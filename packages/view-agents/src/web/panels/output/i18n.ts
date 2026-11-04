@@ -19,6 +19,7 @@ export const en = {
   'panel.output.noMatch': 'No line matches the filter.',
   'panel.output.truncated': 'Showing last 200 KB',
   'panel.output.exit': 'exit {code}',
+  'panel.output.lines': '{n} lines',
   'panel.output.liveHint': 'Install the live output hook to see foreground output while it runs.',
   'panel.output.copySnippet': 'Copy snippet',
 };
@@ -42,6 +43,7 @@ export const ptBR: Messages<typeof en> = {
   'panel.output.noMatch': 'Nenhuma linha corresponde ao filtro.',
   'panel.output.truncated': 'Mostrando os últimos 200 KB',
   'panel.output.exit': 'saída {code}',
+  'panel.output.lines': '{n} linhas',
   'panel.output.liveHint': 'Instale o hook de saída ao vivo para ver a saída em primeiro plano durante a execução.',
   'panel.output.copySnippet': 'Copiar trecho',
 };

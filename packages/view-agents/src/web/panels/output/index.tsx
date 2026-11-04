@@ -70,8 +70,8 @@ const fmtElapsed = (ms: number): string => {
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 };
 
-function OutputBody({ project, sessionId, visible = true }: { project: string | undefined; sessionId?: string; visible?: boolean }) {
-  const [pin, setPin] = useState<string>();
+function OutputBody({ project, sessionId, visible = true, initialPin }: { project: string | undefined; sessionId?: string; visible?: boolean; initialPin?: string }) {
+  const [pin, setPin] = useState<string | undefined>(initialPin);
   const [wrap, setWrap] = useState(true);
   const [query, setQuery] = useState('');
   const [cleared, setCleared] = useState<string>();
@@ -83,9 +83,9 @@ function OutputBody({ project, sessionId, visible = true }: { project: string | 
   const stuck = useRef(true);
 
   useEffect(() => {
-    setPin(undefined);
+    setPin(initialPin);
     setCleared(undefined);
-  }, [project, sessionId]);
+  }, [project, sessionId, initialPin]);
 
   const running = run?.status === 'running';
   useEffect(() => {
@@ -136,7 +136,8 @@ function OutputBody({ project, sessionId, visible = true }: { project: string | 
 
   const end = run.endedAt ?? (running ? now : undefined);
   const elapsed = run.startedAt !== undefined && end !== undefined ? fmtElapsed(end - run.startedAt) : undefined;
-  const meta = [elapsed, run.exitCode !== undefined && run.status !== 'running' ? t('panel.output.exit', { code: run.exitCode }) : undefined].filter(Boolean).join(' · ');
+  const lineCount = text ? lines.length : 0;
+  const meta = [elapsed, lineCount > 0 ? t('panel.output.lines', { n: lineCount }) : undefined, run.exitCode !== undefined && run.status !== 'running' ? t('panel.output.exit', { code: run.exitCode }) : undefined].filter(Boolean).join(' · ');
   const label = (r: RunSummary) => `${r.background ? `[${t('panel.output.background')}] ` : ''}${r.command.replace(/\s+/g, ' ').slice(0, 80)}`;
 
   return (
@@ -194,9 +195,9 @@ export const panel: PanelModule = {
   icon: 'terminal',
   placement: 'both',
   single: true,
-  Panel: ({ project, visible, sessionId }: PanelProps) => (
+  Panel: ({ project, visible, sessionId, params }: PanelProps) => (
     <div className="agents-panel-output">
-      <OutputBody project={project} sessionId={sessionId} visible={visible} />
+      <OutputBody project={project} sessionId={sessionId} visible={visible} initialPin={typeof params.toolUseId === 'string' && params.toolUseId ? params.toolUseId : undefined} />
     </div>
   ),
   Section: ({ project, sessionId }: SectionProps) => <OutputBody project={project} sessionId={sessionId} />,

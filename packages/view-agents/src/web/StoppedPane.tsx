@@ -6,11 +6,12 @@ import { Transcript } from './chat/Transcript';
 import { sessionHistory } from './api';
 import { summarize } from './session-summary';
 import { StoppedCard, type StoppedCardProps } from './StoppedCard';
+import type { StepFocus } from './trajectory/model';
 
 const PAGE = 20;
 
 /** A session that is not attached: the stopped-session card, then its read-only transcript (compact by default). */
-export function StoppedPane(props: StoppedCardProps) {
+export function StoppedPane({ focus, ...props }: StoppedCardProps & { focus?: StepFocus }) {
   const { id: sessionId, updatedAt } = props.session;
   const [events, setEvents] = useState<ChatEvent[] | undefined>();
   const [full, setFull] = useState(false);
@@ -24,6 +25,9 @@ export function StoppedPane(props: StoppedCardProps) {
       live = false;
     };
   }, [sessionId, updatedAt]);
+  useEffect(() => {
+    if (focus) setFull(true);
+  }, [focus?.at]);
   const list = useMemo(() => events ?? [], [events]);
   const summary = useMemo(() => summarize(list), [list]);
   return (
@@ -32,7 +36,7 @@ export function StoppedPane(props: StoppedCardProps) {
       <div className="agents-external-bar">
         <button type="button" className="chat-more" title={full ? t('agents.stopped.compact') : t('agents.stopped.showFull')} onClick={() => setFull((f) => !f)}>{full ? t('agents.stopped.compact') : t('agents.stopped.showFull')}</button>
       </div>
-      {full ? <Transcript events={list} /> : <CompactTranscript events={list} limit={limit} onMore={() => setLimit((n) => n + PAGE)} resetKey={sessionId} />}
+      {full ? <Transcript events={list} focus={focus} /> : <CompactTranscript events={list} limit={limit} onMore={() => setLimit((n) => n + PAGE)} resetKey={sessionId} />}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { ChatEvent } from '../../chat-protocol.ts';
+import type { StepFocus } from '../trajectory/model';
 
 /** Adds a live event to the list: `delta`s of one message merge, a `text` replaces its `delta`s, thinking is dropped. */
 export function applyEvent(events: ChatEvent[], ev: ChatEvent): ChatEvent[] {
@@ -51,4 +52,22 @@ export function toolSummary(input: unknown): string {
   }
   const s = JSON.stringify(input) ?? '';
   return s.length > 120 ? s.slice(0, 117) + '...' : s;
+}
+
+/** Position in `items` of the step a trajectory "Show on session" points at; -1 when it is not there. */
+export function focusIndex(items: TranscriptItem[], f: StepFocus | undefined): number {
+  if (!f) return -1;
+  if (f.toolUseId) return items.findIndex((it) => it.kind === 'tool' && it.use.id === f.toolUseId);
+  if (!f.kind || f.text === undefined) return -1;
+  let seen = 0;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i]!;
+    if (it.kind !== 'event') continue;
+    const ev = it.event;
+    const text = f.kind === 'user' && ev.type === 'user' ? ev.text : f.kind === 'assistant' && ev.type === 'text' ? ev.text : undefined;
+    if (text === undefined || text.trim() !== f.text) continue;
+    if (seen === (f.nth ?? 0)) return i;
+    seen++;
+  }
+  return -1;
 }
