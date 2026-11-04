@@ -1,6 +1,5 @@
-import { randomBytes } from 'node:crypto';
 import { defineServerView, type ServerViewContext, socketTickets } from '@kedalion/server-core';
-import { createMcpConfigFile } from './server/mcp/config.ts';
+import { createMcpConfigFile, loadMcpSecret } from './server/mcp/config.ts';
 import { createDebugState } from './server/mcp/debug-state.ts';
 import { MCP_INSTRUCTIONS } from './server/mcp/instructions.ts';
 import { mcpRoutes } from './server/mcp/rpc.ts';
@@ -36,7 +35,7 @@ export function browserServerView(opts: BrowserServerViewOptions) {
   let load: (() => Promise<BrowserServerSettings>) | undefined;
   const service: BrowserService = createBrowserService({ ...opts, settings: () => current });
   const tickets = socketTickets<true>();
-  const secret = randomBytes(24).toString('hex');
+  const secret = loadMcpSecret(opts.dataDir);
   const mcpFile = createMcpConfigFile({ dataDir: opts.dataDir, secret, origin: opts.origin });
   const debug = createDebugState();
   const tools = [...pageTools, ...actTools,...stateTools, ...debugTools, ...stepTools];
