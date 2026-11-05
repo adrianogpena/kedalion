@@ -6,6 +6,13 @@ import { PATHS } from '@kedalion/ui/icons';
 export const DEFAULT_ICON_COLOR = '#4f6bed';
 const SIZE = 96;
 
+let embedded: Record<string, string> = {};
+
+/** Registers PNG badges (default colour) packed into the exe by the build, by icon name; used when `sharp` is not available. */
+export function setEmbeddedToastIcons(icons: Record<string, string>): void {
+  embedded = icons;
+}
+
 export interface IconPngOptions {
   /** Icon name of the original set (`PATHS`); with `svg`, only the cache name. */
   name: string;
@@ -49,6 +56,16 @@ export async function iconPng(opts: IconPngOptions): Promise<string | undefined>
   const tag = opts.svg ? `${opts.name}-${Bun.hash(opts.svg).toString(36)}` : opts.name;
   const file = join(opts.dir, `${tag}-${color.slice(1).toLowerCase()}-${SIZE}.png`);
   if (existsSync(file)) return file;
+  const packed = opts.svg && color.toLowerCase() === DEFAULT_ICON_COLOR ? embedded[opts.name] : undefined;
+  if (packed) {
+    try {
+      await mkdir(opts.dir, { recursive: true });
+      await Bun.write(file, Bun.file(packed));
+      return file;
+    } catch {
+      return packed;
+    }
+  }
   try {
     const sharp = (await import('sharp')).default;
     const png = await sharp(Buffer.from(opts.svg ? badge(svgBody(opts.svg), color, 1.6) : iconBadgeSvg(path!, color)), { density: 144 }).resize(SIZE, SIZE).png().toBuffer();
