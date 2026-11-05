@@ -127,6 +127,7 @@ function parseStore(raw: unknown): TicketStore {
       if (typeof o.notes === 'string' && o.notes) t.notes = str(o.notes, MAX_NOTES);
       if (typeof o.movedAt === 'number') t.movedAt = o.movedAt;
       if (typeof o.autoMovedAt === 'number') t.autoMovedAt = o.autoMovedAt;
+      if (typeof o.jiraMuted === 'string' && o.jiraMuted) t.jiraMuted = str(o.jiraMuted, 200);
       tickets.push(t);
     }
   }
@@ -316,7 +317,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
       const saved = await ticketsStore(ctx.dataDir).update((s) => {
         if (s.tickets.some((t) => t.key === key)) throw invalid('ticket-duplicate', 'The ticket is already on the board.', { key });
         if (s.tickets.length >= MAX_TICKETS) throw invalid('ticket-limit', 'The board is full.');
-        return { ...s, tickets: add(s.tickets, key, status, description, undefined, pcr) };
+        return { ...s, tickets: add(s.tickets, key, status, description, undefined, pcr, config.autoMove !== false) };
       });
       return saved.tickets;
     },
@@ -408,6 +409,15 @@ export const ticketsSource = defineSource<TicketsConfig>({
       const p = payloadOf(payload);
       const autoMove = typeof p.value === 'boolean' ? p.value : null;
       return (await ticketsStore(ctx.dataDir).update((s) => ({ ...s, tickets: update(s.tickets, str(p.id, 100), { autoMove }) }))).tickets;
+    },
+    async 'set-auto-move-all'(payload, _config, ctx) {
+      const autoMove = payloadOf(payload).value === true;
+      return (await ticketsStore(ctx.dataDir).update((s) => ({ ...s, tickets: s.tickets.map((t) => ({ ...t, autoMove })) }))).tickets;
+    },
+    async 'set-jira-muted'(payload, _config, ctx) {
+      const p = payloadOf(payload);
+      const jiraMuted = str(p.value, 200) || undefined;
+      return (await ticketsStore(ctx.dataDir).update((s) => ({ ...s, tickets: update(s.tickets, str(p.id, 100), { jiraMuted }) }))).tickets;
     },
     async remove(payload, _config, ctx) {
       const p = payloadOf(payload);

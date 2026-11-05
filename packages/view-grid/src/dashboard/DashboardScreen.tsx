@@ -8,6 +8,9 @@ import { setDashboardItems } from './items';
 import { fieldsOf, kindSpecs, panelDef, type AnyPanelKind } from '../panel';
 import { addableKinds, PanelCreator } from '../PanelCreator';
 import { PanelHost } from '../PanelHost';
+import { runAction } from '../source';
+import { showTicketsNow } from '../panels/tickets/TicketsPanel';
+import type { Ticket } from '../panels/tickets/model';
 import { activeLayout, itemFromPreset, layoutsOrDefault, MAX_LAYOUTS, MAX_NAME, MAX_PRESETS, newLayoutId, newPresetId, presetFromItem, validDashboardPresets, type DashboardLayouts, type DashboardPreset } from './model';
 import '../grid.css';
 import './dashboard.css';
@@ -269,7 +272,27 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
           fields={fieldsOf(targetKind)}
           editor={targetKind.configEditor}
           value={target.config ?? {}}
-          onSave={(config) => change(items.map((i) => (i.id === target.id ? { ...i, config } : i)))}
+          onSave={(config) => {
+            change(items.map((i) => (i.id === target.id ? { ...i, config } : i)));
+            if (target.kind !== 'tickets') return;
+            const before = target.config?.autoMove !== false;
+            const after = config.autoMove !== false;
+            if (before === after) return;
+            void (async () => {
+              const ok = await confirm({
+                title: tKey('dash.tickets.autoMove.allTitle'),
+                body: tKey(after ? 'dash.tickets.autoMove.allBodyOn' : 'dash.tickets.autoMove.allBodyOff'),
+                okLabel: tKey('dash.tickets.autoMove.allOk'),
+              });
+              if (!ok) return;
+              try {
+                const tickets = await runAction('tickets', 'set-auto-move-all', config, { value: after });
+                showTicketsNow(tickets as Ticket[]);
+              } catch {
+                // the board keeps the per-ticket values; the next load shows them
+              }
+            })();
+          }}
           onClose={() => setConfiguring(null)}
         />
       )}

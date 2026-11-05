@@ -17,6 +17,8 @@ export interface Ticket {
   order: number;
   movedAt?: number;
   autoMovedAt?: number;
+  /** The Jira status whose drift flag was dismissed; the flag returns when Jira changes. */
+  jiraMuted?: string;
 }
 
 /** The digits of a PCR input (`163`, `#163`, `PCR#163`); empty when there are none. */
@@ -64,9 +66,9 @@ const sorted = (tickets: Ticket[]) => [...tickets].sort((a, b) => a.order - b.or
 
 const renumber = (tickets: Ticket[]): Ticket[] => tickets.map((t, i) => (t.order === i ? t : { ...t, order: i }));
 
-export function add(tickets: Ticket[], key: string, status: string, description = '', id: string = crypto.randomUUID(), pcr = ''): Ticket[] {
+export function add(tickets: Ticket[], key: string, status: string, description = '', id: string = crypto.randomUUID(), pcr = '', autoMove: boolean | null = null): Ticket[] {
   const order = tickets.reduce((n, t) => Math.max(n, t.order + 1), 0);
-  return [...tickets, { id, key, description, status, autoMove: null, order, ...(pcr ? { pcr } : {}) }];
+  return [...tickets, { id, key, description, status, autoMove, order, ...(pcr ? { pcr } : {}) }];
 }
 
 /** Moves a ticket to `status` at position `index` among that column's other tickets. */
@@ -84,7 +86,7 @@ export function move(tickets: Ticket[], id: string, status: string, index: numbe
   return renumber(rest);
 }
 
-export function update(tickets: Ticket[], id: string, patch: Partial<Pick<Ticket, 'description' | 'autoMove' | 'podLinks' | 'aliases' | 'pcr' | 'notes'>>): Ticket[] {
+export function update(tickets: Ticket[], id: string, patch: Partial<Pick<Ticket, 'description' | 'autoMove' | 'podLinks' | 'aliases' | 'pcr' | 'notes' | 'jiraMuted'>>): Ticket[] {
   return tickets.map((t) => (t.id === id ? { ...t, ...patch } : t));
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useState, type DragEvent } from 'react';
 import { tKey } from '../../i18n';
 import { type PanelSide } from '../../panel';
 import { runAction } from '../../source';
+import { driftOf, parseJiraMap } from './drift';
 import { columns, type Ticket } from './model';
 import { TicketCard } from './TicketCard';
 import { boardTicketSide } from './TicketSide';
@@ -12,6 +13,7 @@ import './tickets.css';
 export interface TicketsConfig {
   statuses: string;
   keyPattern: string;
+  jiraMap?: string;
   jiraBaseUrl: string;
   [key: string]: unknown;
 }
@@ -65,6 +67,8 @@ export function TicketsPanel({ id, side, config, data, refresh }: Props) {
 
   const tickets = local ?? data.tickets;
   const cols = columns(tickets, data.statuses);
+  const jiraMap = parseJiraMap(config.jiraMap ?? '');
+  const driftFor = (t: Ticket) => driftOf(t, data.jira?.[t.key]?.status, data.statuses, jiraMap);
   const content = (t: Ticket) => boardTicketSide({ instanceId: id, ticket: t, data, config, side, onChanged: refresh });
   const toggle = (t: Ticket) => {
     if (!side) return;
@@ -99,16 +103,28 @@ export function TicketsPanel({ id, side, config, data, refresh }: Props) {
             <h4 className="tickets-col-head">
               <span>{col.status}</span>
               <span className="tickets-count">{col.tickets.length}</span>
+              {col.tickets.filter((t) => driftFor(t)).length > 0 && (
+                <span className="tickets-drift-count" title={tKey('dash.tickets.drift.count', { n: col.tickets.filter((t) => driftFor(t)).length })}>
+                  {col.tickets.filter((t) => driftFor(t)).length}
+                </span>
+              )}
             </h4>
             <div className="tickets-cards">
               {col.tickets.length === 0 && <p className="kit-empty">{tKey('dash.tickets.empty')}</p>}
-              {col.tickets.map((t) => (
+              {col.tickets.map((t) => {
+                const drift = driftFor(t);
+                return (
                 <TicketCard
                   key={t.id}
                   ticket={t}
+                  jiraStatus={data.jira?.[t.key]?.status}
+                  drift={drift}
+                  onMoveToExpected={() => drift && void act('move', { id: t.id, status: drift.expected, index: Number.MAX_SAFE_INTEGER })}
+                  onMuteDrift={() => void act('set-jira-muted', { id: t.id, value: data.jira?.[t.key]?.status ?? '' })}
                   selected={!!side && side.isOpen(content(t).id)}
                   jiraBaseUrl={config.jiraBaseUrl}
                   onDelete={() => void act('remove', { id: t.id })}
+                  autoMoveDefault={config.autoMove !== false}
                   onAutoMove={(value) => void act('set-auto-move', { id: t.id, value })}
                   onDetails={() => toggle(t)}
                   onDragStart={(e) => {
@@ -116,7 +132,8 @@ export function TicketsPanel({ id, side, config, data, refresh }: Props) {
                     e.dataTransfer.effectAllowed = 'move';
                   }}
                 />
-              ))}
+                );
+              })}
             </div>
           </section>
         ))}
