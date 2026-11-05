@@ -1,6 +1,0 @@
-.agents-panel-json { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 6px; padding: 8px; }
-.agents-json-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.agents-json-status { opacity: 0.8; }
-.agents-json-status.error { color: var(--danger, #e5534b); opacity: 1; }
-.agents-json-input { flex: 1; min-height: 80px; resize: none; font-family: var(--font-mono, monospace); background: var(--surface, transparent); color: inherit; border: 1px solid rgba(128, 128, 128, 0.35); border-radius: 4px; padding: 6px; }
-.agents-json-tree { flex: 1; min-height: 0; overflow: auto; }

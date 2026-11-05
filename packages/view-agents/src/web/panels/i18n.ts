@@ -6,7 +6,6 @@ import * as usage from './usage/i18n';
 import * as run from './run/i18n';
 import * as scratchpad from './scratchpad/i18n';
 import * as code from './code/i18n';
-import * as json from './json/i18n';
 import * as task from './task/i18n';
 import * as notes from './notes/i18n';
 import * as trajectory from './trajectory/i18n';
@@ -23,7 +22,6 @@ export const panelsEn = {
   ...run.en,
   ...scratchpad.en,
   ...code.en,
-  ...json.en,
   ...task.en,
   ...notes.en,
   ...trajectory.en,
@@ -40,7 +38,6 @@ export const panelsPtBR = {
   ...run.ptBR,
   ...scratchpad.ptBR,
   ...code.ptBR,
-  ...json.ptBR,
   ...task.ptBR,
   ...notes.ptBR,
   ...trajectory.ptBR,

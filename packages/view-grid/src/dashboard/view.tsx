@@ -11,6 +11,7 @@ import { en as meetingEn, ptBR as meetingPtBR } from '../panels/meeting/i18n';
 import { en as dailyEn, ptBR as dailyPtBR } from '../panels/daily/i18n';
 import { en as spotifyEn, ptBR as spotifyPtBR } from '../panels/spotify/i18n';
 import { en as spellEn, ptBR as spellPtBR } from '../panels/spellcheck/i18n';
+import { en as fmtEn, ptBR as fmtPtBR } from '../panels/formatters/i18n';
 import { en as podsEn, ptBR as podsPtBR } from '../panels/pods/i18n';
 import { en as ticketsEn, ptBR as ticketsPtBR } from '../panels/tickets/i18n';
 import { en as timesheetEn, ptBR as timesheetPtBR } from '../panels/timesheet/i18n';
@@ -35,8 +36,8 @@ export function dashboardView({ group, order, panels }: DashboardViewOptions) {
     ),
     commands: dashboardCommands,
     messages: {
-      en: { ...gridEn, ...en, ...githubEn, ...jiraEn, ...calendarEn, ...feedsEn, ...miscEn, ...ticketsEn, ...podsEn, ...containersEn, ...timesheetEn, ...meetingEn, ...dailyEn, ...spotifyEn, ...spellEn },
-      'pt-BR': { ...gridPtBR, ...ptBR, ...githubPtBR, ...jiraPtBR, ...calendarPtBR, ...feedsPtBR, ...miscPtBR, ...ticketsPtBR, ...podsPtBR, ...containersPtBR, ...timesheetPtBR, ...meetingPtBR, ...dailyPtBR, ...spotifyPtBR, ...spellPtBR },
+      en: { ...gridEn, ...en, ...githubEn, ...jiraEn, ...calendarEn, ...feedsEn, ...miscEn, ...ticketsEn, ...podsEn, ...containersEn, ...timesheetEn, ...meetingEn, ...dailyEn, ...spotifyEn, ...spellEn, ...fmtEn },
+      'pt-BR': { ...gridPtBR, ...ptBR, ...githubPtBR, ...jiraPtBR, ...calendarPtBR, ...feedsPtBR, ...miscPtBR, ...ticketsPtBR, ...podsPtBR, ...containersPtBR, ...timesheetPtBR, ...meetingPtBR, ...dailyPtBR, ...spotifyPtBR, ...spellPtBR, ...fmtPtBR },
     },
   });
 }

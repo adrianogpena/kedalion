@@ -38,14 +38,14 @@ describe('sidebar sections', () => {
   });
 
   test('docked tools: dock, order, undock, old state without tools', () => {
-    const a = dockTool(DEFAULT_SECTIONS, 'json');
-    expect(a.tools).toEqual(['json']);
-    expect(sectionOrder(a).at(-1)).toBe('tool:json');
-    expect(hideSection(moveSection(a, 'tool:json', 0), 'tool:json')).toEqual({ ...DEFAULT_SECTIONS, order: sectionOrder(DEFAULT_SECTIONS) });
+    const a = dockTool(DEFAULT_SECTIONS, 'notes');
+    expect(a.tools).toEqual(['notes']);
+    expect(sectionOrder(a).at(-1)).toBe('tool:notes');
+    expect(hideSection(moveSection(a, 'tool:notes', 0), 'tool:notes')).toEqual({ ...DEFAULT_SECTIONS, order: sectionOrder(DEFAULT_SECTIONS) });
     expect(dockTool(DEFAULT_SECTIONS, 'changes').hidden).toEqual([]);
     expect(normalizeSections({ collapsed: [], hidden: [] }).tools).toEqual([]);
-    expect(normalizeSections({ tools: ['json', 'bogus'], order: ['tool:json', 'tool:task'] }).order?.[0]).toBe('tool:json');
-    expect(normalizeSections({ tools: ['json'], order: ['tool:task'] }).order).not.toContain('tool:task');
+    expect(normalizeSections({ tools: ['notes', 'bogus'], order: ['tool:notes', 'tool:task'] }).order?.[0]).toBe('tool:notes');
+    expect(normalizeSections({ tools: ['notes'], order: ['tool:task'] }).order).not.toContain('tool:task');
   });
 
   test('save and load round trip; a bad stored value falls back to the defaults', () => {

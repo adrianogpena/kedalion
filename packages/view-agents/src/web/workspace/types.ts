@@ -3,7 +3,7 @@ import type { IconName } from '@kedalion/ui';
 import type { AgentsMessageKey } from '../../i18n';
 
 /** Every tool of the Agents view; each has a folder `panels/<kind>/` exporting a `PanelModule` named `panel`. */
-export const PANEL_KINDS = ['agent', 'changes', 'diff', 'review', 'usage', 'run', 'scratchpad', 'code', 'json', 'task', 'notes', 'trajectory', 'output', 'workflows'] as const;
+export const PANEL_KINDS = ['agent', 'changes', 'diff', 'review', 'usage', 'run', 'scratchpad', 'code', 'task', 'notes', 'trajectory', 'output', 'workflows'] as const;
 export type PanelKind = (typeof PANEL_KINDS)[number];
 
 /** The params of a panel (agent session id and terminal hint; diff path; tool params). */

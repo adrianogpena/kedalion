@@ -481,11 +481,6 @@ Only `panels/run/index.tsx` uses `Button`. No file in scope uses `IconButton` or
 | 106 | Reload (stale banner) | raw `.agents-empty-btn` | NOT, SHOULD migrate | `Button` primary xs icon=rotate-ccw |
 | 109 | Dismiss (stale banner) | raw `.agents-empty-btn` | NOT, SHOULD migrate | `Button` default xs |
 
-## panels/json/index.tsx
-| line | control | built with | verdict | why/deviation |
-|---|---|---|---|---|
-| 25-41 | Format, Minify, Validate, Copy (4 siblings) | raw `.agents-empty-btn` | NOT, SHOULD migrate | `Button` sm default in a toolbar (Copy last, icon=copy); empty-btn is primary accent, 4 primaries in a row, `margin-top:8px`, no disabled |
-
 ## panels/output/index.tsx
 | line | control | built with | verdict | why/deviation |
 |---|---|---|---|---|
