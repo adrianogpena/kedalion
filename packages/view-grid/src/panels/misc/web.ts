@@ -6,7 +6,9 @@ import type { HealthResult } from './health';
 import { JsonMetric } from './JsonMetric';
 import { Links } from './Links';
 import { Notes } from './Notes';
+import { NotificationLog } from './NotificationLog';
 import type { JsonMetricData } from './server';
+import type { NotificationLogEntry } from '../../server';
 import { System } from './SystemTiles';
 import type { SystemStats } from './system';
 import { UrlHealth } from './UrlHealth';
@@ -80,5 +82,19 @@ const systemPanel = definePanel<{ show: string[]; layout: string }, SystemStats>
   render: ({ config, data }) => createElement(System, { data, config }),
 });
 
+const notificationLogPanel = definePanel<{ max: number }, NotificationLogEntry[]>({
+  kind: 'notification-log',
+  title: 'dash.misc.notifLog',
+  description: 'dash.misc.notifLog.description',
+  icon: 'bell',
+  category: CATEGORY,
+  size: { w: 10, h: 14, minW: 4, minH: 6 },
+  config: { fields: fields['notification-log']! },
+  allowMultiple: false,
+  load: (config, ctx) => fetchSource<NotificationLogEntry[]>('notification-log', config, ctx.signal),
+  refreshMs: 5_000,
+  render: ({ data }) => createElement(NotificationLog, { entries: data }),
+});
+
 /** The misc panel kinds. */
-export const panels: AnyPanelKind[] = [linksPanel, notesPanel, urlHealthPanel, jsonMetricPanel, systemPanel];
+export const panels: AnyPanelKind[] = [linksPanel, notesPanel, urlHealthPanel, jsonMetricPanel, systemPanel, notificationLogPanel];

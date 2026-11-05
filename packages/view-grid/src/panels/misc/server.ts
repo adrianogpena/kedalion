@@ -1,6 +1,6 @@
 import type { PanelConfig } from '@kedalion/ui/grid';
 import { notifyChanges, notifyScope } from '../../notify-changes';
-import type { DataSource, GridPanelSpec } from '../../server';
+import type { DataSource, GridPanelSpec, NotificationLogEntry } from '../../server';
 import { fields } from './fields';
 import { checkUrl, fetchJson, type HealthResult } from './health';
 import { asNumber, lookupPath } from './jsonpath';
@@ -14,6 +14,7 @@ export const specs: GridPanelSpec[] = [
   { kind: 'url-health', fields: fields['url-health'], allowMultiple: true },
   { kind: 'json-metric', fields: fields['json-metric'], allowMultiple: true },
   { kind: 'system', fields: fields.system, allowMultiple: false },
+  { kind: 'notification-log', fields: fields['notification-log'], allowMultiple: false },
 ];
 
 export interface JsonMetricData {
@@ -68,5 +69,11 @@ const system: DataSource<PanelConfig> = {
   fetch: (_config, ctx): Promise<SystemStats> => systemStats(ctx.dataDir),
 };
 
+const notificationLog: DataSource<PanelConfig> = {
+  id: 'notification-log',
+  fields: fields['notification-log']!,
+  fetch: (config, ctx): NotificationLogEntry[] => (ctx.notificationLog?.() ?? []).slice(0, Number(config.max) || 50),
+};
+
 /** Server data sources of the misc panels (no React). */
-export const sources: DataSource<any>[] = [urlHealth, jsonMetric, system];
+export const sources: DataSource<any>[] = [urlHealth, jsonMetric, system, notificationLog];

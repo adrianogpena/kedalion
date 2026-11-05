@@ -37,6 +37,7 @@ export const fields: Record<string, readonly PanelField[]> = {
     { key: 'refreshMin', kind: 'enum', label: 'dash.misc.refreshMin', default: 5, values: [1, 5, 15] },
     notifyField(false),
   ],
+  'notification-log': [{ key: 'max', kind: 'enum', label: 'dash.misc.notifLog.max', default: 50, values: [20, 50, 100, 200] }],
   system: [
     { key: 'layout', kind: 'enum', label: 'dash.misc.system.layout', default: 'tiles', values: ['tiles', 'bars'], optionLabel: 'dash.misc.system.layout' },
     { key: 'show', kind: 'multi', label: 'dash.misc.system.show', default: ['cpu', 'memory', 'disk', 'uptime'], values: SYSTEM_COLUMNS, optionLabel: 'dash.misc.system.show' },

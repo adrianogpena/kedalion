@@ -22,6 +22,8 @@ export interface SourceContext {
   connection(id: string, type: ConnectionType): Promise<ResolvedConnection>;
   /** An OS toast (absent when the app wires no notifications). */
   notify?(n: { title?: string; body: string }): Promise<void>;
+  /** The last notifications the app sent, newest first (absent when the app wires no notifications). */
+  notificationLog?(): NotificationLogEntry[];
   /** The origin the request reached the server at, e.g. `http://127.0.0.1:4123` (for OAuth redirect URIs). */
   origin?: string;
   /** The folders of the Explorer projects. */
@@ -31,6 +33,18 @@ export interface SourceContext {
 /** The part of the platform `Notifications` the grid needs (structural, so view-grid does not depend on platform). */
 export interface GridNotifications {
   for(view: string | { icon: string }): (n: { title?: string; body: string; path?: string; launch?: string }) => Promise<void>;
+  history?(): NotificationLogEntry[];
+}
+
+/** One row of the notification log (structural twin of platform `NotificationEntry`). */
+export interface NotificationLogEntry {
+  id: number;
+  time: number;
+  view: string;
+  title: string;
+  body: string;
+  path?: string;
+  muted: boolean;
 }
 
 export interface DataSource<C extends PanelConfig = PanelConfig> {
@@ -96,10 +110,11 @@ export function sourceRoutes(sources: readonly DataSource<any>[], dataDir = '', 
   const routes: Routes = {};
   const notifier = notifications?.for('dashboard');
   const notify = notifier ? (n: { title?: string; body: string }) => notifier({ ...n, path: 'dashboard' }) : undefined;
+  const notificationLog = notifications?.history ? () => notifications.history!() : undefined;
   for (const source of sources) {
     routes[sourceRoute(source.id)] = async ({ json, req }: RouteContext) => {
       const body = await json<{ config?: unknown }>();
-      return source.fetch(validConfig(source.fields, body.config), { dataDir, signal: req.signal, connection, notify, origin: new URL(req.url).origin, projectRoots });
+      return source.fetch(validConfig(source.fields, body.config), { dataDir, signal: req.signal, connection, notify, notificationLog, origin: new URL(req.url).origin, projectRoots });
     };
     for (const [name, action] of Object.entries(source.actions ?? {})) {
       routes[actionRoute(source.id, name)] = async ({ json, req }: RouteContext) => {

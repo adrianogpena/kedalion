@@ -22,3 +22,10 @@
 .misc-bar-fill.warn { background: var(--warn, #d9a21b); }
 .misc-bar-fill.danger { background: var(--danger, #d64545); }
 .misc-bar-value { font-variant-numeric: tabular-nums; }
+.misc-notif-list { list-style: none; margin: 0; padding: var(--space-4) var(--space-8); height: 100%; overflow-y: auto; }
+.misc-notif { padding: var(--space-4) 0; border-bottom: 1px solid var(--border); }
+.misc-notif:last-child { border-bottom: 0; }
+.misc-notif-head { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.misc-notif-title { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.misc-notif-time { flex: none; color: var(--text-3); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.misc-notif-body { margin: var(--space-2) 0 0; font: inherit; font-size: var(--fs-sm); color: var(--text-2, var(--text-1)); white-space: pre-wrap; overflow-wrap: anywhere; }

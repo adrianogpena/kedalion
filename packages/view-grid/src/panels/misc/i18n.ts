@@ -50,6 +50,12 @@ export const en = {
   'dash.misc.system.layout': 'Layout',
   'dash.misc.system.layout.tiles': 'Tiles',
   'dash.misc.system.layout.bars': 'Bars',
+  'dash.misc.notifLog': 'Notification log',
+  'dash.misc.notifLog.description': 'The last notifications the app sent, with their full text, newest first.',
+  'dash.misc.notifLog.max': 'Entries shown',
+  'dash.misc.notifLog.empty': 'No notifications since the app started.',
+  'dash.misc.notifLog.muted': 'Muted',
+  'dash.misc.notifLog.mutedHint': 'Do not disturb was on: no toast was shown.',
 };
 
 export const ptBR: Messages<typeof en> = {
@@ -102,4 +108,10 @@ export const ptBR: Messages<typeof en> = {
   'dash.misc.system.layout': 'Layout',
   'dash.misc.system.layout.tiles': 'Blocos',
   'dash.misc.system.layout.bars': 'Barras',
+  'dash.misc.notifLog': 'Log de notificações',
+  'dash.misc.notifLog.description': 'As últimas notificações enviadas pelo app, com o texto completo, da mais recente para a mais antiga.',
+  'dash.misc.notifLog.max': 'Entradas exibidas',
+  'dash.misc.notifLog.empty': 'Nenhuma notificação desde que o app iniciou.',
+  'dash.misc.notifLog.muted': 'Silenciada',
+  'dash.misc.notifLog.mutedHint': 'Não perturbe estava ligado: nenhum toast foi exibido.',
 };
