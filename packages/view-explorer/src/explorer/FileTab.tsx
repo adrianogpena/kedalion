@@ -394,7 +394,7 @@ function TextFileTab({ project, projectName, projectPath, path, focused, preview
     setDraft(xmlStmts ? applyCombinedXml(draft, xmlStmts, v) : v);
   };
   const sqlUi = useExplorerSql({ project, name, path, asSql: !!xmlStmts, active, focused, draft: editorValue, sql, confirm, onRunStart: () => setStepsOpen(false) });
-  const curlUi = useExplorerCurl({ name, active, draft, sql });
+  const curlUi = useExplorerCurl({ name, active, draft, cursor: selection?.pos, sql });
   const chordOf = useChordOf();
   const stepsPanel = (): ReactNode => isSql && stepsOpen ? (
     <SqlSteps

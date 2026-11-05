@@ -17,6 +17,7 @@ const RAW_BUTTONS: Record<string, number> = {
   'packages/view-git/src/git/ReadThroughView.tsx': 2,
   'app/web/src/screens/SettingsModal.tsx': 10,
   'packages/editor/src/MarkdownToc.tsx': 2,
+  'packages/view-explorer/src/explorer/CurlSide.tsx': 2,
   'packages/view-browser/src/Favorites.tsx': 1,
   'packages/view-grid/src/dashboard/DashboardScreen.tsx': 1,
   'packages/view-grid/src/FolderField.tsx': 2,
