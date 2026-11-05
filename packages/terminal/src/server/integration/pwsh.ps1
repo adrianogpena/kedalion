@@ -33,7 +33,15 @@ if (-not $global:__dbSi) {
     $global:__dbUserReadLine = $function:PSConsoleHostReadLine
     function global:PSConsoleHostReadLine {
       $line = & $global:__dbUserReadLine
-      [Console]::Write("$([char]27)]133;C$([char]7)")
+      $e = [char]27
+      $a = [char]7
+      # The command line (OSC 633 E, VS Code's escaping) for the command history.
+      if ("$line".Trim()) {
+        $esc = "$line" -replace '\\', '\\' -replace ';', '\x3b'
+        $esc = [regex]::Replace($esc, '[\x00-\x1f]', { param($m) '\x{0:x2}' -f [int][char]$m.Value })
+        [Console]::Write("$e]633;E;$esc$a")
+      }
+      [Console]::Write("$e]133;C$a")
       $line
     }
   }

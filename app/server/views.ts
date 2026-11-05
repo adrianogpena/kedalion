@@ -18,7 +18,15 @@ import { MULTI_DELETE_ENABLED } from '../app.ts';
 const explorer = explorerServerView({ multiDelete: MULTI_DELETE_ENABLED });
 /** Claude config home of the Agents view; the `claude` terminal launcher uses the same one. */
 const agentsHome = homedir();
-const terminalStore = terminalSessions();
+/** The app's one notifier (OS toasts); each view sends through `notifications.for(viewId)` and gets its icon. */
+export const notifications = createNotifications({ appName: APP.name, link: () => appLink });
+
+/** Every terminal session (Terminal view and Agents launcher); `main.ts` hands it the settings with `configure`. */
+export const terminalStore = terminalSessions({
+  notify: (n) => void notifications.for('terminal')({ title: n.title, body: n.body, path: 'terminal' }),
+  earlierDir: join(appHome(APP.id), 'terminal', 'earlier'),
+  historyFile: join(appHome(APP.id), 'terminal', 'history.json'),
+});
 
 let appLink: ((path: string) => string) | undefined;
 let appOrigin: (() => string | undefined) | undefined;
@@ -27,9 +35,6 @@ export const setAppLink = (link: (path: string) => string, origin?: () => string
   appLink = link;
   appOrigin = origin;
 };
-
-/** The app's one notifier (OS toasts); each view sends through `notifications.for(viewId)` and gets its icon. */
-export const notifications = createNotifications({ appName: APP.name, link: () => appLink });
 
 const browser = browserServerView({
   profileDir: join(appHome(APP.id), 'browser-profile'),

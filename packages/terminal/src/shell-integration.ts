@@ -11,6 +11,16 @@ export function parseOsc133(data: string): PromptMark | null {
 }
 
 /**
+ * The command line of an OSC 633 `E` report (VS Code's escaping: `\\` for a backslash, `\xHH` for `;`, newlines
+ * and control characters); null for any other OSC 633 sequence.
+ */
+export function parseOsc633Command(data: string): string | null {
+  if (!data.startsWith('E;')) return null;
+  const raw = data.slice(2).split(';', 1)[0];
+  return raw.replace(/\\(\\|x([0-9a-fA-F]{2}))/g, (_all, _esc: string, hex?: string) => (hex ? String.fromCharCode(parseInt(hex, 16)) : '\\'));
+}
+
+/**
  * The folder of an OSC 7 report (`file://host/path`, percent-encoded); a Windows drive path loses its
  * leading slash (`/C:/x` → `C:/x`). Null when it is not a file URL.
  */

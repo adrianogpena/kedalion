@@ -8,9 +8,10 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal, type FontWeight, type IDecoration, type IMarker, type ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { t } from '@kedalion/ui';
+import { createLineReader, findLinks, type CompiledTrigger, type LineLink } from './output-scan.ts';
 import { trimCopied, type PasteWarning } from './paste.ts';
 import type { ColorScheme } from './schemes.ts';
-import { parseOsc133, parseOsc7 } from './shell-integration.ts';
+import { parseOsc133, parseOsc633Command, parseOsc7 } from './shell-integration.ts';
 import { DEFAULT_WORD_SEPARATORS } from './terminalOptions.ts';
 import { readCssToken } from './theme.ts';
 import { themeOf } from './themes.ts';
@@ -76,6 +77,32 @@ export interface XtermViewOptions {
   onCommand?: (running: boolean, code?: number | null) => void;
   /** Called on every paste (keyboard, right-click); true means it took the text and xterm does not paste it. */
   onPaste?: (text: string) => boolean;
+  /** The gutter mark of a command was clicked (at the mouse position). */
+  onMarkClick?: (mark: CommandMark, at: { x: number; y: number }) => void;
+  /** File paths and commit hashes become links: `resolve` gives the existing path of each (null: none), `open*` opens one. */
+  links?: TerminalLinks;
+}
+
+export interface TerminalLinks {
+  resolve(paths: string[]): Promise<Array<string | null>>;
+  openPath(path: string, line?: number): void;
+  openCommit(hash: string): void;
+}
+
+/** A command shell integration marked, as its gutter mark menu sees it. */
+export interface CommandMark {
+  command: string;
+  running: boolean;
+  code: number | null;
+  /** Its output still in the buffer. */
+  output(): string;
+}
+
+/** A link, path or hash on the screen for the hint labels: its viewport row and where its first cell is (pixels, in the host). */
+export interface HintTarget extends LineLink {
+  row: number;
+  left: number;
+  top: number;
 }
 
 export type ScrollKind = 'lineUp' | 'lineDown' | 'pageUp' | 'pageDown' | 'top' | 'bottom';
@@ -88,6 +115,13 @@ interface Prompt {
   code: number | null;
   deco?: IDecoration;
   el?: HTMLElement;
+  /** Its command line (OSC 633 E, else the text typed after the prompt). */
+  command?: string;
+  /** Where its output starts (C) and ends (D). */
+  out?: IMarker;
+  end?: IMarker;
+  /** Column of the cursor at D: the end row holds output only up to it. */
+  endCol?: number;
 }
 
 export interface FindOptions {
@@ -134,6 +168,23 @@ export interface XtermView extends TerminalView {
   scroll(kind: ScrollKind): void;
   /** The xterm root element, measured to scale a preview. */
   element(): HTMLElement;
+  /** Scrolls to the newest command with this line; false when none is in the buffer. */
+  scrollToCommand(command: string): boolean;
+  /** Triggers whose `highlight` matches color their output lines from now on. */
+  setHighlights(triggers: CompiledTrigger[]): void;
+  /** Links, paths and hashes on the screen, for hint labels. */
+  hintTargets(): HintTarget[];
+}
+
+const HIGHLIGHT_STRENGTH = 0.28;
+const DEFAULT_HIGHLIGHT = '#c9a227';
+const MAX_PATH_CACHE = 2000;
+
+/** `a` mixed into `b` by `t` (0 to 1), both `#rrggbb`; `a` alone when `b` is not a hex colour. */
+function mix(a: string, b: string | undefined, t: number): string {
+  if (!b || !/^#[0-9a-f]{6}$/i.test(b)) return a;
+  const ch = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  return '#' + [0, 1, 2].map((i) => Math.round(ch(a, i) * t + ch(b, i) * (1 - t)).toString(16).padStart(2, '0')).join('');
 }
 
 /** Opens http(s) links in the browser; any other scheme (OSC 8 included) is ignored. */
@@ -245,7 +296,67 @@ export function createXtermView(el: HTMLElement, opts: XtermViewOptions = {}): X
 
   // Shell integration (OSC 133): a marker per prompt, a gutter dot per command.
   const prompts: Prompt[] = [];
+  const pathCache = new Map<string, string | null>();
   let decorate = false;
+  let integrated = false;
+  let running = false;
+  let pendingCommand: string | null = null;
+  let promptEnd: { marker: IMarker; col: number } | undefined;
+  const cursorRow = () => term.buffer.active.baseY + term.buffer.active.cursorY;
+  /** The text typed after the prompt; C comes after the Enter's newline, so it ends on the row above the cursor. */
+  const typedCommand = (): string => {
+    const p = promptEnd;
+    if (!p || p.marker.isDisposed) return '';
+    const buf = term.buffer.active;
+    const end = cursorRow();
+    const last = end > p.marker.line ? end - 1 : end;
+    let text = '';
+    for (let y = p.marker.line; y <= last && y - p.marker.line < 50; y++) {
+      const line = buf.getLine(y);
+      if (!line) break;
+      if (y > p.marker.line && !line.isWrapped) text += '\n';
+      text += line.translateToString(true, y === p.marker.line ? p.col : 0, y === end ? buf.cursorX : undefined);
+    }
+    return text.trim();
+  };
+  const outputOf = (p: Prompt): string => {
+    if (!p.out || p.out.isDisposed) return '';
+    const buf = term.buffer.normal;
+    const to = p.end && !p.end.isDisposed ? p.end.line : cursorRow();
+    const lines: string[] = [];
+    for (let y = p.out.line; y <= to; y++) {
+      const line = buf.getLine(y);
+      if (!line) break;
+      const text = line.translateToString(true, 0, p.end && y === to ? p.endCol : undefined);
+      if (line.isWrapped && lines.length) lines[lines.length - 1] += text;
+      else lines.push(text);
+    }
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+    return lines.join('\n');
+  };
+  const markOf = (p: Prompt): CommandMark => ({ command: p.command ?? '', running: !p.done, code: p.code, output: () => outputOf(p) });
+
+  // Highlight triggers: each output line once, colored when one matches.
+  let highlights: CompiledTrigger[] = [];
+  const reader = createLineReader(term, (text, row) => {
+    for (const { trigger, re } of highlights) {
+      re.lastIndex = 0;
+      if (!re.test(text)) continue;
+      const buf = term.buffer.active;
+      const marker = term.registerMarker(row - cursorRow());
+      if (!marker) return;
+      let height = 1;
+      while (buf.getLine(row + height)?.isWrapped) height++;
+      const color = trigger.color ?? DEFAULT_HIGHLIGHT;
+      const bg = typeof term.options.theme?.background === 'string' ? term.options.theme.background : undefined;
+      const deco = term.registerDecoration({ marker, width: term.cols, height, backgroundColor: mix(color, bg, HIGHLIGHT_STRENGTH), overviewRulerOptions: { color } });
+      marker.onDispose(() => deco?.dispose());
+      return;
+    }
+  });
+  const readLines = (emit: boolean) => {
+    if (highlights.length) reader.read(emit);
+  };
   const paint = (p: Prompt) => {
     if (!p.el) return;
     p.el.classList.add('terminal-mark');
@@ -258,6 +369,12 @@ export function createXtermView(el: HTMLElement, opts: XtermViewOptions = {}): X
     if (!decorate || p.deco || !p.started || p.marker.isDisposed) return;
     p.deco = term.registerDecoration({ marker: p.marker, x: 0, width: 1 });
     p.deco?.onRender((elem) => {
+      if (p.el !== elem) {
+        elem.onclick = (ev) => {
+          ev.preventDefault();
+          opts.onMarkClick?.(markOf(p), { x: ev.clientX, y: ev.clientY });
+        };
+      }
       p.el = elem;
       paint(p);
     });
@@ -283,10 +400,24 @@ export function createXtermView(el: HTMLElement, opts: XtermViewOptions = {}): X
     return p;
   };
   const oscSubs = [
+    term.parser.registerOscHandler(633, (data) => {
+      const command = parseOsc633Command(data);
+      if (command !== null) pendingCommand = command;
+      return true;
+    }),
     term.parser.registerOscHandler(133, (data) => {
       const mark = parseOsc133(data);
       if (!mark) return true;
+      integrated = true;
+      if (mark.kind === 'B') {
+        promptEnd?.marker.dispose();
+        const marker = term.registerMarker(0);
+        promptEnd = marker ? { marker, col: term.buffer.active.cursorX } : undefined;
+        return true;
+      }
       if (mark.kind === 'A') {
+        readLines(running);
+        running = false;
         const last = prompts[prompts.length - 1];
         if (last && !last.started) {
           last.marker.dispose();
@@ -303,13 +434,23 @@ export function createXtermView(el: HTMLElement, opts: XtermViewOptions = {}): X
       } else if (mark.kind === 'C') {
         const p = current();
         p.started = true;
+        p.command = pendingCommand ?? typedCommand();
+        pendingCommand = null;
+        p.out?.dispose();
+        p.out = term.registerMarker(0);
+        if (highlights.length) reader.skipToCursor();
+        running = true;
         decorateOne(p);
         opts.onCommand?.(true);
       } else if (mark.kind === 'D') {
+        readLines(true);
+        running = false;
         const p = prompts[prompts.length - 1];
         if (p?.started && !p.done) {
           p.done = true;
           p.code = mark.code;
+          p.end = term.registerMarker(0);
+          p.endCol = term.buffer.active.cursorX;
           paint(p);
           opts.onCommand?.(false, mark.code);
         }
@@ -318,11 +459,54 @@ export function createXtermView(el: HTMLElement, opts: XtermViewOptions = {}): X
     }),
     term.parser.registerOscHandler(7, (data) => {
       const cwd = parseOsc7(data);
-      if (cwd) opts.onCwd?.(cwd);
+      if (cwd) {
+        // Relative paths on screen now resolve against another folder.
+        pathCache.clear();
+        opts.onCwd?.(cwd);
+      }
       return false;
     }),
     term.onBell(() => opts.onBell?.()),
   ];
+  // Paths and commit hashes as links; a path is a link only when it exists (asked once per text).
+  const links = opts.links;
+  if (links && !opts.readOnly) {
+    oscSubs.push(
+      term.registerLinkProvider({
+        provideLinks(y, cb) {
+          const line = term.buffer.active.getLine(y - 1);
+          const found = line ? findLinks(line.translateToString(true)).filter((l) => l.kind !== 'url') : [];
+          if (!found.length) return cb(undefined);
+          const finish = () =>
+            cb(
+              found.flatMap((l) => {
+                const abs = l.kind === 'path' ? pathCache.get(l.text) : undefined;
+                if (l.kind === 'path' && !abs) return [];
+                return [
+                  {
+                    range: { start: { x: l.start + 1, y }, end: { x: l.end, y } },
+                    text: l.text,
+                    decorations: { pointerCursor: true, underline: true },
+                    activate: () => (abs ? links.openPath(abs, l.line) : links.openCommit(l.text)),
+                  },
+                ];
+              }),
+            );
+          const unknown = [...new Set(found.filter((l) => l.kind === 'path' && !pathCache.has(l.text)).map((l) => l.text))];
+          if (!unknown.length) return finish();
+          links.resolve(unknown).then(
+            (res) => {
+              if (pathCache.size > MAX_PATH_CACHE) pathCache.clear();
+              unknown.forEach((p, i) => pathCache.set(p, res[i] ?? null));
+              finish();
+            },
+            () => cb(undefined),
+          );
+        },
+      }),
+    );
+  }
+
   const scrollToPrompt = (dir: 1 | -1) => {
     const lines = prompts.filter((p) => !p.marker.isDisposed).map((p) => p.marker.line);
     const top = term.buffer.active.viewportY;
@@ -406,7 +590,7 @@ export function createXtermView(el: HTMLElement, opts: XtermViewOptions = {}): X
     });
   }
   return {
-    write: (data) => term.write(data),
+    write: (data) => term.write(data, () => readLines(!integrated || running)),
     resize: (cols, rows) => {
       if (cols !== term.cols || rows !== term.rows) term.resize(cols, rows);
     },
@@ -426,8 +610,42 @@ export function createXtermView(el: HTMLElement, opts: XtermViewOptions = {}): X
       for (const p of prompts.splice(0)) {
         p.deco?.dispose();
         p.marker.dispose();
+        p.out?.dispose();
+        p.end?.dispose();
       }
+      promptEnd?.marker.dispose();
+      promptEnd = undefined;
+      integrated = false;
+      running = false;
       term.reset();
+    },
+    scrollToCommand: (command) => {
+      const p = [...prompts].reverse().find((x) => x.command === command && !x.marker.isDisposed);
+      if (!p) return false;
+      term.scrollToLine(p.marker.line);
+      return true;
+    },
+    setHighlights: (triggers) => {
+      const had = highlights.length > 0;
+      highlights = triggers.filter((x) => x.trigger.action === 'highlight');
+      // Starting now: what is already on screen is not read again.
+      if (!had && highlights.length) reader.skipToCursor();
+    },
+    hintTargets: () => {
+      const screen = term.element?.querySelector('.xterm-screen') as HTMLElement | null;
+      if (!screen) return [];
+      const box = screen.getBoundingClientRect();
+      const host = el.getBoundingClientRect();
+      const cw = box.width / term.cols;
+      const ch = box.height / term.rows;
+      const buf = term.buffer.active;
+      const out: HintTarget[] = [];
+      for (let r = 0; r < term.rows; r++) {
+        const line = buf.getLine(buf.viewportY + r);
+        if (!line) continue;
+        for (const l of findLinks(line.translateToString(true))) out.push({ ...l, row: r, left: box.left - host.left + l.start * cw, top: box.top - host.top + r * ch });
+      }
+      return out;
     },
     scrollToPrompt,
     paste: (text) => term.paste(text),
@@ -447,6 +665,7 @@ export function createXtermView(el: HTMLElement, opts: XtermViewOptions = {}): X
     dispose: () => {
       resizeObserver.disconnect();
       themeObserver.disconnect();
+      reader.dispose();
       for (const s of subs) s.dispose();
       dropWebgl();
       term.dispose();

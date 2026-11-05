@@ -2,7 +2,7 @@ import { AppError, invalid, isRecord, notFound, socketTickets, type Routes, type
 import type { ServerWebSocket } from 'bun';
 import { existsSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join, posix, win32 } from 'node:path';
+import { isAbsolute, join, posix, resolve, win32 } from 'node:path';
 import { decodeClientMessage, MAX_COLS, MAX_ROWS, TERMINAL_SOCKET_PATH, type TerminalProfile, type TerminalProfileInfo } from '../protocol.ts';
 import { ensureIntegrationFiles, integratedShell, withIntegration } from './integration.ts';
 import type { Launchers } from './launchers.ts';
@@ -52,6 +52,32 @@ function size(v: unknown, max: number): number {
 function sessionId(b: Record<string, unknown>): string {
   if (typeof b.session !== 'string' || !b.session) throw badRequest();
   return b.session;
+}
+
+function querySession(q: URLSearchParams): string {
+  const id = q.get('session');
+  if (!id) throw badRequest();
+  return id;
+}
+
+const MAX_RESOLVE = 100;
+const MAX_PATH = 1024;
+
+/**
+ * The absolute path of `p` (from a terminal line) when it exists: relative to `cwd`, `~` is home, and a Git Bash
+ * `/c/...` is `C:/...` on Windows. A folder ends with `/`. Null when there is nothing there.
+ */
+export function resolveTerminalPath(p: string, cwd: string, platform: string, kind: (path: string) => 'file' | 'dir' | null): string | null {
+  if (!p || p.length > MAX_PATH || p.includes('\0')) return null;
+  let path = p;
+  if (path === '~' || path.startsWith('~/') || path.startsWith('~\\')) path = homedir() + path.slice(1);
+  if (platform === 'win32') {
+    const msys = /^\/([a-zA-Z])(\/.*)?$/.exec(path);
+    if (msys) path = `${msys[1].toUpperCase()}:${msys[2] ?? '/'}`;
+  }
+  const abs = isAbsolute(path) ? path : resolve(cwd, path);
+  const k = kind(abs);
+  return k === 'dir' ? `${abs.replace(/[\\/]+$/, '')}/` : k === 'file' ? abs : null;
 }
 
 export function terminalRoutes(opts: TerminalRoutesOptions): { routes: Routes; sockets: SocketRoutes } {
@@ -174,6 +200,54 @@ export function terminalRoutes(opts: TerminalRoutesOptions): { routes: Routes; s
     },
 
     'GET /api/terminal/sessions': () => sessions.list(),
+
+    'GET /api/terminal/commands': ({ query }) => sessions.commands(querySession(query)),
+    'GET /api/terminal/command-output': ({ query }) => {
+      const id = Number(query.get('id'));
+      if (!Number.isInteger(id)) throw badRequest();
+      const out = sessions.commandOutput(querySession(query), id);
+      if (!out) throw notFound('terminalCommand', 'That command is no longer in the terminal.');
+      return out;
+    },
+    'GET /api/terminal/results': ({ query }) => sessions.results(querySession(query)),
+    'GET /api/terminal/captures': ({ query }) => sessions.captures(querySession(query)),
+    'GET /api/terminal/earlier': ({ query }) => {
+      const q = query.get('q') ?? '';
+      if (q.length > 1000) throw badRequest();
+      return sessions.earlier(querySession(query), q, { caseSensitive: query.get('case') === '1', regex: query.get('regex') === '1' });
+    },
+    'GET /api/terminal/alerts': ({ query }) => sessions.alerts(querySession(query)),
+    'POST /api/terminal/alerts': async ({ json }) => {
+      const b = await json<Record<string, unknown>>();
+      const patch: Record<string, boolean> = {};
+      for (const k of ['finish', 'quiet', 'print']) {
+        if (b[k] === undefined) continue;
+        if (typeof b[k] !== 'boolean') throw badRequest();
+        patch[k] = b[k] as boolean;
+      }
+      return sessions.setAlerts(sessionId(b), patch);
+    },
+    'GET /api/terminal/history': ({ query }) =>
+      sessions.history.list({ query: (query.get('q') ?? '').slice(0, 500), failed: query.get('failed') === '1' }),
+    'POST /api/terminal/history/clear': () => {
+      sessions.history.clear();
+      return { ok: true };
+    },
+    'POST /api/terminal/resolve-paths': async ({ json }) => {
+      const b = await json<Record<string, unknown>>();
+      const id = sessionId(b);
+      if (!Array.isArray(b.paths) || b.paths.length > MAX_RESOLVE || !b.paths.every((p) => typeof p === 'string')) throw badRequest();
+      const session = sessions.get(id);
+      if (!session) throw notFound('terminalSession', 'No such terminal session');
+      const kind = (p: string) => {
+        try {
+          return statSync(p).isDirectory() ? ('dir' as const) : ('file' as const);
+        } catch {
+          return null;
+        }
+      };
+      return (b.paths as string[]).map((p) => resolveTerminalPath(p, session.cwd, lookup.platform, kind));
+    },
     'GET /api/terminal/shells': () => availableShells(lookup),
     'GET /api/terminal/profiles': () => listProfiles(),
     'GET /api/terminal/launchers': () => opts.launchers?.list() ?? [],
@@ -217,6 +291,7 @@ export function terminalRoutes(opts: TerminalRoutesOptions): { routes: Routes; s
         if (decoded.kind === 'input') sessions.write(attached.session, attached.sink, decoded.data);
         else if (decoded.msg.type === 'resize') sessions.resize(attached.session, attached.sink, decoded.msg.cols, decoded.msg.rows);
         else if (decoded.msg.type === 'clear') sessions.clear(attached.session, attached.sink);
+        else if (decoded.msg.type === 'visible') sessions.setVisible(attached.session, attached.sink, decoded.msg.visible);
         else sessions.close(attached.session, attached.sink);
       },
       close(ws) {

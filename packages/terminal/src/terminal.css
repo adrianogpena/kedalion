@@ -74,3 +74,54 @@
   pointer-events: none;
 }
 .terminal-paste-preview { max-height: 160px; overflow: auto; margin: var(--space-8) 0; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-sunken); font-family: var(--font-mono); font-size: var(--fs-xs-plus); white-space: pre; }
+.terminal-mark { cursor: pointer; }
+/* Earlier output: matches in the lines that left the scrollback, under the find bar. */
+.terminal-earlier {
+  position: absolute;
+  top: 46px;
+  right: 14px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(560px, calc(100% - 28px));
+  max-height: 50%;
+  overflow: auto;
+  padding: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+.terminal-earlier-hit {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs-plus);
+  text-align: left;
+  white-space: pre;
+  cursor: pointer;
+}
+.terminal-earlier-hit:hover { background: var(--hover); }
+.terminal-earlier-line { color: var(--text); }
+/* Hint labels (Ctrl+Shift+E) over each link, path and hash on screen. */
+.terminal-hints { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.terminal-hint {
+  position: absolute;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs-plus);
+  line-height: 1.3;
+  text-transform: uppercase;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+.terminal-hint b { opacity: 0.5; font-weight: inherit; }
+.terminal-hint-path { background: var(--ok); }
+.terminal-hint-hash { background: var(--warn, #c9a227); }

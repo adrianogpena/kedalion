@@ -17,6 +17,14 @@ __db_precmd() {
   printf '\e]7;file://%s%s\a' ${HOST:-localhost} ${PWD//\%/%25}
   [[ $PS1 == *'133;B'* ]] || PS1=$'%{\e]133;A\a%}'$PS1$'%{\e]133;B\a%}'
 }
-__db_preexec() { printf '\e]133;C\a' }
+# The command line goes first (OSC 633 E, VS Code's escaping) for the command history.
+__db_preexec() {
+  local c=${1//\\/\\\\}
+  c=${c//;/\\x3b}
+  c=${c//$'\n'/\\x0a}
+  c=${c//$'\a'/}
+  c=${c//$'\e'/}
+  printf '\e]633;E;%s\a\e]133;C\a' "$c"
+}
 precmd_functions=(__db_status $precmd_functions __db_precmd)
 preexec_functions=($preexec_functions __db_preexec)

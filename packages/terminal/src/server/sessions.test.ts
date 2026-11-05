@@ -281,3 +281,89 @@ describe('shell integration', () => {
     reg.close(s.id);
   });
 });
+
+const osc = (body: string) => `\x1b]${body}\x07`;
+const prompt = `${osc('133;A')}$ ${osc('133;B')}`;
+
+describe('session model', () => {
+  test('commands from OSC 633 E, or typed after the prompt, with their output and exit code', async () => {
+    const { reg, ptys, make } = setup();
+    const s = make();
+    const p = ptys[0]!;
+    p.emit(`${prompt}npm test\r\n${osc('633;E;npm test')}${osc('133;C')}ok 1\r\nok 2\r\n${osc('133;D;1')}`);
+    p.emit(`${prompt}ls -la\r\n${osc('133;C')}a.txt\r\n${osc('133;D;0')}${prompt}`);
+    await settle();
+    const cmds = reg.commands(s.id);
+    expect(cmds.map((c) => [c.command, c.exitCode])).toEqual([
+      ['npm test', 1],
+      ['ls -la', 0],
+    ]);
+    expect(reg.commandOutput(s.id, cmds[0]!.id)).toEqual({ text: 'ok 1\nok 2', truncated: false });
+    expect(reg.history.list().map((h) => h.command)).toEqual(['ls -la', 'npm test']);
+    reg.close(s.id);
+  });
+
+  test('results and trigger captures come from output lines only, not the typed command', async () => {
+    const notices: string[] = [];
+    const { reg, ptys } = setup();
+    const r2 = terminalSessions({ spawn: () => ptys[ptys.push(new FakePty()) - 1]!, notify: (n) => notices.push(n.body) });
+    r2.configure({ triggers: [{ id: 't', name: 'boom', pattern: 'ERROR', action: 'notify' }] });
+    const s = r2.create({ cmd: ['sh'], cwd: '/tmp', cols: 80, rows: 24, label: 'sh' });
+    const p = ptys[ptys.length - 1]!;
+    p.emit(`${prompt}gh pr view https://github.com/a/b/pull/1\r\n${osc('133;C')}https://github.com/a/b/pull/2\r\nERROR bad\r\n${osc('133;D;0')}${prompt}`);
+    await settle();
+    expect(r2.results(s.id).map((r) => r.title)).toEqual(['a/b#2']);
+    expect(r2.captures(s.id).map((c) => c.text)).toEqual(['ERROR bad']);
+    expect(notices).toEqual(['boom: ERROR bad']);
+    r2.closeAll();
+    reg.closeAll();
+  });
+
+  test('a long command notifies only when its terminal is not seen; the finish alert always does, once', async () => {
+    let t = 0;
+    const notices: string[] = [];
+    const ptys: FakePty[] = [];
+    const reg = terminalSessions({ spawn: () => ptys[ptys.push(new FakePty()) - 1]!, now: () => t, notify: (n) => notices.push(n.body) });
+    reg.configure({ notifyAfter: 10 });
+    const s = reg.create({ cmd: ['sh'], cwd: '/tmp', cols: 80, rows: 24, label: 'sh' });
+    const sink = new FakeSink();
+    reg.attach(s.id, sink, 'interactive');
+    await settle();
+    const run = async (cmd: string, secs: number) => {
+      ptys[0]!.emit(`${prompt}${cmd}\r\n${osc('133;C')}`);
+      await settle();
+      t += secs * 1000;
+      ptys[0]!.emit(`${osc('133;D;0')}`);
+      await settle();
+    };
+    await run('seen', 20);
+    reg.setVisible(s.id, sink, false);
+    await run('hidden', 20);
+    await run('short', 1);
+    reg.setVisible(s.id, sink, true);
+    reg.setAlerts(s.id, { finish: true });
+    await run('alerted', 1);
+    await run('after', 1);
+    expect(notices).toEqual(['hidden succeeded after 20s', 'alerted succeeded after 1s']);
+    expect(reg.alerts(s.id).finish).toBe(false);
+    reg.closeAll();
+  });
+
+  test('lines that leave the scrollback are kept and searchable', async () => {
+    const dir = `${require('node:os').tmpdir()}/kedalion-earlier-test-${process.pid}`;
+    const ptys: FakePty[] = [];
+    const reg = terminalSessions({ spawn: () => ptys[ptys.push(new FakePty()) - 1]!, earlierDir: dir });
+    const s = reg.create({ cmd: ['sh'], cwd: '/tmp', cols: 80, rows: 24, label: 'sh' });
+    let out = '';
+    for (let i = 0; i < 7000; i++) out += `line number ${i}\r\n`;
+    ptys[0]!.emit(out);
+    await settle();
+    const found = reg.earlier(s.id, 'line number 12');
+    expect(found.hits.some((h) => h.line === 'line number 12')).toBe(true);
+    ptys[0]!.emit('wiped secret\r\n\x1b[2J\x1b[3J');
+    await settle();
+    expect(reg.earlier(s.id, 'wiped secret').count).toBe(1);
+    reg.closeAll();
+    expect(require('node:fs').existsSync(dir + `/${s.id}.txt`)).toBe(false);
+  });
+});

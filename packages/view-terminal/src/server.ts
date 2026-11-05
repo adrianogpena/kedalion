@@ -8,7 +8,10 @@ import {
   type TerminalSessions,
   validAppearance,
   validSchemes,
+  validTriggers,
   type ColorScheme,
+  type SessionsConfig,
+  type TerminalTrigger,
   type ShellId,
   type TerminalProfile,
 } from '@kedalion/terminal/server';
@@ -16,7 +19,13 @@ import {
 /** The part of the server settings the Terminal view owns; the app's `Settings` extends it. */
 export interface TerminalServerSettings {
   /** Terminal: the shell new sessions start, plus look and behavior, checked by `validTerminal`. */
-  terminal?: { shell?: ShellId; profiles?: TerminalProfile[]; schemes?: ColorScheme[]; [field: string]: string | number | boolean | TerminalProfile[] | ColorScheme[] | undefined };
+  terminal?: {
+    shell?: ShellId;
+    profiles?: TerminalProfile[];
+    schemes?: ColorScheme[];
+    triggers?: TerminalTrigger[];
+    [field: string]: string | number | boolean | TerminalProfile[] | ColorScheme[] | TerminalTrigger[] | undefined;
+  };
   /** Layout of the Terminal screen's tabs (`serialize`); the UI validates it on restore. */
   terminalLayout?: unknown;
 }
@@ -59,6 +68,10 @@ export const TERMINAL_SPEC: Record<string, FieldSpec> = {
   commandDecorations: 'boolean',
   defaultCwd: 'string',
   defaultProfile: 'string',
+  detectResults: 'boolean',
+  pathLinks: 'boolean',
+  notifyAfter: [0, 86_400],
+  earlierOutput: 'boolean',
 };
 
 const MAX_PROFILES = 50;
@@ -95,18 +108,32 @@ function validProfiles(raw: unknown): TerminalProfile[] | null {
 /** The terminal group: a valid `shell` id plus the fields of `TERMINAL_SPEC`. */
 export function validTerminal(raw: unknown): TerminalServerSettings['terminal'] | null {
   if (!isRecord(raw)) return null;
-  const { shell, profiles, schemes, ...rest } = raw;
+  const { shell, profiles, schemes, triggers, ...rest } = raw;
   if (shell !== undefined && !isShellId(shell)) return null;
   const validated = profiles === undefined ? undefined : validProfiles(profiles);
   if (validated === null) return null;
   const validSchemeList = schemes === undefined ? undefined : validSchemes(schemes);
   if (validSchemeList === null) return null;
+  const validTriggerList = triggers === undefined ? undefined : validTriggers(triggers);
+  if (validTriggerList === null) return null;
   if (typeof rest.theme === 'string' && !/^[\w.-]{1,64}$/.test(rest.theme)) return null;
   const fields: NonNullable<TerminalServerSettings['terminal']> | null = validGroup(rest, TERMINAL_SPEC);
   if (!fields) return null;
   if (validated) fields.profiles = validated;
   if (validSchemeList) fields.schemes = validSchemeList;
+  if (validTriggerList) fields.triggers = validTriggerList;
   return shell === undefined ? fields : { ...fields, shell };
+}
+
+/** What the session store reads from the settings: triggers, result detection, long-command notices, earlier output. */
+export function terminalSessionsConfig(settings: TerminalServerSettings): SessionsConfig {
+  const t = settings.terminal ?? {};
+  return {
+    triggers: t.triggers,
+    detectResults: t.detectResults !== false,
+    notifyAfter: typeof t.notifyAfter === 'number' ? t.notifyAfter : 30,
+    earlierOutput: t.earlierOutput !== false,
+  };
 }
 
 const validLayout = (raw: unknown) =>

@@ -116,7 +116,8 @@ export function HistoryPanel({ root, tick, open, size, onToggle, onResize, selec
   // Reveal: find the commit in the log (loading older pages as needed), expand it and select its first file.
   useEffect(() => {
     if (!reveal || !root || !open || loading || logRoot !== root) return;
-    const commit = commits.find((c) => c.hash === reveal);
+    // A short hash (from a terminal) matches the commit it starts.
+    const commit = commits.find((c) => c.hash === reveal || (reveal.length >= 7 && c.hash.startsWith(reveal)));
     if (!commit) {
       if (more) loadMore();
       else onRevealed?.();

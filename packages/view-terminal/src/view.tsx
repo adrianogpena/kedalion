@@ -35,6 +35,7 @@ export function terminalView({ group, order }: TerminalViewOptions) {
         { path: ['terminal', 'appearance'], order: 20, label: 'settings.section.terminal.appearance' },
         { path: ['terminal', 'tabs'], order: 30, label: 'settings.section.terminal.tabs' },
         { path: ['terminal', 'behavior'], order: 40, label: 'settings.section.terminal.behavior' },
+        { path: ['terminal', 'output'], order: 35, label: 'settings.section.terminal.output' },
       ],
       cards: { 'terminal.profiles': TerminalProfilesCard },
       fields: terminalSettingFields,

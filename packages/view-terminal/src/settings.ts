@@ -1,5 +1,6 @@
 import { DEFAULT_WORD_SEPARATORS, TERMINAL_THEMES, type ColorScheme } from '@kedalion/terminal/options';
 import type { TerminalProfile } from '@kedalion/terminal/protocol';
+import type { TerminalTrigger } from '@kedalion/terminal';
 import { bool, type FieldDef, groupField, num, oneOf, type SettingDef, settingDefaultsOf, str } from '@kedalion/ui';
 
 export type TerminalFontWeight = 'normal' | 'bold' | '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
@@ -57,6 +58,16 @@ export interface TerminalSettings {
   defaultProfile?: string;
   /** Overrides of built-in profiles (shell id as `id`) and custom profiles. */
   profiles?: TerminalProfile[];
+  /** Regular expressions over output lines: highlight, capture or notify (at most 50). */
+  triggers?: TerminalTrigger[];
+  /** Pull requests, issues, local apps, commits and pushes in output go to the session panel; default true. */
+  detectResults?: boolean;
+  /** File paths and commit hashes on screen open in the Explorer and Git views; default true. */
+  pathLinks?: boolean;
+  /** Seconds a command runs before its end is notified when the terminal is not in view; 0 never; default 30. */
+  notifyAfter?: number;
+  /** Lines that leave the scrollback are kept for the find bar; default true. */
+  earlierOutput?: boolean;
 }
 
 /** The part of the app settings the Terminal view reads and writes; the app's `Settings` extends it. */
@@ -110,6 +121,11 @@ export const terminalSettingDefs: SettingDef<TerminalViewSettings>[] = [
   field('defaultCwd', 430, str(''), 'profiles'),
   field('onExit', 440, oneOf('keep', ['keep', 'close', 'closeIfClean', 'restart']), 'tabs'),
   field('confirmCloseRunning', 450, bool(true), 'tabs'),
+  field('detectResults', 700, bool(true), 'output'),
+  field('pathLinks', 710, bool(true), 'output'),
+  field('notifyAfter', 720, num(30, 0, 86_400), 'output'),
+  field('earlierOutput', 730, bool(true), 'output'),
+  { id: 'terminal.triggers', kind: 'custom', section: ['terminal', 'output'], order: 740, label: 'settings.terminal.triggers', description: 'settings.terminal.triggers.hint', default: [] as TerminalTrigger[], get: (s) => s.terminal?.triggers ?? [], set: (s, v) => ({ terminal: { ...s.terminal, triggers: v as TerminalTrigger[] } }) },
   field('shellIntegration', 500, bool(true), 'profiles'),
   field('commandDecorations', 510, bool(true), 'profiles'),
   { id: 'terminal.profiles', kind: 'custom', section: ['terminal', 'profiles'], order: 600, label: 'settings.terminal.profiles', description: 'settings.terminal.profiles.hint', default: [] as TerminalProfile[], get: (s) => s.terminal?.profiles ?? [], set: (s, v) => ({ terminal: { ...s.terminal, profiles: v as TerminalProfile[] } }) },

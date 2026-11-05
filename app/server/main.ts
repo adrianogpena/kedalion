@@ -8,7 +8,7 @@ import type { GitServerSettings } from '@kedalion/view-git/server';
 import type { AgentsServerSettings } from '@kedalion/view-agents/server';
 import type { BrowserServerSettings } from '@kedalion/view-browser/server';
 import { restHistorySizeOf, type RestServerSettings } from '@kedalion/view-rest/server';
-import type { TerminalServerSettings } from '@kedalion/view-terminal/server';
+import { terminalSessionsConfig, type TerminalServerSettings } from '@kedalion/view-terminal/server';
 import { historySizeOf, type WorkbenchServerSettings } from '@kedalion/view-workbench/server';
 import type { DashboardServerSettings } from '@kedalion/view-grid/server';
 import { validKeymap, type Keymap } from '@kedalion/ui/keybindings';
@@ -19,7 +19,7 @@ import { APP } from '../app.ts';
 import pkg from '../package.json';
 import { routes } from './routes.ts';
 import { stores } from './stores.ts';
-import { serverViews, setAppLink } from './views.ts';
+import { serverViews, setAppLink, terminalStore } from './views.ts';
 
 export interface Settings extends BaseSettings, TerminalServerSettings, WorkbenchServerSettings, RestServerSettings, GitServerSettings,DashboardServerSettings, ExplorerServerSettings, AgentsServerSettings, BrowserServerSettings {
   /** Start at Windows login (exe only). */
@@ -161,6 +161,7 @@ const settings = settingsStore<Settings>({
     stores.sqlHistory.setMax(historySizeOf(next));
     stores.restHistory.setMax(restHistorySizeOf(next));
     setBrowser(browserOf(next));
+    terminalStore.configure(terminalSessionsConfig(next));
   },
 });
 
@@ -168,6 +169,7 @@ const { closeToTray } = await settings.load();
 setBrowser(browserOf(await settings.load()));
 stores.sqlHistory.setMax(historySizeOf(await settings.load()));
 stores.restHistory.setMax(restHistorySizeOf(await settings.load()));
+terminalStore.configure(terminalSessionsConfig(await settings.load()));
 
 const mounted = mountViews(serverViews, { dataDir, settings, stores });
 

@@ -20,6 +20,7 @@ import {
   nudgeSplit,
   paneInDirection,
   type PaneDirection,
+  request,
   splitPane,
   type ContextMenuItem,
   IconPicker,
@@ -37,9 +38,13 @@ import {
   useDebouncedSave,
   useDialogs,
   useKeybindings,
+  useToast,
+  useViewLink,
 } from '@kedalion/ui';
+import type { CommandRecord, ResultRecord, TerminalAlerts } from '@kedalion/terminal/protocol';
 import { TERMINAL_SCREEN_COMMANDS, terminalCommandById } from './commands';
 import { t } from './i18n';
+import { emptySessionData, type PanelTab, SessionPanel, type SessionData } from './SessionPanel';
 import { type TerminalViewSettings as Settings, terminalSettingsOf } from './settings';
 import './terminal-screen.css';
 
@@ -94,6 +99,45 @@ function dropCopiedSessions(prev: Layout<Route>, next: Layout<Route>): Layout<Ro
 
 const basename = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
+interface ExplorerProject {
+  id: string;
+  name: string;
+  path: string;
+}
+
+const PANEL_KEY = 'kedalion.terminal.panel';
+const readPanel = (): { open: boolean; tab: PanelTab } => {
+  try {
+    const v = JSON.parse(localStorage.getItem(PANEL_KEY) ?? 'null') as { open?: unknown; tab?: unknown } | null;
+    const tab = v && ['commands', 'results', 'captures', 'history'].includes(v.tab as string) ? (v.tab as PanelTab) : 'commands';
+    return { open: v?.open === true, tab };
+  } catch {
+    return { open: false, tab: 'commands' };
+  }
+};
+const savePanel = (v: { open: boolean; tab: PanelTab }) => {
+  try {
+    localStorage.setItem(PANEL_KEY, JSON.stringify(v));
+  } catch {
+    // no storage: the panel just starts closed next time
+  }
+};
+
+const normPath = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
+/** The project whose folder holds `abs` (the deepest one), with the path inside it. */
+function projectOf(projects: ExplorerProject[], abs: string): { project: ExplorerProject; rel: string } | null {
+  const target = normPath(abs);
+  let best: ExplorerProject | null = null;
+  for (const p of projects) {
+    const root = normPath(p.path);
+    if ((target === root || target.startsWith(root + '/')) && (!best || root.length > normPath(best.path).length)) best = p;
+  }
+  if (!best) return null;
+  const rel = abs.replace(/\\/g, '/').replace(/\/+$/, '').slice(normPath(best.path).length).replace(/^\/+/, '');
+  return { project: best, rel };
+}
+
 /** Clears the bell marker once the tab is shown. */
 function Seen({ visible, onSeen }: { visible: boolean; onSeen: () => void }) {
   useEffect(() => {
@@ -126,6 +170,25 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
   /** Each mounted pane's handle, by tab id (tab menu: clear, zoom). */
   const handles = useRef(new Map<string, TerminalPaneHandle>());
   const [newMenuRequest, setNewMenuRequest] = useState<{ pane: string; n: number }>();
+  const [panel, setPanel] = useState(readPanel);
+  const changePanel = (patch: Partial<{ open: boolean; tab: PanelTab }>) =>
+    setPanel((p) => {
+      const next = { ...p, ...patch };
+      savePanel(next);
+      return next;
+    });
+  /** Commands, results, captures and alerts of each session (frames from its pane, seeded from the server). */
+  const [sessionData, setSessionData] = useState<Record<string, SessionData>>({});
+  const patchData = (session: string, fn: (d: SessionData) => SessionData) =>
+    setSessionData((m) => ({ ...m, [session]: fn(m[session] ?? emptySessionData()) }));
+  const toast = useToast();
+  const linkExplorer = useViewLink<{ project: string; path: string; open: boolean }>('explorer');
+  const linkGit = useViewLink<{ project: string; commit: string }>('git');
+  const projects = useRef<Promise<ExplorerProject[]> | null>(null);
+  const loadProjects = () => (projects.current ??= request<ExplorerProject[]>('GET', '/api/projects').catch(() => {
+    projects.current = null;
+    return [];
+  }));
 
   const save = useDebouncedSave((next: Layout<Route>) => onSave({ terminalLayout: serialize(next) }));
   const change = (raw: Layout<Route>) => {
@@ -165,6 +228,58 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
   useEffect(() => {
     void listProfiles().then(setProfiles, () => {});
   }, [settings.terminal]);
+
+  const focusedTab = activeTab(layout);
+  const focusedSession = focusedTab?.route.session;
+  // The panel's session: seeded from the server when it changes (frames keep it current after that).
+  useEffect(() => {
+    if (!panel.open || !focusedSession) return;
+    const s = focusedSession;
+    const q = { session: s };
+    void Promise.all([
+      request<CommandRecord[]>('GET', '/api/terminal/commands', q),
+      request<ResultRecord[]>('GET', '/api/terminal/results', q),
+      request<SessionData['captures']>('GET', '/api/terminal/captures', q),
+      request<TerminalAlerts>('GET', '/api/terminal/alerts', q),
+    ]).then(
+      ([commands, results, captures, alerts]) => setSessionData((m) => ({ ...m, [s]: { commands, results, captures, alerts } })),
+      () => {},
+    );
+  }, [panel.open, focusedSession]);
+
+  const setAlerts = (session: string, patch: Partial<TerminalAlerts>) => {
+    patchData(session, (d) => ({ ...d, alerts: { ...d.alerts, ...patch } }));
+    void request<TerminalAlerts>('POST', '/api/terminal/alerts', {}, { session, ...patch }).then(
+      (alerts) => patchData(session, (d) => ({ ...d, alerts })),
+      () => {},
+    );
+  };
+
+  const copyAction = (text: string) => ({ label: t('terminalScreen.link.copy'), run: () => void navigator.clipboard?.writeText(text).catch(() => {}) });
+  /** Opens an existing path (a folder ends with `/`) in the Explorer: a file in a tab, a folder revealed in the tree. */
+  const openPath = async (abs: string) => {
+    const hit = projectOf(await loadProjects(), abs);
+    if (!hit || !linkExplorer) {
+      toast({ message: t('terminalScreen.link.notInProject', { path: abs }), action: copyAction(abs) });
+      return;
+    }
+    linkExplorer({ project: hit.project.id, path: hit.rel, open: !abs.endsWith('/') });
+  };
+  /** Shows a commit in the Git view, in the project that holds the terminal's folder. */
+  const openCommit = async (tabId: string, hash: string) => {
+    const tab = tabOf(tabId);
+    const cwd = tab ? cwdOf(tab.route) : undefined;
+    const hit = cwd ? projectOf(await loadProjects(), cwd) : null;
+    if (!hit || !linkGit) {
+      toast({ message: t('terminalScreen.link.noRepo'), action: copyAction(hash) });
+      return;
+    }
+    linkGit({ project: hit.project.path, commit: hash });
+  };
+  const openResult = (tabId: string, r: ResultRecord) => {
+    if (r.url) window.open(r.url, '_blank', 'noopener');
+    else if (r.hash) void openCommit(tabId, r.hash);
+  };
 
   const tabOf = (tabId: string) => latest.current.panes.flatMap((p) => p.tabs).find((x) => x.id === tabId);
   const paneOf = (tabId: string) => latest.current.panes.find((p) => p.tabs.some((x) => x.id === tabId))?.id;
@@ -243,6 +358,7 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
     'terminal.splitRight': () => splitWith('right'),
     'terminal.splitDown': () => splitWith('down'),
     'terminal.newTabMenu': () => setNewMenuRequest((r) => ({ pane: latest.current.focused, n: (r?.n ?? 0) + 1 })),
+    'terminal.togglePanel': () => changePanel({ open: !panel.open }),
   };
   for (const dir of ['left', 'right', 'up', 'down'] as PaneDirection[]) {
     const name = dir[0].toUpperCase() + dir.slice(1);
@@ -276,6 +392,15 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
     { id: 'zoomIn', label: t('terminalScreen.zoomIn'), run: paneRun(tab, 'terminal.zoomIn') },
     { id: 'zoomOut', label: t('terminalScreen.zoomOut'), run: paneRun(tab, 'terminal.zoomOut') },
     { id: 'zoomReset', label: t('terminalScreen.zoomReset'), run: paneRun(tab, 'terminal.zoomReset') },
+    'sep',
+    ...(route.session
+      ? (['finish', 'quiet', 'print'] as const).map((k) => {
+          const session = route.session!;
+          const on = !!sessionData[session]?.alerts[k];
+          return { id: `alert:${k}`, label: `${t('terminalScreen.alerts')}: ${t(`terminalScreen.alert.${k}`)}`, icon: 'bell' as const, checked: on, run: () => setAlerts(session, { [k]: !on }) };
+        })
+      : []),
+    { id: 'panel', label: t('terminalScreen.panel'), icon: 'panel-right', checked: panel.open, run: () => changePanel({ open: !panel.open }) },
   ];
 
   const newMenu = (paneId: string): Array<ContextMenuItem | 'sep'> => {
@@ -373,6 +498,32 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
               profile={tab.route.profile ?? (term.defaultProfile || undefined)}
               dir={tab.route.dir}
               restartOnExit={term.onExit === 'restart'}
+              visible={ctx.visible}
+              triggers={term.triggers}
+              links={term.pathLinks === false ? undefined : { openPath: (path) => void openPath(path), openCommit: (hash) => void openCommit(tab.id, hash) }}
+              onCommandRecord={(record) => {
+                const session = sessionOf(tab.id);
+                if (!session) return;
+                patchData(session, (d) => {
+                  const at = d.commands.findIndex((c) => c.id === record.id);
+                  const commands = at >= 0 ? d.commands.map((c, i) => (i === at ? record : c)) : [...d.commands, record].slice(-500);
+                  return { ...d, commands };
+                });
+              }}
+              onResult={(record) => {
+                const session = sessionOf(tab.id);
+                if (!session) return;
+                const key = (r: ResultRecord) => `${r.kind}\0${r.url ?? r.hash ?? r.title}`;
+                patchData(session, (d) => ({ ...d, results: [record, ...d.results.filter((r) => key(r) !== key(record))].slice(0, 50) }));
+              }}
+              onCapture={(record) => {
+                const session = sessionOf(tab.id);
+                if (session) patchData(session, (d) => ({ ...d, captures: [record, ...d.captures].slice(0, 300) }));
+              }}
+              onAlerts={(alerts) => {
+                const session = sessionOf(tab.id);
+                if (session) patchData(session, (d) => ({ ...d, alerts }));
+              }}
               onSession={(id) => onSession(tab.id, id)}
               appKeys={terminalAppKeys('terminal', keys?.defs ?? [], TERMINAL_SCREEN_COMMANDS)}
               onTitle={(title) => {
@@ -415,7 +566,23 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
 
   return (
     <div className="terminal-screen screen-edges">
-      {workspace}
+      <div className="terminal-screen-body">
+        {workspace}
+        {panel.open && (
+          <SessionPanel
+            session={focusedSession}
+            data={focusedSession ? sessionData[focusedSession] : undefined}
+            tab={panel.tab}
+            onTab={(tab) => changePanel({ tab })}
+            onClose={() => changePanel({ open: false })}
+            onRun={(command) => focusedTab && handles.current.get(focusedTab.id)?.submit(command)}
+            onInsert={(command) => focusedTab && handles.current.get(focusedTab.id)?.insert(command)}
+            onJump={(command) => !!focusedTab && !!handles.current.get(focusedTab.id)?.scrollToCommand(command)}
+            onAlerts={(patch) => focusedSession && setAlerts(focusedSession, patch)}
+            onOpenResult={(r) => focusedTab && openResult(focusedTab.id, r)}
+          />
+        )}
+      </div>
       {extras}
     </div>
   );

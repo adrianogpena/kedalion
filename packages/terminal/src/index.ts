@@ -7,7 +7,8 @@ export { resolveThemeId, TERMINAL_THEMES, themeOf, type TerminalThemeId } from '
 export { validAppearance, withAppearance, type ProfileAppearance } from './appearance.ts';
 export { parseWindowsTerminalSchemes, schemeTheme, SCHEME_COLORS, validSchemes, type ColorScheme } from './schemes.ts';
 export { continuationOf, pasteNeedsWarning, pasteSummary, sanitizePaste, trimCopied, type PasteWarning } from './paste.ts';
-export { formatTabTitle, parseOsc133, parseOsc7, type PromptMark, type TitleVars } from './shell-integration.ts';
+export { formatTabTitle, parseOsc133, parseOsc633Command, parseOsc7, type PromptMark, type TitleVars } from './shell-integration.ts';
+export { compileTriggers, detectResults, findLinks, type DetectedResult, type LineLink, type ResultKind, type TerminalTrigger, type TriggerAction } from './output-scan.ts';
 export type { TerminalView } from './view.ts';
 export { createXtermView, type TerminalFontWeight, type TerminalOptions, type XtermView, type XtermViewOptions } from './xterm-view.ts';
 export { terminalAppKeys } from './app-keys';

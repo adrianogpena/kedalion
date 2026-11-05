@@ -11,6 +11,7 @@ export const TERMINAL_SCREEN_COMMANDS = [
   'terminal.splitDown',
   ...Array.from({ length: 9 }, (_, i) => `terminal.newTabProfile${i + 1}`),
   'terminal.newTabMenu',
+  'terminal.togglePanel',
 ];
 
 /** Terminal pane, zoom, scroll and new-tab commands (the pane ones mirror `PANE_COMMANDS` of the terminal package). */
@@ -33,6 +34,8 @@ export function terminalCommands(): CommandDef[] {
     def('scrollTop', ['Ctrl+Shift+Home']),
     def('scrollBottom', ['Ctrl+Shift+End']),
     def('clear', ['Ctrl+Shift+K']),
+    def('hints', ['Ctrl+Shift+E']),
+    def('togglePanel', ['Ctrl+Shift+H']),
     ...PANE_DIRS.map((d) => def(`focus${d}`, [`Alt+Arrow${d}`])),
     ...PANE_DIRS.map((d) => def(`resize${d}`, [`Alt+Shift+Arrow${d}`])),
     def('splitRight', ['Alt+Shift++', 'Alt+Shift+=']),

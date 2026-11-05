@@ -1,4 +1,5 @@
 import type { ProfileAppearance } from './appearance.ts';
+import type { DetectedResult } from './output-scan.ts';
 
 export const TERMINAL_SOCKET_PATH = '/api/terminal/socket';
 export const MAX_COLS = 1000;
@@ -65,12 +66,66 @@ export interface TerminalProfileInfo extends TerminalProfile {
 }
 
 /** `clear` drops the session's scrollback on the server too, so a reattach does not bring it back. */
-export type ClientControl = { type: 'resize'; cols: number; rows: number } | { type: 'close' } | { type: 'clear' };
+/** `visible`: whether the user sees this view (tab shown, window focused); a long command notifies only when not. */
+export type ClientControl = { type: 'resize'; cols: number; rows: number } | { type: 'close' } | { type: 'clear' } | { type: 'visible'; visible: boolean };
+
+/** A command shell integration reported: its line, folder, start and, once done, end and exit code. */
+export interface CommandRecord {
+  id: number;
+  command: string;
+  cwd: string;
+  startedAt: number;
+  endedAt?: number;
+  exitCode?: number | null;
+}
+
+/** A result found in a terminal's output (pull request, app, commit...), with when and the command that printed it. */
+export interface ResultRecord extends DetectedResult {
+  id: number;
+  at: number;
+  command?: string;
+}
+
+/** An output line a trigger kept. */
+export interface CaptureRecord {
+  id: number;
+  at: number;
+  text: string;
+  trigger: string;
+}
+
+/** One-off alerts on a terminal: its next command finishes, it goes quiet, it prints. */
+export interface TerminalAlerts {
+  finish: boolean;
+  quiet: boolean;
+  print: boolean;
+}
+
+/** A command of the app-wide history (all terminals, kept across runs). */
+export interface HistoryEntry {
+  command: string;
+  cwd: string;
+  at: number;
+  durationMs: number | null;
+  exitCode: number | null;
+  terminal: string;
+}
+
+/** A match in a terminal's earlier output (lines that left its scrollback): the line and a few around it. */
+export interface EarlierHit {
+  line: string;
+  before: string[];
+  after: string[];
+}
 
 export type ServerControl =
   | { type: 'hello'; session: string; cols: number; rows: number }
   | { type: 'exit'; code: number | null }
-  | { type: 'title'; title: string };
+  | { type: 'title'; title: string }
+  | { type: 'command'; record: CommandRecord }
+  | { type: 'result'; record: ResultRecord }
+  | { type: 'capture'; record: CaptureRecord }
+  | { type: 'alerts'; alerts: TerminalAlerts };
 
 export type ClientMessage = { kind: 'input'; data: Uint8Array } | { kind: 'control'; msg: ClientControl };
 export type ServerMessage = { kind: 'output'; data: Uint8Array } | { kind: 'control'; msg: ServerControl };
@@ -123,6 +178,7 @@ export function decodeClientMessage(frame: Frame): ClientMessage | null {
   if (!m) return null;
   if (m.type === 'close') return { kind: 'control', msg: { type: 'close' } };
   if (m.type === 'clear') return { kind: 'control', msg: { type: 'clear' } };
+  if (m.type === 'visible' && typeof m.visible === 'boolean') return { kind: 'control', msg: { type: 'visible', visible: m.visible } };
   if (m.type === 'resize' && isSize(m.cols, MAX_COLS) && isSize(m.rows, MAX_ROWS)) {
     return { kind: 'control', msg: { type: 'resize', cols: m.cols, rows: m.rows } };
   }
@@ -141,6 +197,21 @@ export function decodeServerMessage(frame: Frame): ServerMessage | null {
   }
   if (m.type === 'title' && typeof m.title === 'string') {
     return { kind: 'control', msg: { type: 'title', title: m.title.slice(0, MAX_TITLE) } };
+  }
+  const r = m.record as Record<string, unknown> | undefined;
+  const isRec = typeof r === 'object' && r !== null && typeof r.id === 'number';
+  if (m.type === 'command' && isRec && typeof r.command === 'string' && typeof r.cwd === 'string' && typeof r.startedAt === 'number') {
+    return { kind: 'control', msg: { type: 'command', record: r as unknown as CommandRecord } };
+  }
+  if (m.type === 'result' && isRec && typeof r.kind === 'string' && typeof r.title === 'string' && typeof r.at === 'number') {
+    return { kind: 'control', msg: { type: 'result', record: r as unknown as ResultRecord } };
+  }
+  if (m.type === 'capture' && isRec && typeof r.text === 'string' && typeof r.trigger === 'string' && typeof r.at === 'number') {
+    return { kind: 'control', msg: { type: 'capture', record: r as unknown as CaptureRecord } };
+  }
+  const a = m.alerts as Record<string, unknown> | undefined;
+  if (m.type === 'alerts' && typeof a === 'object' && a !== null && ['finish', 'quiet', 'print'].every((k) => typeof a[k] === 'boolean')) {
+    return { kind: 'control', msg: { type: 'alerts', alerts: a as unknown as TerminalAlerts } };
   }
   return null;
 }

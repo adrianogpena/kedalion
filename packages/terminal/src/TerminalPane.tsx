@@ -1,12 +1,13 @@
-import { Button, copyNotify, IconButton, effectiveKeys, errorMessage, errorOf, paletteCommand, t, useDialogs, useKeybindings, type CommandDef } from '@kedalion/ui';
+import { Button, ContextMenu, copyNotify, IconButton, effectiveKeys, errorMessage, errorOf, paletteCommand, request, t, useDialogs, useKeybindings, useToast, type CommandDef } from '@kedalion/ui';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { attachSession, closeSession, isSessionGone, openSession, socketUrl, type TerminalCwd, type TerminalLaunch } from './client.ts';
 import { withAppearance, type ProfileAppearance } from './appearance.ts';
 import { PANE_COMMANDS, terminalKeyAction, type PaneCommand } from './keys.ts';
 import { pasteNeedsWarning, pasteSummary, sanitizePaste } from './paste.ts';
-import { decodeServerMessage, encodeControl } from './protocol.ts';
+import { compileTriggers, type TerminalTrigger } from './output-scan.ts';
+import { decodeServerMessage, encodeControl, type CaptureRecord, type CommandRecord, type EarlierHit, type ResultRecord, type TerminalAlerts } from './protocol.ts';
 import { useTerminalOptions } from './terminalOptions.ts';
-import { createXtermView, type TerminalOptions, type XtermView } from './xterm-view.ts';
+import { createXtermView, type CommandMark, type HintTarget, type TerminalLinks, type TerminalOptions, type XtermView } from './xterm-view.ts';
 import './terminal.css';
 
 /** Server close codes (see `terminalRoutes`). */
@@ -23,6 +24,8 @@ const NEXT_COMMAND = 'terminal.nextCommand';
 const DEFAULT_PREV_KEY = 'Ctrl+ArrowUp';
 const DEFAULT_NEXT_KEY = 'Ctrl+ArrowDown';
 const MIN_FONT = 6;
+const HINT_LETTERS = 'asdfghjklqwertyuiopzxcvbnm';
+const EARLIER_DELAY = 300;
 const MAX_FONT = 72;
 const DEFAULT_FONT = 13;
 
@@ -33,6 +36,20 @@ export interface TerminalPaneHandle {
   insert(text: string): void;
   /** Types text and presses Enter. */
   submit(text: string): void;
+  /** Scrolls to the newest command with this line still in the buffer; false when none. */
+  scrollToCommand(command: string): boolean;
+}
+
+/** Where a pane opens what its links point at; paths arrive absolute and existing. */
+export type PaneLinks = Omit<TerminalLinks, 'resolve'>;
+
+/** Labels for `n` hints: single letters while they last, else two. */
+function hintLabels(n: number): string[] {
+  const L = HINT_LETTERS;
+  if (n <= L.length) return [...L.slice(0, n)];
+  const out: string[] = [];
+  for (const a of L) for (const b of L) if (out.length < n) out.push(a + b);
+  return out;
 }
 
 let audio: AudioContext | null = null;
@@ -93,6 +110,17 @@ export interface TerminalPaneProps {
   focused?: boolean;
   /** Gets the pane's handle once mounted, null when it goes. */
   handle?: (h: TerminalPaneHandle | null) => void;
+  /** Triggers; the pane colors the lines of the `highlight` ones. */
+  triggers?: TerminalTrigger[];
+  /** Opens file paths and commit hashes found on screen; none leaves them plain text. */
+  links?: PaneLinks;
+  /** False while the tab is hidden; with the window's focus it tells the server whether a long command needs a notification. */
+  visible?: boolean;
+  /** A command started or ended (shell integration). */
+  onCommandRecord?: (record: CommandRecord) => void;
+  onResult?: (record: ResultRecord) => void;
+  onCapture?: (record: CaptureRecord) => void;
+  onAlerts?: (alerts: TerminalAlerts) => void;
 }
 
 type Status =
@@ -144,6 +172,15 @@ export function TerminalPane(props: TerminalPaneProps) {
   const [regex, setRegex] = useState(false);
   const [found, setFound] = useState({ index: -1, count: 0 });
   const findInput = useRef<HTMLInputElement>(null);
+  const [earlier, setEarlier] = useState<{ count: number; hits: EarlierHit[] } | null>(null);
+  const [showEarlier, setShowEarlier] = useState(false);
+  const [markMenu, setMarkMenu] = useState<{ mark: CommandMark; at: { x: number; y: number } } | null>(null);
+  const [hints, setHints] = useState<Array<HintTarget & { label: string }> | null>(null);
+  const [typed, setTyped] = useState('');
+  const hintsRef = useRef<{ list: Array<HintTarget & { label: string }>; typed: string } | null>(null);
+  hintsRef.current = hints ? { list: hints, typed } : null;
+  const sessionRef = useRef<string | undefined>(undefined);
+  const sendRef = useRef<(data: string | Uint8Array) => void>(() => {});
 
   const kb = useKeybindings();
   const appKeys = useMemo(() => props.appKeys ?? [paletteCommand()], [props.appKeys]);
@@ -170,6 +207,9 @@ export function TerminalPane(props: TerminalPaneProps) {
   }, [kb]);
 
   const dialogs = useDialogs();
+  const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const dialogsRef = useRef(dialogs);
   dialogsRef.current = dialogs;
 
@@ -203,6 +243,14 @@ export function TerminalPane(props: TerminalPaneProps) {
         latest.current.onBell?.();
       },
       onCommand: (running) => latest.current.onRunning?.(running),
+      onMarkClick: (mark, at) => setMarkMenu({ mark, at }),
+      links: preview
+        ? undefined
+        : {
+            resolve: (paths) => resolvePaths(paths),
+            openPath: (path, line) => latest.current.links?.openPath(path, line),
+            openCommit: (hash) => latest.current.links?.openCommit(hash),
+          },
       onPaste: (text) => {
         const o = optionsRef.current;
         if (preview || !pasteNeedsWarning(text, o?.pasteWarning ?? 'multiLine', o?.pasteLargeSize ?? 5120)) return false;
@@ -211,6 +259,11 @@ export function TerminalPane(props: TerminalPaneProps) {
       },
       onKey: (e) => {
         if (preview || e.type !== 'keydown') return true;
+        if (hintsRef.current) {
+          e.preventDefault();
+          hintKey(e);
+          return false;
+        }
         if (e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
           // xterm sends a bare CR for Shift+Enter; ESC+CR is the newline sequence Claude Code reads.
           e.preventDefault();
@@ -271,8 +324,57 @@ export function TerminalPane(props: TerminalPaneProps) {
       view.focus();
     }
 
+    async function resolvePaths(paths: string[]): Promise<Array<string | null>> {
+      const session = sessionRef.current;
+      if (!session || !latest.current.links) return paths.map(() => null);
+      return request<Array<string | null>>('POST', '/api/terminal/resolve-paths', {}, { session, paths });
+    }
+
+    function showHints() {
+      const found = view.hintTargets();
+      if (!found.length) {
+        toastRef.current({ message: t('terminal.hints.none') });
+        return;
+      }
+      const labels = hintLabels(found.length);
+      setTyped('');
+      setHints(found.map((h, i) => ({ ...h, label: labels[i] })));
+    }
+
+    async function openHint(h: HintTarget, copy: boolean) {
+      const links = latest.current.links;
+      if (copy) return void copyNotify(h.text);
+      if (h.kind === 'url') return void window.open(h.text, '_blank', 'noopener');
+      if (h.kind === 'hash') return links ? links.openCommit(h.text) : void copyNotify(h.text);
+      const [abs] = await resolvePaths([h.text]).catch(() => [null]);
+      if (abs && links) links.openPath(abs, h.line);
+      else void copyNotify(h.text);
+    }
+
+    function hintKey(e: KeyboardEvent) {
+      const state = hintsRef.current;
+      if (!state) return;
+      const key = e.key.toLowerCase();
+      if (e.key === 'Escape' || key.length !== 1 || !/[a-z]/.test(key)) {
+        if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return;
+        setHints(null);
+        return;
+      }
+      const next = state.typed + key;
+      const hit = state.list.find((h) => h.label === next);
+      if (hit) {
+        setHints(null);
+        void openHint(hit, e.shiftKey);
+        return;
+      }
+      if (state.list.some((h) => h.label.startsWith(next))) setTyped(next);
+      else setHints(null);
+    }
+
     function runPane(command: PaneCommand) {
       switch (command) {
+        case 'terminal.hints':
+          return showHints();
         case 'terminal.zoomIn':
           return setZoom((z) => z + 1);
         case 'terminal.zoomOut':
@@ -301,9 +403,18 @@ export function TerminalPane(props: TerminalPaneProps) {
     const send = (data: string | Uint8Array) => {
       if (ws?.readyState === WebSocket.OPEN) ws.send(data);
     };
+    sendRef.current = send;
+    sessionRef.current = sessionId;
     view.onInput((data) => send(encoder.encode(data)));
     view.onBinary((data) => send(Uint8Array.from(data, (c) => c.charCodeAt(0))));
-    if (!preview) latest.current.handle?.({ run: runPane, insert: (text) => view.paste(text), submit: (text) => send(encoder.encode(text + String.fromCharCode(13))) });
+    if (!preview) {
+      latest.current.handle?.({
+        run: runPane,
+        insert: (text) => view.paste(text),
+        submit: (text) => send(encoder.encode(text + String.fromCharCode(13))),
+        scrollToCommand: (command) => view.scrollToCommand(command),
+      });
+    }
     view.onResize((cols, rows) => {
       if (!preview) send(encodeControl({ type: 'resize', cols, rows }));
     });
@@ -358,6 +469,7 @@ export function TerminalPane(props: TerminalPaneProps) {
             const { cols, rows } = view.size();
             if (cols !== msg.cols || rows !== msg.rows) send(encodeControl({ type: 'resize', cols, rows }));
             if (latest.current.focused !== false) view.focus();
+            send(encodeControl({ type: 'visible', visible: latest.current.visible !== false && document.hasFocus() }));
           }
           setStatus({ kind: 'live' });
         } else if (msg.type === 'exit') {
@@ -370,8 +482,16 @@ export function TerminalPane(props: TerminalPaneProps) {
           }
           stop({ kind: 'exited', code: msg.code });
           latest.current.onExit?.(msg.code);
-        } else {
+        } else if (msg.type === 'title') {
           latest.current.onTitle?.(msg.title);
+        } else if (msg.type === 'command') {
+          latest.current.onCommandRecord?.(msg.record);
+        } else if (msg.type === 'result') {
+          latest.current.onResult?.(msg.record);
+        } else if (msg.type === 'capture') {
+          latest.current.onCapture?.(msg.record);
+        } else {
+          latest.current.onAlerts?.(msg.alerts);
         }
       };
       socket.onclose = (ev) => {
@@ -405,6 +525,7 @@ export function TerminalPane(props: TerminalPaneProps) {
             return;
           }
           sessionId = ticketed.session;
+          sessionRef.current = sessionId;
           latest.current.onSession?.(ticketed.session);
         } else {
           ticketed = await attachSession(sessionId, preview ? 'preview' : 'interactive');
@@ -426,6 +547,7 @@ export function TerminalPane(props: TerminalPaneProps) {
       session: () => sessionId,
       attach: (id) => {
         sessionId = id;
+        sessionRef.current = id;
         ws?.close();
         ws = null;
         setStatus({ kind: 'connecting' });
@@ -458,6 +580,46 @@ export function TerminalPane(props: TerminalPaneProps) {
   useEffect(() => {
     if (options) viewRef.current?.setOptions(options);
   }, [options]);
+
+  const triggersKey = JSON.stringify(props.triggers ?? []);
+  useEffect(() => {
+    viewRef.current?.setHighlights(compileTriggers(props.triggers));
+  }, [triggersKey]);
+
+  // Whether the user sees this pane: its tab shown and the window focused (a long command notifies otherwise).
+  useEffect(() => {
+    if (preview) return;
+    const report = () => sendRef.current(encodeControl({ type: 'visible', visible: props.visible !== false && document.hasFocus() }));
+    report();
+    window.addEventListener('focus', report);
+    window.addEventListener('blur', report);
+    return () => {
+      window.removeEventListener('focus', report);
+      window.removeEventListener('blur', report);
+    };
+  }, [props.visible, preview]);
+
+  // Matches in the earlier output (lines that left the scrollback), asked for as the query settles.
+  useEffect(() => {
+    const session = sessionRef.current;
+    if (!finding || !findQuery || !session) {
+      setEarlier(null);
+      setShowEarlier(false);
+      return;
+    }
+    let stale = false;
+    const timer = setTimeout(() => {
+      const params = { session, q: findQuery, ...(matchCase ? { case: '1' } : {}), ...(regex ? { regex: '1' } : {}) };
+      request<{ count: number; hits: EarlierHit[] }>('GET', '/api/terminal/earlier', params).then(
+        (r) => !stale && setEarlier(r.count ? r : null),
+        () => !stale && setEarlier(null),
+      );
+    }, EARLIER_DELAY);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [finding, findQuery, matchCase, regex]);
 
   // Focus moved to this pane (another split pane had it): the keys come here.
   useEffect(() => {
@@ -537,10 +699,55 @@ export function TerminalPane(props: TerminalPaneProps) {
           <button type="button" className={`chip${regex ? ' chip-on' : ''}`} onClick={() => setRegex(!regex)} aria-pressed={regex} title={t('terminal.find.regex')}>
             .*
           </button>
+          {earlier && (
+            <button type="button" className={`chip${showEarlier ? ' chip-on' : ''}`} onClick={() => setShowEarlier(!showEarlier)} aria-pressed={showEarlier} title={t('terminal.find.earlierTitle')}>
+              {t('terminal.find.earlier', { count: earlier.count })}
+            </button>
+          )}
           <IconButton icon="chevron-up" onClick={() => step(-1)} label={t('terminal.find.prev')} />
           <IconButton icon="chevron-down" onClick={() => step(1)} label={t('terminal.find.next')} />
           <IconButton icon="close" onClick={closeFind} label={t('terminal.find.close')} />
         </div>
+      )}
+      {finding && !preview && showEarlier && earlier && (
+        <div className="terminal-earlier" role="list" aria-label={t('terminal.find.earlierTitle')}>
+          {earlier.hits.map((h, i) => (
+            <button key={i} type="button" className="terminal-earlier-hit" role="listitem" onClick={() => void copyNotify(h.line)}>
+              {h.before.map((l, j) => (
+                <span key={`b${j}`} className="muted">{l}</span>
+              ))}
+              <span className="terminal-earlier-line">{h.line}</span>
+              {h.after.map((l, j) => (
+                <span key={`a${j}`} className="muted">{l}</span>
+              ))}
+            </button>
+          ))}
+        </div>
+      )}
+      {hints && (
+        <div className="terminal-hints" title={t('terminal.hints.help')}>
+          {hints
+            .filter((h) => h.label.startsWith(typed))
+            .map((h) => (
+              <span key={`${h.row}:${h.start}`} className={`terminal-hint terminal-hint-${h.kind}`} style={{ left: h.left, top: h.top }}>
+                <b>{h.label.slice(0, typed.length)}</b>
+                {h.label.slice(typed.length)}
+              </span>
+            ))}
+        </div>
+      )}
+      {markMenu && (
+        <ContextMenu
+          at={markMenu.at}
+          onClose={() => setMarkMenu(null)}
+          items={[
+            { id: 'copyCommand', label: t('terminal.mark.copyCommand'), icon: 'copy', disabled: !markMenu.mark.command, run: () => void copyNotify(markMenu.mark.command) },
+            { id: 'copyOutput', label: t('terminal.mark.copyOutput'), disabled: markMenu.mark.running, run: () => void copyNotify(markMenu.mark.output()) },
+            'sep',
+            { id: 'rerun', label: t('terminal.mark.rerun'), icon: 'play', disabled: !markMenu.mark.command, run: () => sendRef.current(new TextEncoder().encode(markMenu.mark.command + String.fromCharCode(13))) },
+            { id: 'insert', label: t('terminal.mark.insert'), disabled: !markMenu.mark.command, run: () => viewRef.current?.paste(markMenu.mark.command) },
+          ]}
+        />
       )}
       {overlay && <div className="terminal-overlay">{overlay}</div>}
       {dialogs.element}

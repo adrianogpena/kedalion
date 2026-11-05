@@ -4,6 +4,7 @@ import { listProfiles, listShells } from '@kedalion/terminal/session';
 import { isShellId, SHELL_ICONS, SHELL_IDS, SHELL_NAMES, type TerminalProfile, type TerminalProfileInfo } from '@kedalion/terminal/protocol';
 import { t, type TerminalMessageKey } from '../i18n';
 import { terminalSettingDefs, type TerminalViewSettings } from '../settings';
+import { TriggersRow } from './TriggersRow';
 import { ProfileAppearanceFields, SchemesRow, ThemeRow } from '../TerminalSchemes';
 
 type Settings = TerminalViewSettings;
@@ -339,6 +340,7 @@ export const terminalSettingFields: Record<string, ComponentType<SettingsFieldPr
   'terminal.theme': ({ settings, onChange }) => <ThemeRow settings={settings} onChange={onChange} />,
   'terminal.schemes': ({ settings, onChange }) => <SchemesRow settings={settings} onChange={onChange} />,
   'terminal.profiles': ({ settings, onChange }) => <ProfilesRow settings={settings} onChange={onChange} />,
+  'terminal.triggers': ({ settings, onChange }) => <TriggersRow settings={settings} onChange={onChange} />,
   'terminal.pasteLargeSize': ({ def, settings, onChange }) =>
     settings.terminal?.pasteWarning === 'never'
       ? <fieldset className="setting-disabled" disabled><SettingRow def={def} settings={settings} onChange={onChange} /></fieldset>
