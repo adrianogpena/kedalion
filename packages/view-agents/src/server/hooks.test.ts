@@ -17,7 +17,7 @@ function setup(cfg: AgentsSettings, fail = false, approvals: { isApproved(c: str
   const h = createHooks(
     {
       settings: async () => cfg,
-      flash: (m) => flashes.push(m),
+      flash: (title, body) => flashes.push(`${title}: ${body}`),
       approvals,
       spawn: async (command, o) => {
         if (fail) throw new Error('boom');
@@ -68,7 +68,7 @@ test('an unapproved command is not spawned and flashes once; an approved one run
   await h.observe([sess('a', 'idle'), sess('b', 'idle')]);
   await h.observe([sess('a', 'running'), sess('b', 'idle')]);
   expect(runs.map((r) => r.command)).toEqual(['good']);
-  expect(flashes).toEqual(['Hook not approved: edit and apply it in Settings > Agents to confirm it']);
+  expect(flashes).toEqual(['Hook not approved: Edit and apply it in Settings > Agents to confirm it']);
 });
 
 function store() {

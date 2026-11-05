@@ -99,8 +99,8 @@ export type HookSpawn = (command: string, opts: { cwd?: string; env: Record<stri
 
 export interface HooksOptions {
   settings: () => Promise<AgentsSettings | undefined>;
-  /** Flash a failure to start (shown once per run). */
-  flash: (message: string) => void;
+  /** Flash a hook problem as a toast (title: what happened, body: details). */
+  flash: (title: string, body: string) => void;
   /** Starts the command detached; rejects when it cannot start. */
   spawn?: HookSpawn;
   /** Only approved commands run. */
@@ -150,12 +150,12 @@ export function createHooks(opts: HooksOptions, transitions: Transitions) {
         if (!(await opts.approvals.isApproved(command).catch(() => false))) {
           if (!warned.has(command)) {
             warned.add(command);
-            opts.flash('Hook not approved: edit and apply it in Settings > Agents to confirm it');
+            opts.flash('Hook not approved', 'Edit and apply it in Settings > Agents to confirm it');
           }
           continue;
         }
         const env = { KEDALION_SESSION_ID: s.id, KEDALION_STATUS: s.status, KEDALION_LABEL: s.name || s.title || s.firstPrompt || s.id, KEDALION_PROJECT: s.project ?? '', KEDALION_CWD: s.cwd };
-        void run(command, { cwd: s.cwd, env }).catch((e: unknown) => opts.flash(`Hook failed to start: ${e instanceof Error ? e.message : String(e)}`));
+        void run(command, { cwd: s.cwd, env }).catch((e: unknown) => opts.flash('Hook failed to start', e instanceof Error ? e.message : String(e)));
       }
     },
   };

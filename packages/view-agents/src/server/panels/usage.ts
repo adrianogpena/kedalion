@@ -97,7 +97,7 @@ const fmt = (n: number) => `$${n.toFixed(2)}`;
 const nameOf = (p: string) => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
 
 export const alertToast = (a: BudgetAlert): { title: string; body: string } => ({
-  title: `${a.scope ? nameOf(a.scope) : 'Agents'}: ${a.kind} budget at ${a.level}%`,
+  title: `${a.scope ? `${nameOf(a.scope)}: ` : ''}${a.kind} budget at ${a.level}%`,
   body: `${fmt(a.spent)} of ${fmt(a.limit)} ${a.kind}`,
 });
 

@@ -6,7 +6,7 @@ import { createNotifications, type Notifications, type Toast } from '@kedalion/p
 import { editorRoutes, gitRoutes, pickedPaths, rootedFs } from '@kedalion/server-mods';
 import { defineServerView, invalid, ndjson, socketTickets, validGroup, type SocketData, type SocketRoutes } from '@kedalion/server-core';
 import type { ServerWebSocket } from 'bun';
-import type { AgentLocal, AgentSkill, AgentActiveAccountResult, AgentActiveAccountSet, AgentLaunch, AgentRunning, AgentSessionView, AgentsCapWarn, AgentsFrame, AgentStopResult } from './protocol.ts';
+import type { AgentAccountUsage, AgentLocal, AgentSkill, AgentActiveAccountResult, AgentActiveAccountSet, AgentLaunch, AgentRunning, AgentSessionView, AgentsCapWarn, AgentsFrame, AgentStopResult } from './protocol.ts';
 import type { AgentsSettings, AgentsUsagePosition } from './settings-types.ts';
 import { summaryLimitOf } from './settings.ts';
 import { type AgentAccount, accountByDir, createAccountRegistry, detectAccounts, resolveActiveAccount } from './server/accounts.ts';
@@ -18,6 +18,7 @@ import { type PanelCtx, panelRoutes } from './server/panels/index.ts';
 import { createGitPoller } from './server/git-status.ts';
 import { checkHookSettings, createHookApprovals, createHooks, type HookConfirm } from './server/hooks.ts';
 import { createNotifier, createTransitions, NOTIFY_LABEL } from './server/notify.ts';
+import { createLimitWatch } from './server/limit-alerts.ts';
 import { CLAUDE_LAUNCHER_ID, claudeLauncher } from './server/launcher.ts';
 import { claudeCommand } from './server/claude-command.ts';
 import { findSessionFile, loadHistory, sessionFilesOf } from './server/chat/normalize.ts';
@@ -162,7 +163,7 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
   const show = (x: { title: string; body: string; launch: string }) => void agentsNotify(x);
   let approvalsFile: string | undefined;
   const approvals = createHookApprovals(() => approvalsFile);
-  const hooks = createHooks({ settings: async () => (await loadSettings()).agents, flash: (message) => show({ title: 'Agents', body: message, launch: '' }), approvals }, createTransitions());
+  const hooks = createHooks({ settings: async () => (await loadSettings()).agents, flash: (title, body) => show({ title, body, launch: '' }), approvals }, createTransitions());
   let alertsDir: string | undefined;
   const alerts = createAlerts(() => alertsDir, createTransitions());
   const notifier = createNotifier({
@@ -170,8 +171,21 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
     link: () => opts.link?.(),
     settings: async () => (await loadSettings()).agents,
     shown: () => shownId,
-    text: (status, s) => ({ title: `${NOTIFY_LABEL[status]}: ${s.title || s.firstPrompt || s.id}`, body: s.cwd }),
+    text: (status, s) => {
+      const name = projects?.list().find((p) => p.id === s.project)?.name || s.cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || s.cwd;
+      return { title: `${NOTIFY_LABEL[status]}: ${name}`, body: s.title || s.firstPrompt || s.id };
+    },
   });
+
+  const limitWatch = createLimitWatch();
+  /** Toasts a 5h or 7d window that turned red (the usage bars' critical percent), with its reset time. */
+  const notifyLimits = async (accounts: AgentAccountUsage[]): Promise<void> => {
+    const cfg = (await loadSettings().catch(() => undefined))?.agents;
+    const crit = (key: 'usage.fiveHour.critAt' | 'usage.sevenDay.critAt', fallback: number) => (typeof cfg?.[key] === 'number' && Number.isFinite(cfg[key]) ? cfg[key] : fallback);
+    const toasts = limitWatch.observe(accounts, { fiveHour: crit('usage.fiveHour.critAt', 80), sevenDay: crit('usage.sevenDay.critAt', 90) });
+    if (cfg?.doNotDisturb === true) return;
+    for (const t of toasts) show({ ...t, launch: '' });
+  };
 
   const liveTerminalIds = () => [...(opts.terminalScreens?.() ?? [])].map(([id]) => id);
 
@@ -315,6 +329,7 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
     const external = externalIds(pids, liveTerminalIds());
     const usage = usageReader.read(accs, ownerView.active?.id);
     sevenDayHistory.observe(usage.accounts);
+    void notifyLimits(usage.accounts);
     const views: AgentSessionView[] = applyAccountView(scanner
       .scan(accs.map((a) => ({ id: a.id, dir: a.dir })), quick, { projectPaths: refs.map((r) => r.path), perFolder: feedCap, keep: new Set([...statuses.keys(), ...claudeTerms().map((t) => t.sessionId)]) }, (m) => usage.windows.get(m))
       .map((x) => ({ ...x, lifecycle: lc.exited.has(x.id) ? ('exited' as const) : lc.starting.has(x.id) ? ('starting' as const) : undefined, exitCode: lc.exited.get(x.id), contextPercent: usageContextPercent(usage.bySession.get(x.id)) ?? x.contextPercent, startupContextPercent: usage.bySession.get(x.id)?.startupContextPercent, modelName: usage.bySession.get(x.id)?.model?.display_name, effort: usage.bySession.get(x.id)?.effort, claudeVersion: usage.bySession.get(x.id)?.version, status: statusOf(x.id), live: statuses.has(x.id) || undefined, external: external.has(x.id) || hanging.has(x.id) || undefined, hanging: hanging.has(x.id) || undefined, project: matchProject(x.cwd, refs)?.id, seenAt: s[x.id] }))
