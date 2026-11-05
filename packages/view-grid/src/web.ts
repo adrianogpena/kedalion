@@ -5,5 +5,6 @@ export { definePanel, type AnyPanelKind, type PanelKind, type PanelLoadContext, 
 export { fetchSource, runAction, streamSource } from './source';
 export { dashboardView, type DashboardViewOptions } from './dashboard/view';
 export { type DashboardViewSettings } from './dashboard/DashboardScreen';
+export { NotificationsSide } from './panels/misc/NotificationsSide';
 export { dashboardPanels } from './panels/catalog.web';
 export { defaultConfig, validConfig, validGridItems, type GridItem, type PanelConfig, type PanelField } from '@kedalion/ui';

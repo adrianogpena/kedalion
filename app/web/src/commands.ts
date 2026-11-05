@@ -19,6 +19,7 @@ export const navCommandId = (screen: string) => `nav.${screen}`;
 export const SETTINGS_COMMAND = 'app.settings';
 export const KEYS_COMMAND = 'app.keybindings';
 export const POPOUT_COMMAND = 'window.popOut';
+export const NOTIFICATIONS_COMMAND = 'app.notifications';
 
 /** Every shortcut of the gallery; built at render so the labels follow the language. */
 export function commands(views: CommandViews): CommandDef[] {
@@ -33,6 +34,7 @@ export function commands(views: CommandViews): CommandDef[] {
     { id: SETTINGS_COMMAND, scope: GLOBAL, label: t('nav.settings'), keys: ['Ctrl+,'], inInput: true },
     { id: KEYS_COMMAND, scope: GLOBAL, label: t('nav.keys'), keys: ['Ctrl+K Ctrl+S'], inInput: true },
     { id: POPOUT_COMMAND, scope: GLOBAL, label: t('window.popOut'), keys: ['Ctrl+Alt+O'], inInput: true, desktopOnly: true },
+    { id: NOTIFICATIONS_COMMAND, scope: GLOBAL, label: t('nav.notifications'), keys: ['Ctrl+Alt+N'], inInput: true },
     ...views.keybindings(),
     ...views.commands(),
   ];

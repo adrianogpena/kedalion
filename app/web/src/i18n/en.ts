@@ -3,6 +3,7 @@ export const en = {
   'nav.section.main': 'Main',
   'nav.home': 'Home',
   'nav.keys': 'Keyboard shortcuts',
+  'nav.notifications': 'Notifications',
   'nav.settings': 'Settings',
   'nav.theme.dark': 'Dark theme',
   'nav.theme.light': 'Light theme',

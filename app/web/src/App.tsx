@@ -5,13 +5,15 @@ import { CommandPalette, DEFAULT_LINK_SETTINGS, installLinkRouter, LinkContextMe
 import { EditorOptionsContext } from '@kedalion/editor/options';
 import { APP } from '../../app';
 import { api, type Settings } from './api';
-import { commandById, commands, KEYS_COMMAND, navCommandId, POPOUT_COMMAND, SETTINGS_COMMAND } from './commands';
+import { commandById, commands, KEYS_COMMAND, navCommandId, NOTIFICATIONS_COMMAND, POPOUT_COMMAND, SETTINGS_COMMAND } from './commands';
 import { type MessageKey, t } from './i18n';
 import { appearanceSettingsOf, editorSettingsOf, generalSettingsOf, keyboardSettingsOf, linkSettingsOf, windowSettingsOf } from './settings';
 import { SettingsModal, viewSettingsSection } from './screens/SettingsModal';
+import { NotificationsSide } from '@kedalion/view-grid/web';
 import { views, type ScreenId } from './views';
 
 // Retrying can't revive a used launch code or a stale token; the user has to open the app again.
+const NOTIFICATIONS_PANEL = 'notifications';
 const SESSION_ERRORS = ['invalidCode', 'invalidToken'];
 
 // Settings is a full page in the content area over the current screen (kept mounted), not a screen; 'keys' opens it at Keyboard › Shortcuts. App links
@@ -174,7 +176,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   // The nav list is a constant, so the hooks run in the same order every render.
   const firstFree = (skip?: string) => navItems.find((i) => i.id !== skip && !popped.has(i.id) && placementOf(i.id) !== 'side')?.id;
   /** The view in the side panel (null = closed). */
-  const [sideOpen, setSideOpen] = useState<ScreenId | null>(null);
+  const [sideOpen, setSideOpen] = useState<string | null>(null);
   const goView = (id: ScreenId) => {
     if (placementOf(id) === 'side') {
       setOverlay(null);
@@ -194,7 +196,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
     } else go(id as ScreenId);
   }, [go, placement, inPopout]);
   useEffect(() => {
-    if (sideOpen && placementOf(sideOpen) !== 'side') setSideOpen(null);
+    if (sideOpen && sideOpen !== NOTIFICATIONS_PANEL && placementOf(sideOpen) !== 'side') setSideOpen(null);
   }, [sideOpen, placement, inPopout]);
   // A route (hash, start screen) pointing at a side view opens its panel over the first free screen.
   useEffect(() => {
@@ -218,6 +220,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   for (const item of allNavItems) useCommand(commandById(navCommandId(item.id)), () => goView(item.id), { enabled: !inPopout });
   useCommand(commandById(SETTINGS_COMMAND), () => setOverlay('settings'));
   useCommand(commandById(KEYS_COMMAND), () => { if (!inPopout) setOverlay('keys'); });
+  useCommand(commandById(NOTIFICATIONS_COMMAND), () => { if (!inPopout) setSideOpen((cur) => (cur === NOTIFICATIONS_PANEL ? null : NOTIFICATIONS_PANEL)); });
   useCommand(commandById(POPOUT_COMMAND), popOutShown, { enabled: !inPopout && popouts.supported });
   const zen = useZen();
   const keys = useKeybindings();
@@ -232,6 +235,7 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
     }));
     const overlays: PaletteItem[] = [
       { id: 'app:settings', group: t('palette.group.go'), label: t('nav.settings'), hint: chordOf(SETTINGS_COMMAND), keywords: ['settings', 'preferences'], run: () => setOverlay('settings') },
+      ...(inPopout ? [] : [{ id: 'app:notifications', group: t('palette.group.go'), label: t('nav.notifications'), hint: chordOf(NOTIFICATIONS_COMMAND), keywords: ['notifications', 'log', 'toasts'], run: () => setSideOpen(NOTIFICATIONS_PANEL) }]),
       ...(inPopout ? [] : [{ id: 'app:keys', group: t('palette.group.go'), label: t('nav.keys'), hint: chordOf(KEYS_COMMAND), keywords: ['keybindings', 'shortcuts', 'keys'], run: () => setOverlay('keys') }]),
     ];
     const toggle: PaletteItem = {
@@ -283,8 +287,9 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   const sideViews = allNavItems.filter((i) => placementOf(i.id) === 'side').map((i) => ({
     id: i.id, title: views.label(i.id), icon: i.icon, render: () => views.render(i.id, viewProps),
   }));
+  const sidePanels = inPopout ? sideViews : [...sideViews, { id: NOTIFICATIONS_PANEL, title: t('nav.notifications'), icon: 'bell' as const, render: () => <NotificationsSide /> }];
   const mainNode = (
-    <AppSidePanel open={sideOpen} views={sideViews} onClose={() => setSideOpen(null)}>
+    <AppSidePanel open={sideOpen} views={sidePanels} onClose={() => setSideOpen(null)}>
     <main className="main">
       <div className="main-view" data-link-scope={`view:${screen}`} hidden={!!overlay}>{screenNode}</div>
       {overlay && (

@@ -5,6 +5,7 @@ export const ptBR: Messages<typeof en> = {
   'nav.section.main': 'Principal',
   'nav.home': 'Início',
   'nav.keys': 'Atalhos de teclado',
+  'nav.notifications': 'Notificações',
   'nav.settings': 'Configurações',
   'nav.theme.dark': 'Tema escuro',
   'nav.theme.light': 'Tema claro',
