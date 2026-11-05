@@ -10,7 +10,7 @@ import { latestPods } from '../pods/server';
 import { TICKETS_FIELDS } from './fields';
 import { notifyChanges, notifyScope } from '../../notify-changes';
 import { planAutoMoves } from './auto-move';
-import { infoFields, mapInfo, pcrOf, type JiraInfo } from './jira-info';
+import { infoFields, mapInfo, pcrOf, ticketEvents, type JiraInfo } from './jira-info';
 import { linkTickets } from './linker';
 import type { NoteTemplate } from './note-templates';
 import { add, extractKey, MAX_TICKETS, move, normPodId, parsePcr, parseStatuses, remove, update, type Ticket } from './model';
@@ -251,9 +251,10 @@ export const ticketsSource = defineSource<TicketsConfig>({
         tickets.filter((t) => jira[t.key]),
         {
           key: (t) => t.key,
-          sig: (t) => `${jira[t.key]!.status}|${jira[t.key]!.assignee}|${jira[t.key]!.priority}`,
-          title: 'Ticket changes',
+          sig: (t) => JSON.stringify([jira[t.key]!.status, jira[t.key]!.assignee, jira[t.key]!.priority]),
+          title: 'Tickets',
           line: (t) => `${t.key}: ${jira[t.key]!.status}`,
+          events: (t, prevSig) => ticketEvents(t.key, prevSig, jira[t.key]!),
         },
       );
     }

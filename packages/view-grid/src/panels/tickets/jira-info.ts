@@ -132,3 +132,24 @@ export function isOverdue(due: string, tone: StatusTone, now: number = Date.now(
   const end = Date.parse(`${due}T23:59:59`);
   return Number.isFinite(end) && end < now;
 }
+
+/** Toast lines of a ticket whose `[status, assignee, priority]` signature changed: one per changed field, `old → new`. A ticket seen for the first time gives none. */
+export function ticketEvents(key: string, prevSig: string | undefined, now: Pick<JiraInfo, 'status' | 'assignee' | 'priority'>): { heading: string; line: string }[] {
+  if (prevSig === undefined) return [];
+  let prev: unknown;
+  try {
+    prev = JSON.parse(prevSig);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(prev)) return [];
+  const show = (v: unknown, empty: string) => (typeof v === 'string' && v !== '' ? v : empty);
+  const fields: [string, unknown, string, string][] = [
+    ['Status', prev[0], now.status, 'No status'],
+    ['Assignee', prev[1], now.assignee, 'Unassigned'],
+    ['Priority', prev[2], now.priority, 'No priority'],
+  ];
+  return fields
+    .filter(([, before, after]) => before !== after)
+    .map(([heading, before, after, empty]) => ({ heading, line: `${key}: ${show(before, empty)} → ${show(after, empty)}` }));
+}

@@ -172,7 +172,8 @@ export const githubPrsSource = defineSource<SearchConfig>({
         key: (pr) => pr.id,
         sig: (pr) => [pr.state, pr.review, pr.ci, `${pr.checks.passed}/${pr.checks.total}`].join('|'),
         title: 'Pull requests',
-        line: (pr) => `${prStatus(pr.state, pr.ci)} - ${pr.title}`,
+        line: (pr) => pr.title,
+        heading: (pr, isNew) => (isNew ? 'New PR added' : prStatus(pr.state, pr.ci)),
       });
     }
     return { ...data, items, ...(nextRefreshMs ? { nextRefreshMs } : {}) };
@@ -479,7 +480,8 @@ export const githubTrackedSource = defineSource<TrackedConfig>({
         key: (p) => `${p.owner}/${p.repo}#${p.number}`,
         sig: (p) => [p.state, p.reviewDecision ?? '', p.changesRequested, p.checks.state, `${p.checks.passed}/${p.checks.total}`].join('|'),
         title: 'Tracked pull requests',
-        line: (p) => `${prStatus(p.state, TRACKED_CI[p.checks.state])} - ${p.title}`,
+        line: (p) => p.title,
+        heading: (p, isNew) => (isNew ? 'New PR added' : prStatus(p.state, TRACKED_CI[p.checks.state])),
       });
     }
     return { items };

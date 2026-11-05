@@ -39,6 +39,8 @@ export interface Pod {
   ready: string;
   restarts: number;
   lastRestartAt: string;
+  /** Reason the last container run ended (`OOMKilled`, `Error`, ...); optional like `tone`. */
+  lastReason?: string;
   startedAt: string;
   images: string[];
   labels: Record<string, string>;
@@ -116,14 +118,68 @@ export function moveEntry(entries: readonly PodEntry[], from: number, to: number
 
 const podKey = (p: Pod) => `${p.context}/${p.namespace}/${p.name}`;
 
-/** Pods whose health flipped since `prev` (updated in place); first-seen pods never count. */
-export function healthChanges(prev: Map<string, boolean>, pods: readonly Pod[]): { pod: Pod; healthy: boolean }[] {
-  const out: { pod: Pod; healthy: boolean }[] = [];
-  for (const pod of pods) {
-    const key = podKey(pod);
-    const before = prev.get(key);
-    if (before !== undefined && before !== pod.healthy) out.push({ pod, healthy: pod.healthy });
-    prev.set(key, pod.healthy);
+export type PodEventKind = 'crashloop' | 'running' | 'killed' | 'image';
+
+export interface PodEvent {
+  kind: PodEventKind;
+  pod: Pod;
+  /** Extra text for the toast line: restart count, `OOMKilled`, `Deleted`, the pull error. */
+  detail: string;
+}
+
+/** What `podEvents` remembers between polls; shared by every panel instance so an event notifies once. */
+export interface PodWatch {
+  pods: Map<string, { restarts: number; healthy: boolean; status: string; crashing: boolean }>;
+  /** Clusters (`<context>/<namespace>`) seen once; their first poll only records. */
+  primed: Set<string>;
+}
+
+export const newPodWatch = (): PodWatch => ({ pods: new Map(), primed: new Set() });
+
+const IMAGE_ERROR = /ImagePullBackOff|ErrImagePull|InvalidImageName/;
+
+/**
+ * Events since the last call: crash loop (restarts went up, or the status turned CrashLoopBackOff;
+ * once per loop until it runs stable), running (a new or restarted pod became healthy), killed
+ * (OOMKilled, or the pod left the list) and image error. Only the clusters in `live` (fetched
+ * without error) are compared, and a cluster's first poll is silent.
+ */
+export function podEvents(watch: PodWatch, pods: readonly Pod[], live: ReadonlySet<string>): PodEvent[] {
+  const out: PodEvent[] = [];
+  for (const cluster of live) {
+    const primed = watch.primed.has(cluster);
+    watch.primed.add(cluster);
+    const keys = new Set<string>();
+    for (const pod of pods) {
+      if (pod.cluster !== cluster) continue;
+      const key = podKey(pod);
+      keys.add(key);
+      const prev = watch.pods.get(key);
+      const next = { restarts: pod.restarts, healthy: pod.healthy, status: pod.status, crashing: prev?.crashing ?? false };
+      watch.pods.set(key, next);
+      if (!primed) continue;
+      if (!prev) {
+        if (pod.healthy) out.push({ kind: 'running', pod, detail: '' });
+        continue;
+      }
+      const restarted = pod.restarts > prev.restarts;
+      if (restarted && pod.lastReason === 'OOMKilled') out.push({ kind: 'killed', pod, detail: 'OOMKilled' });
+      else if ((restarted || (pod.status === 'CrashLoopBackOff' && prev.status !== 'CrashLoopBackOff')) && !prev.crashing) {
+        out.push({ kind: 'crashloop', pod, detail: `${pod.restarts} restarts` });
+      }
+      if (restarted || pod.status === 'CrashLoopBackOff') next.crashing = true;
+      else if (pod.healthy) next.crashing = false;
+      if (IMAGE_ERROR.test(pod.status) && !IMAGE_ERROR.test(prev.status)) out.push({ kind: 'image', pod, detail: pod.status });
+      if (!prev.healthy && pod.healthy) out.push({ kind: 'running', pod, detail: '' });
+    }
+    for (const key of [...watch.pods.keys()]) {
+      if (!key.startsWith(`${cluster}/`) || keys.has(key)) continue;
+      const gone = watch.pods.get(key)!;
+      watch.pods.delete(key);
+      if (!primed) continue;
+      const [context, namespace, ...name] = key.split('/');
+      out.push({ kind: 'killed', pod: { context, namespace, name: name.join('/'), status: gone.status } as Pod, detail: 'Deleted' });
+    }
   }
   return out;
 }
@@ -133,7 +189,7 @@ interface ContainerStatus {
   restartCount?: number;
   image?: string;
   state?: { waiting?: { reason?: string }; terminated?: { reason?: string } };
-  lastState?: { terminated?: { finishedAt?: string } };
+  lastState?: { terminated?: { finishedAt?: string; reason?: string } };
 }
 
 interface PodJson {
@@ -154,9 +210,13 @@ export function mapPods(json: unknown, cluster: Cluster): Pod[] {
     const readyCount = statuses.filter((c) => c.ready).length;
     const total = statuses.length || (p.spec?.containers?.length ?? 0);
     let lastRestartAt = '';
+    let lastReason = '';
     for (const c of statuses) {
       const at = c.lastState?.terminated?.finishedAt ?? '';
-      if (at > lastRestartAt) lastRestartAt = at;
+      if (at > lastRestartAt) {
+        lastRestartAt = at;
+        lastReason = c.lastState?.terminated?.reason ?? '';
+      }
     }
     pods.push({
       cluster: `${cluster.context}/${cluster.namespace}`,
@@ -169,6 +229,7 @@ export function mapPods(json: unknown, cluster: Cluster): Pod[] {
       ready: `${readyCount}/${total}`,
       restarts: statuses.reduce((n, c) => n + (c.restartCount ?? 0), 0),
       lastRestartAt,
+      lastReason,
       startedAt: p.status?.startTime ?? p.metadata?.creationTimestamp ?? '',
       images: (p.spec?.containers ?? []).map((c) => c.image ?? '').filter(Boolean),
       labels: p.metadata?.labels ?? {},

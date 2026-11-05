@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { findPcr, formatDuration, infoFields, isOverdue, mapInfo, pcrOf } from './jira-info';
+import { findPcr, formatDuration, infoFields, isOverdue, mapInfo, pcrOf, ticketEvents } from './jira-info';
 
 describe('mapInfo', () => {
   const raw = {
@@ -68,4 +68,17 @@ test('pcrOf looks in the title, parent, labels and linked titles', () => {
   expect(pcrOf({ fields: { summary: 'x', parent: { fields: { summary: 'PCR#7 - epic' } } } })).toBe('7');
   expect(pcrOf({ fields: { summary: 'x', issuelinks: [{ type: { inward: 'relates to' }, inwardIssue: { key: 'A-1', fields: { summary: 'PCR#9' } } }] } })).toBe('9');
   expect(pcrOf({ fields: { summary: 'x' } })).toBe('');
+});
+
+describe('ticketEvents', () => {
+  const prev = JSON.stringify(['In Progress', 'Ana', 'High']);
+  test('one line per changed field, old → new', () => {
+    expect(ticketEvents('VWDE-1', prev, { status: 'Done', assignee: '', priority: 'High' })).toEqual([
+      { heading: 'Status', line: 'VWDE-1: In Progress → Done' },
+      { heading: 'Assignee', line: 'VWDE-1: Ana → Unassigned' },
+    ]);
+  });
+  test('a new ticket gives nothing', () => {
+    expect(ticketEvents('VWDE-1', undefined, { status: 'Done', assignee: '', priority: 'High' })).toEqual([]);
+  });
 });

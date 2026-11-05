@@ -18,9 +18,10 @@ export interface Toaster {
 
 const noopToaster: Toaster = { show() {}, close: async () => null };
 
-// Windows PowerShell's own AppUserModelID: toasts need a registered app id, and a custom one
-// would need a Start-menu shortcut.
-const APP_ID = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe';
+// Own AppUserModelID, registered per user in HKCU (no Start-menu shortcut needed): its DisplayName
+// is the app name in the toast header instead of "Windows PowerShell".
+const APP_ID = 'Kedalion.Notifications';
+const APP_NAME = 'Kedalion';
 
 function xmlEscape(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
@@ -55,6 +56,9 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
 $null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
+$key = 'HKCU:\\Software\\Classes\\AppUserModelId\\${APP_ID}'
+if (-not (Test-Path $key)) { $null = New-Item -Path $key -Force }
+Set-ItemProperty -Path $key -Name DisplayName -Value '${APP_NAME}'
 $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('${APP_ID}')
 while ($true) {
   $line = [Console]::In.ReadLine()

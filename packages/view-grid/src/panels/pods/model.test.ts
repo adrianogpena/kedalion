@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { formatEntries, healthChanges, ingressUrls, isTracked, mapPods, matchesEntry, moveEntry, parseClusters, parseEntries, podConfigMaps, podRows } from './model';
+import { formatEntries, ingressUrls, isTracked, mapPods, matchesEntry, moveEntry, newPodWatch, parseClusters, parseEntries, podConfigMaps, podEvents, podRows } from './model';
 
 const cluster = { context: 'dev', namespace: 'apps', patterns: ['api', 'web'] };
 
@@ -106,13 +106,34 @@ describe('podRows', () => {
   });
 });
 
-describe('healthChanges', () => {
-  test('first seen is silent, flips are reported', () => {
-    const prev = new Map<string, boolean>();
+describe('podEvents', () => {
+  const live = new Set(['dev/apps']);
+  const kinds = (w: ReturnType<typeof newPodWatch>, pods: ReturnType<typeof mapPods>) => podEvents(w, pods, live).map((e) => [e.kind, e.pod.name, e.detail]);
+
+  test('first poll is silent, a restart is one crash loop until the pod runs stable', () => {
+    const w = newPodWatch();
     const pods = mapPods(podsJson, cluster);
-    expect(healthChanges(prev, pods)).toEqual([]);
-    const flipped = pods.map((p, i) => (i === 0 ? { ...p, healthy: false } : p));
-    expect(healthChanges(prev, flipped).map((c) => [c.pod.name, c.healthy])).toEqual([['api-7d9f-abc', false]]);
+    expect(kinds(w, pods)).toEqual([]);
+    const restarted = pods.map((p, i) => (i === 0 ? { ...p, restarts: p.restarts + 1 } : p));
+    expect(kinds(w, restarted)).toEqual([['crashloop', 'api-7d9f-abc', '4 restarts']]);
+    const again = restarted.map((p, i) => (i === 0 ? { ...p, restarts: p.restarts + 1 } : p));
+    expect(kinds(w, again)).toEqual([]);
+  });
+
+  test('OOMKilled restart is killed; a vanished pod is killed; a new healthy pod is running', () => {
+    const w = newPodWatch();
+    const pods = mapPods(podsJson, cluster);
+    kinds(w, pods);
+    const oom = pods.map((p, i) => (i === 0 ? { ...p, restarts: p.restarts + 1, lastReason: 'OOMKilled' } : p));
+    expect(kinds(w, oom)).toEqual([['killed', 'api-7d9f-abc', 'OOMKilled']]);
+    expect(kinds(w, oom.slice(0, 1))).toContainEqual(['killed', pods[1]!.name, 'Deleted']);
+    expect(kinds(w, [...oom.slice(0, 1), { ...pods[0]!, name: 'api-new' }])).toEqual([['running', 'api-new', '']]);
+  });
+
+  test('an errored cluster is not compared', () => {
+    const w = newPodWatch();
+    kinds(w, mapPods(podsJson, cluster));
+    expect(podEvents(w, [], new Set())).toEqual([]);
   });
 });
 

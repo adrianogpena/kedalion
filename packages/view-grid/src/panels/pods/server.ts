@@ -2,11 +2,12 @@ import { AppError, ndjson } from '@kedalion/server-core';
 import { runCli } from '../../cli';
 import { parseTail, PodLogHub, validateTarget } from './logs';
 import { defineSource, SourceError, type DataSource, type GridPanelSpec } from '../../server';
+import { notifyLines } from '../../notify-changes';
 import { PODS_FIELDS } from './fields';
 import { classifyStderr, type KubeError } from './kube-errors';
 import { parseMetrics, sanitizePod, type PodUsage } from './detail';
 import { kubePaths, kubeProxy, ProxyUnavailable } from './proxy';
-import { DNS_1123, healthChanges, ingressUrls, mapPods, parseEntries, podConfigMaps, type Cluster, type Pod, type PodEntry, type PodsConfig as PodsSettings } from './model';
+import { DNS_1123, ingressUrls, mapPods, newPodWatch, podEvents, type PodEventKind, parseEntries, podConfigMaps, type Cluster, type Pod, type PodEntry, type PodsConfig as PodsSettings } from './model';
 
 type PodsConfig = PodsSettings & { [key: string]: unknown };
 
@@ -37,8 +38,10 @@ const logHub = new PodLogHub();
 
 let latest: Pod[] = [];
 
-/** Pod health seen so far, shared by every panel instance so a change notifies once. */
-const healthSeen = new Map<string, boolean>();
+/** Pod state seen so far, shared by every panel instance so an event notifies once. */
+const podWatch = newPodWatch();
+
+const POD_HEADING: Record<PodEventKind, string> = { crashloop: 'CrashLoop', running: 'Running', killed: 'Killed', image: 'Image error' };
 
 /** One cluster per distinct (context, namespace), with the pod texts of its entries. */
 export function groupEntries(entries: readonly PodEntry[]): Cluster[] {
@@ -120,9 +123,15 @@ function publish(config: PodsConfig, clusters: readonly Cluster[], notify?: (n: 
   }
   latest = out.pods;
   if (config.notify !== false && notify) {
-    for (const { pod, healthy } of healthChanges(healthSeen, out.pods)) {
-      notify({ title: healthy ? 'Pod recovered' : 'Pod unhealthy', body: `${pod.context}/${pod.namespace}/${pod.name}: ${pod.status}` }).catch(() => {});
-    }
+    const live = new Set(out.clusters.filter((c) => !c.error).map((c) => `${c.context}/${c.namespace}`));
+    notifyLines(
+      notify,
+      'Pods',
+      podEvents(podWatch, out.pods, live).map((e) => ({
+        heading: POD_HEADING[e.kind],
+        line: `${e.pod.context}/${e.pod.namespace}/${e.pod.name}${e.detail ? ` (${e.detail})` : ''}`,
+      })),
+    );
   }
   return out;
 }
