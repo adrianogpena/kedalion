@@ -27,6 +27,7 @@ const RAW_BUTTONS: Record<string, number> = {
   'packages/view-grid/src/panels/meeting/MeetingPanel.tsx': 1,
   'packages/editor/src/RequestEditor.tsx': 1,
   'packages/editor/src/rich/headingLinks.ts': 1,
+  'packages/editor/src/rich/codeBlock.ts': 1,
   'packages/editor/src/ResponseView.tsx': 1,
   'packages/editor/src/SqlSteps.tsx': 8,
   'packages/editor/src/SqliteView.tsx': 1,

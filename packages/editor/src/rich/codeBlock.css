@@ -5,9 +5,14 @@
 .md-rich-code-bar { position: absolute; top: var(--space-4); right: var(--space-6); z-index: 1; display: flex; gap: var(--space-6); }
 .md-rich-code-lang {
   height: var(--control-h-xs); padding: 0 22px 0 var(--space-8); font-family: var(--font-mono); font-size: var(--fs-xs);
-  color: var(--text-3); background-color: transparent; border-color: transparent; border-radius: var(--radius-md);
+  color: var(--text-3); background-color: transparent; border-color: transparent; border-radius: var(--radius-md); opacity: 0;
 }
-.md-rich-code:hover .md-rich-code-lang, .md-rich-code-lang:focus-visible { color: var(--text-2); border-color: var(--border-soft); background-color: var(--bg); }
+.md-rich-code-copy {
+  height: var(--control-h-xs); padding: 0 var(--space-8); font-family: var(--font-mono); font-size: var(--fs-xs);
+  color: var(--text-3); background: transparent; border: 1px solid transparent; border-radius: var(--radius-md); cursor: pointer; opacity: 0;
+}
+.md-rich-code:hover .md-rich-code-copy, .md-rich-code-copy:focus-visible { opacity: 1; color: var(--text-2); border-color: var(--border-soft); background-color: var(--bg); }
+.md-rich-code:hover .md-rich-code-lang, .md-rich-code-lang:focus-visible { opacity: 1; color: var(--text-2); border-color: var(--border-soft); background-color: var(--bg); }
 
 /* Mermaid: the source hides while the cursor is outside the block; the preview sits below it. */
 .md-rich-code.md-mermaid-folded > pre { display: none; }

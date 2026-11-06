@@ -1,4 +1,5 @@
 import './codeBlock.css';
+import { copyText } from '@kedalion/ui';
 import { tryT } from '@kedalion/ui/i18n';
 import { highlightTree } from '@lezer/highlight';
 import { codeBlockSchema } from '@milkdown/preset-commonmark';
@@ -101,7 +102,24 @@ const codeBlockView = $view(codeBlockSchema.node, () => (initial, view, getPos) 
   select.className = 'md-rich-code-lang';
   select.title = tryT('explorer.md.language') ?? 'Language';
   select.setAttribute('aria-label', select.title);
-  bar.append(select);
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'md-rich-code-copy';
+  const copyLabel = tryT('explorer.md.copyCode') ?? 'Copy code';
+  copy.title = copyLabel;
+  copy.setAttribute('aria-label', copyLabel);
+  copy.textContent = copyLabel;
+  copy.addEventListener('mousedown', (e) => e.preventDefault());
+  copy.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void copyText(node.textContent).then((ok) => {
+      if (!ok) return;
+      copy.textContent = tryT('explorer.md.codeCopied') ?? 'Copied';
+      setTimeout(() => { copy.textContent = copyLabel; }, 1200);
+    });
+  });
+  bar.append(select, copy);
   const pre = document.createElement('pre');
   const code = document.createElement('code');
   code.spellcheck = false;
