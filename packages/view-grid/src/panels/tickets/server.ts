@@ -104,6 +104,44 @@ async function assertNotesFile(file: string, ctx: SourceContext): Promise<void> 
 /** The notes file of a ticket key in the linked folder, or null for an unsafe key. */
 const notesFile = (folder: string, key: string): string | null => (SAFE_KEY.test(key) ? join(folder, `${key}.md`) : null);
 
+/** The linked notes folder, else the default tickets root, '' when neither exists. */
+async function rootOf(config: { notesFolder?: string }, ctx: SourceContext): Promise<string> {
+  return (await notesFolderOf(config, ctx)) || ctx.ticketsRoot || '';
+}
+
+export interface TicketFile {
+  text: string;
+  exists: boolean;
+  /** Id of the project whose root contains the file, '' when none. */
+  project: string;
+  /** Path of the file inside that project, forward slashes. */
+  path: string;
+}
+
+async function describeFile(file: string, text: string, exists: boolean, ctx: SourceContext): Promise<TicketFile> {
+  const target = await realOrNearest(file);
+  let best: { id: string; rel: string; len: number } | null = null;
+  for (const r of (await ctx.projectRoots?.()) ?? []) {
+    const root = await realOrNearest(r.path);
+    const rel = relative(root, target);
+    if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) continue;
+    if (!best || root.length > best.len) best = { id: r.id, rel, len: root.length };
+  }
+  return { text, exists, project: best?.id ?? '', path: best ? best.rel.split(/[\\/]/).join('/') : '' };
+}
+
+/** The sql/rest file of the payload's ticket under the root, with the payload text for a set. */
+async function ticketFileOf(payload: unknown, config: { notesFolder?: string }, ctx: SourceContext): Promise<{ file: string; text: string }> {
+  const p = payloadOf(payload);
+  const ticket = (await ticketsStore(ctx.dataDir).read()).tickets.find((t) => t.id === str(p.id, 100));
+  if (!ticket || !SAFE_KEY.test(ticket.key)) throw invalid('ticket-invalid-key', 'Not a ticket key.');
+  const kind = p.kind === 'sql' || p.kind === 'rest' ? p.kind : '';
+  if (!kind) throw invalid('ticket-file-kind', 'The file kind must be sql or rest.');
+  const root = await rootOf(config, ctx);
+  if (!root) throw invalid('ticket-notes-folder', 'There is no tickets folder.');
+  return { file: join(root, kind, `${ticket.key}.${kind === 'sql' ? 'sql' : 'curl'}`), text: str(p.text, MAX_NOTES) };
+}
+
 function parseStore(raw: unknown): TicketStore {
   const list = (raw as { tickets?: unknown })?.tickets;
   const tickets: Ticket[] = [];
@@ -333,11 +371,32 @@ export const ticketsSource = defineSource<TicketsConfig>({
       if ('pcr' in p) patch.pcr = parsePcr(str(p.pcr, 20));
       return (await ticketsStore(ctx.dataDir).update((s) => ({ ...s, tickets: update(s.tickets, str(p.id, 100), patch) }))).tickets;
     },
+    async 'file-get'(payload, config, ctx): Promise<TicketFile> {
+      const { file } = await ticketFileOf(payload, config, ctx);
+      await assertNotesFile(file, ctx);
+      try {
+        return await describeFile(file, await readFile(file, 'utf8'), true, ctx);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return describeFile(file, '', false, ctx);
+        throw invalid('ticket-file-read', 'The file could not be read.', { file });
+      }
+    },
+    async 'file-set'(payload, config, ctx): Promise<TicketFile> {
+      const { file, text } = await ticketFileOf(payload, config, ctx);
+      await assertNotesFile(file, ctx);
+      try {
+        await mkdir(dirname(file), { recursive: true });
+        await writeFile(file, text, 'utf8');
+      } catch {
+        throw invalid('ticket-file-write', 'The file could not be saved.', { file });
+      }
+      return describeFile(file, text, true, ctx);
+    },
     async 'notes-get'(payload, config, ctx): Promise<string> {
       const p = payloadOf(payload);
       const ticket = (await ticketsStore(ctx.dataDir).read()).tickets.find((t) => t.id === str(p.id, 100));
       if (!ticket) return '';
-      const folder = await notesFolderOf(config, ctx);
+      const folder = await rootOf(config, ctx);
       const file = folder ? notesFile(folder, ticket.key) : null;
       if (!file) return ticket.notes ?? '';
       await assertNotesFile(file, ctx);
@@ -353,7 +412,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
       const text = str(p.text, MAX_NOTES);
       const ticket = (await ticketsStore(ctx.dataDir).read()).tickets.find((t) => t.id === str(p.id, 100));
       if (!ticket) return;
-      const folder = await notesFolderOf(config, ctx);
+      const folder = await rootOf(config, ctx);
       if (!folder) {
         await ticketsStore(ctx.dataDir).update((s) => ({ ...s, tickets: update(s.tickets, ticket.id, { notes: text }) }));
         return;
@@ -367,6 +426,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
       } catch {
         throw invalid('ticket-notes-write', 'The notes file could not be saved.', { file });
       }
+      if (ticket.notes) await ticketsStore(ctx.dataDir).update((s) => ({ ...s, tickets: update(s.tickets, ticket.id, { notes: '' }) }));
     },
     async 'templates-get'(_payload, _config, ctx): Promise<NoteTemplate[]> {
       return (await templatesStore(ctx.dataDir).read()).templates;

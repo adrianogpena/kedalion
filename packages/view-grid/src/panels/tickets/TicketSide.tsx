@@ -5,7 +5,7 @@ import type { TrackedPr } from '../github/tracked';
 import type { Pod } from '../pods/model';
 import type { Ticket } from './model';
 import { jiraUrl } from './TicketCard';
-import { TicketNotes } from './TicketNotes';
+import { TicketNotesTabs } from './TicketNotesTabs';
 import { TicketOverview } from './TicketOverview';
 import type { TicketLink, TicketsData } from './types';
 import type { PanelSide } from '../../panel';
@@ -58,7 +58,7 @@ export function ticketSideContent({ instanceId, ticket, link, jira, allPods, con
         label: tKey('dash.pods.tab.overview'),
         render: () => <TicketOverview ticket={ticket} link={link} jira={jira} allPods={allPods} config={config} onChanged={onChanged} onOpenPr={onOpenPr} onOpenPod={onOpenPod} />,
       },
-      { id: 'notes', label: tKey('dash.tickets.tab.notes'), render: () => <TicketNotes ticketId={ticket.id} config={config} vars={{ key: ticket.key, title: jira?.summary ?? '', url }} /> },
+      { id: 'notes', label: tKey('dash.tickets.tab.notes'), render: () => <TicketNotesTabs ticketId={ticket.id} config={config} vars={{ key: ticket.key, title: jira?.summary ?? '', url }} /> },
     ],
     actions: (
       <>

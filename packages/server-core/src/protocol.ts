@@ -418,3 +418,6 @@ export interface SqlHistoryEntry {
   rows?: number;
   error?: string;
 }
+
+/** Id of the hidden project that roots the default tickets folder (`<app home>/tickets`); never in `/api/projects`. */
+export const TICKETS_PROJECT_ID = 'kedalion-tickets';

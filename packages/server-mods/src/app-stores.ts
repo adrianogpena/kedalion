@@ -1,8 +1,8 @@
 import { statSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { appHome, secretStore } from '@kedalion/platform';
 import { AppError, invalid, isRecord, notFound, type Routes } from '@kedalion/server-core';
-import { REST_ENV_MAX_VARS, REST_ENV_NAME_CHARS, REST_VAR_NAME, type HttpRequestDraft, type RestChainStep, type RestEnvVar } from '@kedalion/server-core/protocol';
+import { TICKETS_PROJECT_ID, REST_ENV_MAX_VARS, REST_ENV_NAME_CHARS, REST_VAR_NAME, type HttpRequestDraft, type RestChainStep, type RestEnvVar } from '@kedalion/server-core/protocol';
 import { httpExecutor, httpRoutes, validateDraft } from './http.ts';
 import { pickedPaths } from './dialogs.ts';
 import type { DialogPicks } from './file-dialog.ts';
@@ -64,6 +64,9 @@ export interface AppStores {
   secretHeaders: (ref: string, url: string, resolve: (text: string) => string) => Promise<Array<[string, string]>>;
 }
 
+export { TICKETS_PROJECT_ID };
+/** Folder of the default tickets root under the app home. */
+export const TICKETS_DIR = 'tickets';
 const MAX_VAR_VALUE_CHARS = 8192;
 const badEnvironment = () => invalid('badEnvironment', 'The environment is not valid.');
 
@@ -108,7 +111,16 @@ export function appStores(appId: string, opts: AppStoresOptions = {}): AppStores
     },
   });
 
-  const projectRoots = async () => (await projects.list()).map((p) => ({ id: p.id, path: p.path }));
+  const ticketsRoot = join(home, TICKETS_DIR);
+  const projectRoots = async () => {
+    const list = (await projects.list()).map((p) => ({ id: p.id, path: p.path }));
+    const target = resolve(ticketsRoot);
+    const covered = list.some((p) => {
+      const rel = relative(resolve(p.path), target);
+      return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+    });
+    return covered ? list : [...list, { id: TICKETS_PROJECT_ID, path: ticketsRoot }];
+  };
 
   /** Saved REST requests; the Authorization value is a secret field. */
   const requests = recordStore<SavedRequest>({

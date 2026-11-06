@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { addMessages, createViews, groupField, oneOf, PanelLoading, type ViewIds } from '@kedalion/ui';
-import { explorerView } from '@kedalion/view-explorer/web';
+import { ExplorerFileRunner, explorerView } from '@kedalion/view-explorer/web';
 import { browserView } from '@kedalion/view-browser/web';
 import { gitView } from '@kedalion/view-git/web';
 import { restView } from '@kedalion/view-rest/web';
@@ -9,9 +9,11 @@ import { workbenchView } from '@kedalion/view-workbench/web';
 import { agentsView } from '@kedalion/view-agents/view';
 import type { Settings } from './api';
 import { bindViews } from './commands';
-import { dashboardPanels, dashboardView } from '@kedalion/view-grid/web';
+import { dashboardPanels, dashboardView, setFileRunner } from '@kedalion/view-grid/web';
 import { settingsRegistry } from './settings';
 import { MULTI_DELETE_ENABLED } from '../../app';
+
+setFileRunner(ExplorerFileRunner);
 
 /** The one list the nav, routes, screens, commands, settings and messages of the gallery come from. */
 export const views = createViews(

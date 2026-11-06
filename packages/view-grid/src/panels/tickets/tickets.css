@@ -91,6 +91,8 @@ a.tickets-key:hover { text-decoration: underline; }
 .tickets-ov-projects { display: flex; flex-wrap: wrap; gap: var(--space-6); }
 .tickets-notes { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .tickets-notes-editor { flex: 1; min-height: 0; }
+.tickets-notes-tabs { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.tickets-notes-tabs-body { flex: 1; min-height: 0; padding-top: var(--space-4); }
 .tickets-notes-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); padding-bottom: var(--space-4); }
 .tickets-notes-manage { margin-left: auto; }
 .tickets-tpl { display: flex; gap: var(--space-8); height: 100%; min-height: 0; }

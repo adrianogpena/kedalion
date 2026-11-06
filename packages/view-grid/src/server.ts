@@ -28,6 +28,8 @@ export interface SourceContext {
   origin?: string;
   /** The folders of the Explorer projects. */
   projectRoots?(): Promise<Array<{ id: string; path: string }>>;
+  /** The default tickets root (`<app home>/tickets`), used when no notes folder is linked. */
+  ticketsRoot?: string;
 }
 
 /** The part of the platform `Notifications` the grid needs (structural, so view-grid does not depend on platform). */
@@ -105,7 +107,7 @@ export function checkSources(sources: readonly DataSource<any>[], label: string)
 }
 
 /** The handlers of `sources`: the body is `{ config }`, cleaned with the source's fields before `fetch`; plus their actions and streams. */
-export function sourceRoutes(sources: readonly DataSource<any>[], dataDir = '', notifications?: GridNotifications, projectRoots?: SourceContext['projectRoots']): Routes {
+export function sourceRoutes(sources: readonly DataSource<any>[], dataDir = '', notifications?: GridNotifications, projectRoots?: SourceContext['projectRoots'], ticketsRoot?: string): Routes {
   const connection = connectionResolverOf(dataDir);
   const routes: Routes = {};
   const notifier = notifications?.for('dashboard');
@@ -114,12 +116,12 @@ export function sourceRoutes(sources: readonly DataSource<any>[], dataDir = '', 
   for (const source of sources) {
     routes[sourceRoute(source.id)] = async ({ json, req }: RouteContext) => {
       const body = await json<{ config?: unknown }>();
-      return source.fetch(validConfig(source.fields, body.config), { dataDir, signal: req.signal, connection, notify, notificationLog, origin: new URL(req.url).origin, projectRoots });
+      return source.fetch(validConfig(source.fields, body.config), { dataDir, signal: req.signal, connection, notify, notificationLog, origin: new URL(req.url).origin, projectRoots, ticketsRoot });
     };
     for (const [name, action] of Object.entries(source.actions ?? {})) {
       routes[actionRoute(source.id, name)] = async ({ json, req }: RouteContext) => {
         const body = await json<{ config?: unknown; payload?: unknown }>();
-        return (await action(body.payload, validConfig(source.fields, body.config), { dataDir, signal: req.signal, connection, notify, origin: new URL(req.url).origin, projectRoots })) ?? null;
+        return (await action(body.payload, validConfig(source.fields, body.config), { dataDir, signal: req.signal, connection, notify, origin: new URL(req.url).origin, projectRoots, ticketsRoot })) ?? null;
       };
     }
     for (const [name, stream] of Object.entries(source.streams ?? {})) {
