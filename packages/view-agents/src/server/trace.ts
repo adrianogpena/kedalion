@@ -3,6 +3,7 @@ import { contextPercentOf } from './discovery.ts';
 import type { AgentTraceEdit, AgentTraceStep } from '../protocol.ts';
 import { costParts } from './pricing.ts';
 import { shellFileOps } from './shell-files.ts';
+import { inputExtras, noticeOf, resultExtras, userMarker } from './trace-extras.ts';
 
 const MAX_LABEL = 72;
 const PRIMARY_KEYS = ['file_path', 'path', 'command', 'pattern', 'query', 'url', 'description'];
@@ -27,6 +28,7 @@ function userSource(e: { isMeta?: boolean; origin?: { kind?: string } }, text: s
   const kind = e.origin?.kind;
   if (kind === 'peer') return 'agent';
   if (kind === 'task-notification') return 'task';
+  if (text.startsWith('[Request interrupted by user')) return 'system';
   if (/^<local-command-(stdout|stderr|caveat)>/.test(text) || text.startsWith('This session is being continued from a previous')) return 'system';
   if (e.isMeta || (kind !== undefined && kind !== 'human')) return 'system';
   return undefined;
@@ -138,6 +140,7 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
           step.detail += `\n\n${err ? 'Error:' : 'Result:'} ${text || '(empty)'}`;
           delete step.pending;
           step.resultChars = text.length;
+          resultExtras(step, text, err);
           if ((step.tool === 'Grep' || step.tool === 'Glob') && !err) {
             const hits = hitsOf(text);
             if (hits.length > 0) step.hits = hits;
@@ -150,7 +153,9 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
       if (text) {
         const source = userSource(e, text);
         const shown = source === 'shell' ? shellText(text) : text;
-        steps.push({ kind: 'user', label: firstLine(shown), detail: shown, ...(source ? { source } : {}), ...base });
+        const marker = userMarker(text);
+        const notice = noticeOf(text);
+        steps.push({ kind: 'user', label: firstLine(shown), detail: shown, ...(source ? { source } : {}), ...(marker ? { marker } : {}), ...(notice ? { notice } : {}), ...base });
       }
       if (ts !== undefined) prevTs = ts;
     } else if (e?.type === 'assistant') {
@@ -200,6 +205,7 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
             ...(command ? { command } : {}),
             ...(range ? { readRange: range } : {}),
             ...(shellFiles.length > 0 ? { shellFiles } : {}),
+            ...inputExtras(name, b.input),
             ...take(),
           };
           steps.push(step);

@@ -361,6 +361,18 @@ export interface AgentTraceStep {
   hits?: string[];
   /** Bash: files the command writes, edits, deletes, moves or restores. */
   shellFiles?: AgentTraceShellFile[];
+  /** Bash: exit code of a failed command. */
+  exitCode?: number;
+  /** WebFetch url or WebSearch query. */
+  target?: string;
+  /** TodoWrite: the list as written. */
+  todos?: AgentTraceTodo[];
+  /** Agent / Task call: what was launched and, once known, how it ended. */
+  subagent?: AgentTraceSubagent;
+  /** Task notification: the background agent it reports on. */
+  notice?: AgentTraceNotice;
+  /** Interruption, permission denial or session continuation. */
+  marker?: 'interrupt' | 'denied' | 'continued';
   /** Token usage of the assistant message (on its first step only). */
   tokens?: AgentTraceTokens;
   /** Estimated USD of the request by token kind (on the same step as `tokens`; absent for an unknown model). */
@@ -376,6 +388,33 @@ export interface AgentTraceStep {
   resultChars?: number;
   /** Written by a subagent. */
   sidechain?: boolean;
+}
+
+export interface AgentTraceTodo {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+export interface AgentTraceSubagent {
+  type?: string;
+  description?: string;
+  model?: string;
+  prompt?: string;
+  background?: boolean;
+  /** Final answer (foreground) or launch note, capped. */
+  result?: string;
+  tokens?: number;
+  toolUses?: number;
+  durationMs?: number;
+}
+
+export interface AgentTraceNotice {
+  toolUseId: string;
+  status?: string;
+  summary?: string;
+  tokens?: number;
+  toolUses?: number;
+  durationMs?: number;
 }
 
 export interface AgentTraceShellFile {
@@ -440,6 +479,35 @@ export type AgentFileGit = 'modified' | 'untracked' | 'added' | 'deleted' | 'com
 export interface AgentFileStatusResponse {
   /** File path as the trace has it -> status. Empty when the cwd is not in a git repository. */
   status: Record<string, AgentFileGit>;
+  /** Files whose disk state differs from the session's last change: edited by something else afterwards, or gone. */
+  disk: Record<string, 'changed' | 'missing'>;
+}
+
+/** Headline numbers of a session, for comparing two sessions. */
+export interface AgentSessionSummary {
+  id: string;
+  cost: number;
+  turns: number;
+  prompts: number;
+  toolCalls: number;
+  errors: number;
+  spanMs: number;
+  outputTokens: number;
+  peakContext: number;
+  filesEdited: number;
+}
+
+export interface AgentCompareResponse {
+  current: AgentSessionSummary;
+  /** The other session, or the average of `count` sibling sessions. */
+  other?: AgentSessionSummary;
+  count: number;
+}
+
+export interface AgentSiblingSession {
+  id: string;
+  mtime: number;
+  prompt?: string;
 }
 
 /** A project added to the Agents view. */

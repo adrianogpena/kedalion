@@ -1,4 +1,5 @@
-import { relative, resolve } from 'node:path';
+import { statSync } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
 import type { AgentFileGit, AgentTraceStep } from '../protocol.ts';
 
 const GIT_TIMEOUT_MS = 8000;
@@ -26,25 +27,54 @@ const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();
 interface Touched {
   edited: boolean;
   firstTs?: number;
+  lastTs?: number;
+  /** The last change removed or moved the file away. */
+  gone: boolean;
 }
 
 /** Files the steps touched (with whether they were changed and when first), keyed by trace path. */
 export function touchedFiles(steps: AgentTraceStep[]): Map<string, Touched> {
   const m = new Map<string, Touched>();
-  const mark = (file: string, edited: boolean, ts?: number) => {
-    const x = m.get(file) ?? { edited: false };
+  const mark = (file: string, edited: boolean, ts?: number, gone = false) => {
+    const x = m.get(file) ?? { edited: false, gone: false };
     if (edited) {
       x.edited = true;
+      x.gone = gone;
       if (ts !== undefined && (x.firstTs === undefined || ts < x.firstTs)) x.firstTs = ts;
+      if (ts !== undefined && (x.lastTs === undefined || ts > x.lastTs)) x.lastTs = ts;
     }
     m.set(file, x);
   };
   for (const s of steps) {
     if (s.kind !== 'tool') continue;
     if (s.file) mark(s.file, s.edits !== undefined, s.ts);
-    for (const f of s.shellFiles ?? []) mark(f.path, f.op !== 'restore', s.ts);
+    for (const f of s.shellFiles ?? []) mark(f.path, f.op !== 'restore', s.ts, f.op === 'delete' || f.op === 'move-from');
   }
   return m;
+}
+
+const DRIFT_MARGIN_MS = 3000;
+
+const statOf = (p: string): { mtimeMs: number } | undefined => {
+  try {
+    return statSync(p);
+  } catch {
+    return undefined;
+  }
+};
+
+/** Files whose disk state no longer matches the session's last change: modified afterwards, missing, or back after a delete. */
+export function diskCheck(steps: AgentTraceStep[], stat: (p: string) => { mtimeMs: number } | undefined = statOf): Record<string, 'changed' | 'missing'> {
+  const out: Record<string, 'changed' | 'missing'> = {};
+  for (const [file, info] of [...touchedFiles(steps)].slice(0, MAX_FILES)) {
+    if (!info.edited || !isAbsolute(file)) continue;
+    const st = stat(file);
+    if (info.gone) {
+      if (st) out[file] = 'changed';
+    } else if (!st) out[file] = 'missing';
+    else if (info.lastTs !== undefined && st.mtimeMs > info.lastTs + DRIFT_MARGIN_MS) out[file] = 'changed';
+  }
+  return out;
 }
 
 function porcelainStatus(xy: string): AgentFileGit {

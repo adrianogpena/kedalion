@@ -58,6 +58,7 @@ export function FilesView({ files, cwd, sessionId, stamp, onGoto }: { files: Fil
   const [grouped, setGrouped] = useState(false);
   const git = useAsync(() => (sessionId ? getFileStatus(sessionId) : Promise.resolve(undefined)), [sessionId, stamp], 0);
   const gitOf = (f: FileEntry): AgentFileGit | undefined => git.data?.status[f.file];
+  const diskOf = (f: FileEntry) => git.data?.disk?.[f.file];
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return files.filter((f) => {
@@ -94,6 +95,7 @@ export function FilesView({ files, cwd, sessionId, stamp, onGoto }: { files: Fil
           {f.failed > 0 && <span className="agents-traj-fail" title={t('panel.trajectory.files.failed', { n: f.failed })}>✕{f.failed}</span>}
           {f.shell.length > 0 && <span className="agents-traj-meta" title={t('panel.trajectory.files.viaShell')}>⌘{f.shell.length}</span>}
           <Delta f={f} />
+          {diskOf(f) && <span className="agents-traj-git agents-traj-git-warn" title={t(`panel.trajectory.files.disk.${diskOf(f)!}.tip`)}>{t(`panel.trajectory.files.disk.${diskOf(f)!}`)}</span>}
           {g && g !== 'clean' && g !== 'outside' && <span className={`agents-traj-git agents-traj-git-${GIT_TONE[g]}`}>{t(`panel.trajectory.files.git.${g}`)}</span>}
           <span className="agents-traj-meta">{f.edits.length > 0 ? `±${f.edits.length}` : `${f.reads}×`}</span>
         </button>
@@ -127,13 +129,13 @@ export function FilesView({ files, cwd, sessionId, stamp, onGoto }: { files: Fil
         </div>
       </div>
       <div className="agents-traj-detail agents-traj-files-detail" tabIndex={0}>
-        {current && <FileDetail f={current} cwd={cwd} git={gitOf(current)} onGoto={onGoto} />}
+        {current && <FileDetail f={current} cwd={cwd} git={gitOf(current)} disk={diskOf(current)} onGoto={onGoto} />}
       </div>
     </div>
   );
 }
 
-function FileDetail({ f, cwd, git, onGoto }: { f: FileEntry; cwd?: string; git?: AgentFileGit; onGoto(i: number): void }) {
+function FileDetail({ f, cwd, git, disk, onGoto }: { f: FileEntry; cwd?: string; git?: AgentFileGit; disk?: 'changed' | 'missing'; onGoto(i: number): void }) {
   const tokens = Math.round(f.readChars / 4);
   return (
     <>
@@ -143,6 +145,7 @@ function FileDetail({ f, cwd, git, onGoto }: { f: FileEntry; cwd?: string; git?:
       </div>
       <dl className="agents-traj-metabar">
         <div><dt>{t('panel.trajectory.files.kindLabel')}</dt><dd>{t(`panel.trajectory.files.kind.${f.kind}`)}</dd></div>
+        {disk && <div><dt>{t('panel.trajectory.files.diskLabel')}</dt><dd>{t(`panel.trajectory.files.disk.${disk}.tip`)}</dd></div>}
         {git && <div><dt>{t('panel.trajectory.files.gitLabel')}</dt><dd>{t(`panel.trajectory.files.git.${git}`)}</dd></div>}
         {(f.added > 0 || f.removed > 0) && <div><dt>{t('panel.trajectory.files.lines')}</dt><dd><Delta f={f} /></dd></div>}
         {f.failed > 0 && <div><dt>{t('panel.trajectory.files.failedLabel')}</dt><dd>{f.failed}</dd></div>}

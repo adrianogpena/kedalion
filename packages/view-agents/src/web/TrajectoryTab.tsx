@@ -5,6 +5,8 @@ import { t } from '../i18n';
 import { getTrace } from './api';
 import { FilesView } from './trajectory/FilesView';
 import { StatsView } from './trajectory/StatsView';
+import { AgentsView, CommandsView, fmtCost, PromptsView, TodosView, WebView } from './trajectory/TabViews';
+import { promptRows } from './trajectory/views';
 import { Timeline } from './trajectory/Timeline';
 import {
   applyFilters,
@@ -45,7 +47,8 @@ const KIND_KEY = {
 const kindLabel = (s: AgentTraceStep) => (s.source ? t(`panel.trajectory.source.${s.source}`) : t(KIND_KEY[s.kind]));
 const lineOf = (s: AgentTraceStep) => `${kindLabel(s)}: ${s.label}`;
 
-type Tab = 'steps' | 'files' | 'stats';
+type Tab = 'steps' | 'files' | 'stats' | 'commands' | 'todos' | 'agents' | 'prompts' | 'web';
+const TABS = ['steps', 'prompts', 'files', 'commands', 'todos', 'agents', 'web', 'stats'] as const;
 
 export interface TrajectoryTabProps {
   /** The selected session's id; absent when none is selected. */
@@ -129,6 +132,11 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
     setSeen(steps.length);
   }, [initialStep, steps, sessionId]);
   const entries = useMemo(() => entriesOf(steps ?? []), [steps]);
+  const promptCost = useMemo(() => {
+    const rows = promptRows(steps ?? []);
+    const top = rows.reduce((m, r) => Math.max(m, r.cost), 0);
+    return new Map(rows.map((r) => [r.i, { cost: r.cost, top: top > 0 && r.cost === top }]));
+  }, [steps]);
   const files = useMemo(() => (tab === 'files' ? filesOf(steps ?? []) : []), [tab, steps]);
   const visible = useMemo(() => applyFilters(entries, filters), [entries, filters]);
   const infos = useMemo(() => infoOf(steps ?? []), [steps]);
@@ -291,6 +299,11 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
           <span className="agents-traj-same" title={t('panel.trajectory.sameRequest', { n: infos[i]!.head! + 1 })}>{t('panel.trajectory.partOf', { n: infos[i]!.head! + 1 })}</span>
         )}
         {!compact && s.pending && <span className="agents-traj-pending" aria-label={t('panel.trajectory.pending')} />}
+        {s.marker && <span className={`agents-traj-marker agents-traj-marker-${s.marker}`}>{t(`panel.trajectory.marker.${s.marker}`)}</span>}
+        {s.kind === 'thinking' && s.detail.length > 0 && <span className="agents-traj-meta" title={t('panel.trajectory.meta.thinking')}>~{fmtTokens(Math.ceil(s.detail.length / 4))}</span>}
+        {promptCost.get(i) && promptCost.get(i)!.cost > 0 && (
+          <span className={`agents-traj-meta${promptCost.get(i)!.top ? ' agents-traj-topcost' : ''}`} title={t(promptCost.get(i)!.top ? 'panel.trajectory.prompts.top' : 'panel.trajectory.prompts.cost')}>{fmtCost(promptCost.get(i)!.cost)}</span>
+        )}
         {s.durationMs !== undefined && <span className="agents-traj-meta" title={t('panel.trajectory.meta.duration')}>{fmtDuration(s.durationMs)}</span>}
         {s.context ? <span className="agents-traj-meta agents-traj-ctx" title={t('panel.trajectory.meta.context')}>{s.contextPercent !== undefined ? `${s.contextPercent}%` : fmtTokens(s.context)}</span> : null}
       </button>
@@ -351,7 +364,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
     <div className="agents-traj-root" onKeyDownCapture={onKeyDownCapture}>
       <div className="agents-traj-bar">
         <div className="agents-traj-tabs" role="tablist">
-          {(['steps', 'files', 'stats'] as const).map((k) => (
+          {TABS.map((k) => (
             <button key={k} type="button" role="tab" aria-selected={tab === k} className="agents-traj-tab" onClick={() => setTab(k)}>
               {t(`panel.trajectory.tab.${k}`)}
             </button>
@@ -409,7 +422,12 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
           </div>
         ))}
       {tab === 'files' && <FilesView files={files} cwd={state.data?.cwd} sessionId={sessionId} stamp={steps.length} onGoto={gotoStep} />}
-      {tab === 'stats' && <StatsView steps={steps} onTool={openTool} onGoto={gotoStep} />}
+      {tab === 'commands' && <CommandsView steps={steps} onGoto={gotoStep} />}
+      {tab === 'todos' && <TodosView steps={steps} onGoto={gotoStep} />}
+      {tab === 'agents' && <AgentsView steps={steps} onGoto={gotoStep} />}
+      {tab === 'prompts' && <PromptsView steps={steps} onGoto={gotoStep} />}
+      {tab === 'web' && <WebView steps={steps} onGoto={gotoStep} />}
+      {tab === 'stats' && <StatsView steps={steps} sessionId={sessionId} onTool={openTool} onGoto={gotoStep} />}
       {menuEl}
     </div>
   );

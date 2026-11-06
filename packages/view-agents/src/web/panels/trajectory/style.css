@@ -107,3 +107,18 @@
 .agents-traj-chart-hot { fill: var(--warn); cursor: pointer; }
 .agents-traj-hist { display: flex; align-items: flex-end; gap: 1px; height: 48px; }
 .agents-traj-hist span { flex: 1; min-height: 1px; background: var(--accent); opacity: 0.8; }
+
+.agents-traj-pane { display: flex; flex: 1; flex-direction: column; gap: var(--space-8); min-height: 0; overflow: auto; }
+.agents-traj-cmds { width: 100%; }
+.agents-traj-cmds td { vertical-align: top; }
+.agents-traj-cmd { text-align: left !important; max-width: 0; width: 100%; }
+.agents-traj-cmd code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agents-traj-rowact { white-space: nowrap; }
+.agents-traj-agentbox { max-height: 220px; margin: var(--space-4) 0; white-space: pre-wrap; overflow: auto; }
+.agents-traj-todos { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-4); }
+.agents-traj-todo-completed { color: var(--text-3); text-decoration: line-through; }
+.agents-traj-todo-in_progress { color: var(--accent); }
+.agents-traj-topcost { color: var(--warn); font-weight: 600; }
+.agents-traj-marker { flex-shrink: 0; font-size: var(--fs-sm); color: var(--text-3); }
+.agents-traj-marker-denied, .agents-traj-marker-interrupt { color: var(--err); }
+.agents-traj-select { width: auto; max-width: 100%; }

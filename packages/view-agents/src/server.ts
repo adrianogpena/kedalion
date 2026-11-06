@@ -24,7 +24,8 @@ import { claudeCommand } from './server/claude-command.ts';
 import { findSessionFile, loadHistory, sessionFilesOf } from './server/chat/normalize.ts';
 import { createTailer, type Tailer } from './server/tail.ts';
 import { lastResponse } from './server/last-response.ts';
-import { fileStatus } from './server/file-status.ts';
+import { diskCheck, fileStatus } from './server/file-status.ts';
+import { averageOf, siblingFiles, siblingList, summaryOf, summaryOfFile } from './server/trace-summary.ts';
 import { readTraceFull } from './server/trace.ts';
 import { listScoped } from './server/skills.ts';
 import { capPerProject, createSessionScanner, matchProject } from './server/discovery.ts';
@@ -745,10 +746,37 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
             const file = findSessionFile(a.dir, id);
             if (file) {
               const { steps, cwd } = readTraceFull(file);
-              return { status: await fileStatus(steps, cwd) };
+              return { status: await fileStatus(steps, cwd), disk: diskCheck(steps) };
             }
           }
-          return { status: {} };
+          return { status: {}, disk: {} };
+        },
+        'GET /api/agents/trace/siblings': ({ url }) => {
+          const id = url?.searchParams.get('sessionId') ?? '';
+          for (const a of accounts()) {
+            const file = findSessionFile(a.dir, id);
+            if (file) return { sessions: siblingList(file) };
+          }
+          return { sessions: [] };
+        },
+        'GET /api/agents/trace/compare': ({ url }) => {
+          const id = url?.searchParams.get('sessionId') ?? '';
+          const withId = url?.searchParams.get('with') ?? '';
+          for (const a of accounts()) {
+            const file = findSessionFile(a.dir, id);
+            if (!file) continue;
+            const current = summaryOf(id, readTraceFull(file).steps);
+            const sibs = siblingFiles(file);
+            if (withId && withId !== 'project') {
+              const other = sibs.find((x) => x.id === withId);
+              const summary = other ? summaryOfFile(other.id, other.file) : undefined;
+              return { current, ...(summary ? { other: summary } : {}), count: summary ? 1 : 0 };
+            }
+            const list = sibs.flatMap((x) => summaryOfFile(x.id, x.file) ?? []);
+            const other = averageOf(list);
+            return { current, ...(other ? { other } : {}), count: list.length };
+          }
+          return { count: 0 };
         },
         'GET /api/agents/recovery': async () => {
           await syncRunning();

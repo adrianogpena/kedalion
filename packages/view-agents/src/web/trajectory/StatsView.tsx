@@ -3,6 +3,7 @@ import { Empty } from '@kedalion/ui';
 import type { AgentTraceStep } from '../../protocol';
 import { t } from '../../i18n';
 import { fmtDuration, fmtTokens, toolStats, totalsOf } from './model';
+import { CompareSection } from './CompareSection';
 import { activityOf, contextSeries, costOfSteps, errorsOf, fileRollup, heaviestResults, modelsOf, promptsOf, subagentOf, timeOf, toolDetails } from './stats';
 
 const fmtCost = (usd: number) => (usd === 0 ? '$0' : usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`);
@@ -66,7 +67,7 @@ function ContextChart({ points, onGoto }: { points: ReturnType<typeof contextSer
 const Title = ({ text }: { text: string }) => <h3 className="agents-traj-stats-title">{text}</h3>;
 
 /** Session statistics: totals, cost, models, time, context, heaviest results, prompts, subagents, errors, activity, files and tools. Clicking a tool filters the steps to it. */
-export function StatsView({ steps, onTool, onGoto }: { steps: AgentTraceStep[]; onTool(tool: string): void; onGoto(i: number): void }) {
+export function StatsView({ steps, sessionId, onTool, onGoto }: { steps: AgentTraceStep[]; sessionId?: string; onTool(tool: string): void; onGoto(i: number): void }) {
   const stats = useMemo(() => toolStats(steps), [steps]);
   const totals = useMemo(() => totalsOf(steps), [steps]);
   const models = useMemo(() => modelsOf(steps), [steps]);
@@ -246,6 +247,7 @@ export function StatsView({ steps, onTool, onGoto }: { steps: AgentTraceStep[]; 
         <Title text={t('panel.trajectory.stats.filesTitle')} />
         <Legend items={[{ label: t('panel.trajectory.stats.filesRead'), value: String(roll.read) }, { label: t('panel.trajectory.stats.filesEdited'), value: String(roll.edited) }, { label: t('panel.trajectory.stats.filesCreated'), value: String(roll.created) }, { label: t('panel.trajectory.stats.filesDeleted'), value: String(roll.deleted) }, { label: t('panel.trajectory.stats.lines'), value: `+${roll.added} −${roll.removed}` }, { label: t('panel.trajectory.stats.bash'), value: String(roll.bash) }]} />
       </section>
+      <CompareSection sessionId={sessionId} />
       {stats.length === 0 ? (
         <Empty title={t('panel.trajectory.stats.empty')} />
       ) : (
