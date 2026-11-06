@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useSyncExternalStore, type ReactNode } from 'react';
 import { copyNotify, IconButton, useAsync, type SidePanelContent } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { Chip, relTime, type Tone } from '../../kit';
@@ -252,12 +252,59 @@ interface ExtraSource {
 }
 
 const PRS_EXTRA: ExtraSource = { source: 'github-prs', action: 'rc' };
+const PRS_ONE: ExtraSource = { source: 'github-prs', action: 'pr' };
 
-function PrOverview({ pr, config, extraSource = PRS_EXTRA }: { pr: PrItem; config: Record<string, unknown>; extraSource?: ExtraSource }) {
+interface Live {
+  fresh?: PrItem;
+  busy: boolean;
+  failed: string;
+  tick: number;
+}
+
+const IDLE: Live = { busy: false, failed: '', tick: 0 };
+const lives = new Map<string, Live>();
+const listeners = new Set<() => void>();
+interface PrRef {
+  repo: string;
+  number: number;
+}
+const liveKey = (pr: PrRef) => `${pr.repo}#${pr.number}`;
+const setLive = (key: string, patch: Partial<Live>) => {
+  lives.set(key, { ...(lives.get(key) ?? IDLE), ...patch });
+  listeners.forEach((l) => l());
+};
+
+function useLive(key: string): Live {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => void listeners.delete(cb);
+    },
+    () => lives.get(key) ?? IDLE,
+  );
+}
+
+function refreshPr(listed: PrRef, config: Record<string, unknown>, source: ExtraSource) {
+  const key = liveKey(listed);
+  setLive(key, { busy: true, failed: '', tick: (lives.get(key)?.tick ?? 0) + 1 });
+  runAction<PrItem>(source.source, source.action, config, { repo: listed.repo, number: listed.number })
+    .then((item) => setLive(key, { fresh: item, busy: false }))
+    .catch((e: unknown) => setLive(key, { busy: false, failed: e instanceof Error ? e.message : String(e) }));
+}
+
+function RefreshButton({ pr, config, source }: { pr: PrRef; config: Record<string, unknown>; source: ExtraSource }) {
+  const live = useLive(liveKey(pr));
+  return <IconButton icon="refresh" label={tKey(live.busy ? 'dash.github.pr.refreshing' : 'dash.github.pr.refresh')} disabled={live.busy} onClick={() => refreshPr(pr, config, source)} />;
+}
+
+function PrOverview({ pr: listed, config, extraSource = PRS_EXTRA }: { pr: PrItem; config: Record<string, unknown>; extraSource?: ExtraSource }) {
+  const live = useLive(liveKey(listed));
+  const pr = live.fresh && live.fresh.updatedAt >= listed.updatedAt ? { ...live.fresh, linked: listed.linked } : listed;
   const c = pr.checks;
-  const extra = useAsync(() => runAction<PrExtra>(extraSource.source, extraSource.action, config, { repo: pr.repo, number: pr.number }), [pr.id]);
+  const extra = useAsync(() => runAction<PrExtra>(extraSource.source, extraSource.action, config, { repo: pr.repo, number: pr.number }), [pr.id, live.tick]);
   return (
     <div className="gh-pr">
+      {live.failed && <span className="gh-error">{live.failed}</span>}
       <Card title={tKey('dash.github.pr.status')}>
         <Line label={tKey('dash.github.pr.review')}>
           {pr.review === 'none' ? <span>{tKey('dash.github.pr.noReview')}</span> : <Chip tone={REVIEW_TONE[pr.review]}>{tKey(`dash.github.review.${pr.review}`)}</Chip>}
@@ -344,6 +391,7 @@ export function trackedPrSideContent({ instanceId, pr, config }: { instanceId: s
     actions: (
       <>
         <IconButton icon="link" label={tKey('dash.github.pr.open')} onClick={() => window.open(pr.url, '_blank', 'noreferrer')} />
+        <RefreshButton pr={{ repo: `${pr.owner}/${pr.repo}`, number: pr.number }} config={config} source={{ source: 'tickets', action: 'pr' }} />
         <IconButton icon="copy" label={tKey('dash.github.pr.copyLink')} onClick={() => void copyNotify(pr.url)} />
         <IconButton icon="copy" label={tKey('dash.github.pr.copyBranch')} onClick={() => void copyNotify(pr.branch)} />
       </>
@@ -362,6 +410,7 @@ export function prSideContent({ instanceId, pr, config }: PrSideInput): SidePane
     actions: (
       <>
         <IconButton icon="link" label={tKey('dash.github.pr.open')} onClick={() => window.open(pr.url, '_blank', 'noreferrer')} />
+        <RefreshButton pr={pr} config={config} source={PRS_ONE} />
         <IconButton icon="copy" label={tKey('dash.github.pr.copyLink')} onClick={() => void copyNotify(pr.url)} />
         <IconButton icon="copy" label={tKey('dash.github.pr.copyBranch')} onClick={() => void copyNotify(pr.branch)} />
       </>

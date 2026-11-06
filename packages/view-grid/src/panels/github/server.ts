@@ -179,6 +179,15 @@ export const githubPrsSource = defineSource<SearchConfig>({
     return { ...data, items, ...(nextRefreshMs ? { nextRefreshMs } : {}) };
   },
   actions: {
+    async pr(payload, config, ctx) {
+      const p = payload as { repo?: unknown; number?: unknown } | null;
+      const ref = typeof p?.repo === 'string' ? parseRepo(p.repo) : null;
+      const number = Number(p?.number);
+      if (!ref || !Number.isInteger(number) || number <= 0) throw invalid('pr-ref', 'A pull request is required.');
+      const item = await fetchPrItem(await ctx.connection(config.connection, 'github'), ref, number, config.ticketPattern ?? '', ctx.signal);
+      if (!item) throw invalid('pr-not-found', 'The pull request was not found.');
+      return item;
+    },
     async rc(payload, config, ctx) {
       const p = payload as { repo?: unknown; number?: unknown } | null;
       const ref = typeof p?.repo === 'string' ? parseRepo(p.repo) : null;
