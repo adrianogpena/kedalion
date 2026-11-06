@@ -7,3 +7,4 @@ export { cwdFromOsc7, durationText, terminalSessions, type SessionInfo, type Ses
 export { validTriggers, type TerminalTrigger } from '../output-scan.ts';
 export { validAppearance, withAppearance, type ProfileAppearance } from '../appearance.ts';
 export { parseWindowsTerminalSchemes, validSchemes, type ColorScheme } from '../schemes.ts';
+export { DEFAULT_PROMPT_STYLE, MAX_PROMPT_SEGMENTS, MAX_PROMPT_SYMBOL, PROMPT_COLORS, PROMPT_CUSTOM_NAME, PROMPT_SEGMENT_KINDS, MAX_PROMPT_CUSTOMS, MAX_PROMPT_SCRIPT, promptPreview, promptSpec, validPromptStyle, type PromptColor, type PromptCustom, type PromptSample, type PromptSegment, type PromptSegmentKind, type PromptSpan, type PromptStyle } from '../prompt.ts';

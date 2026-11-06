@@ -1,6 +1,6 @@
 import { DEFAULT_WORD_SEPARATORS, TERMINAL_THEMES, type ColorScheme } from '@kedalion/terminal/options';
 import type { TerminalProfile } from '@kedalion/terminal/protocol';
-import type { TerminalTrigger } from '@kedalion/terminal';
+import { DEFAULT_PROMPT_STYLE, type PromptStyle, type TerminalTrigger } from '@kedalion/terminal';
 import { bool, type FieldDef, groupField, num, oneOf, type SettingDef, settingDefaultsOf, str } from '@kedalion/ui';
 
 export type TerminalFontWeight = 'normal' | 'bold' | '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
@@ -51,6 +51,10 @@ export interface TerminalSettings {
   confirmCloseRunning?: boolean;
   /** OSC 133/OSC 7 scripts injected into supported shells; default true. */
   shellIntegration?: boolean;
+  /** `kedalion` replaces the shell's prompt with folder, git branch and exit status; default `shell`. */
+  prompt?: 'shell' | 'kedalion';
+  /** Segments, colors and symbol of Kedalion's prompt; default `DEFAULT_PROMPT_STYLE`. */
+  promptStyle?: PromptStyle;
   commandDecorations?: boolean;
   /** Start directory when the tab and profile give none; `~` = home. */
   defaultCwd?: string;
@@ -127,6 +131,8 @@ export const terminalSettingDefs: SettingDef<TerminalViewSettings>[] = [
   field('earlierOutput', 730, bool(true), 'output'),
   { id: 'terminal.triggers', kind: 'custom', section: ['terminal', 'output'], order: 740, label: 'settings.terminal.triggers', description: 'settings.terminal.triggers.hint', default: [] as TerminalTrigger[], get: (s) => s.terminal?.triggers ?? [], set: (s, v) => ({ terminal: { ...s.terminal, triggers: v as TerminalTrigger[] } }) },
   field('shellIntegration', 500, bool(true), 'profiles'),
+  field('prompt', 505, oneOf('shell', ['shell', 'kedalion']), 'prompt'),
+  { id: 'terminal.promptStyle', kind: 'custom', section: ['terminal', 'prompt'], order: 506, label: 'settings.terminal.promptStyle', description: 'settings.terminal.promptStyle.hint', default: DEFAULT_PROMPT_STYLE, get: (s) => s.terminal?.promptStyle ?? DEFAULT_PROMPT_STYLE, set: (s, v) => ({ terminal: { ...s.terminal, promptStyle: v as PromptStyle } }) },
   field('commandDecorations', 510, bool(true), 'profiles'),
   { id: 'terminal.profiles', kind: 'custom', section: ['terminal', 'profiles'], order: 600, label: 'settings.terminal.profiles', description: 'settings.terminal.profiles.hint', default: [] as TerminalProfile[], get: (s) => s.terminal?.profiles ?? [], set: (s, v) => ({ terminal: { ...s.terminal, profiles: v as TerminalProfile[] } }) },
 ];

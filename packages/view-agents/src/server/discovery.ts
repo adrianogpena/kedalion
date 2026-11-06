@@ -15,7 +15,7 @@ export interface ProjectRef {
 type Entry = Record<string, any>;
 
 const CHUNK = 64 * 1024;
-const SYNTHETIC = ['<command-name>', '<local-command-', '<command-message>', '<system-reminder>', '<usage>'];
+const SYNTHETIC = ['<command-name>', '<local-command-', '<command-message>', '<system-reminder>', '<usage>', '<bash-input>', '<bash-stdout>', '<bash-stderr>'];
 
 function readRange(file: string, start: number, length: number): string {
   const fd = openSync(file, 'r');

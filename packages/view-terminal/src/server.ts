@@ -8,7 +8,9 @@ import {
   type TerminalSessions,
   validAppearance,
   validSchemes,
+  validPromptStyle,
   validTriggers,
+  type PromptStyle,
   type ColorScheme,
   type SessionsConfig,
   type TerminalTrigger,
@@ -24,7 +26,8 @@ export interface TerminalServerSettings {
     profiles?: TerminalProfile[];
     schemes?: ColorScheme[];
     triggers?: TerminalTrigger[];
-    [field: string]: string | number | boolean | TerminalProfile[] | ColorScheme[] | TerminalTrigger[] | undefined;
+    promptStyle?: PromptStyle;
+    [field: string]: string | number | boolean | TerminalProfile[] | ColorScheme[] | TerminalTrigger[] | PromptStyle | undefined;
   };
   /** Layout of the Terminal screen's tabs (`serialize`); the UI validates it on restore. */
   terminalLayout?: unknown;
@@ -65,6 +68,7 @@ export const TERMINAL_SPEC: Record<string, FieldSpec> = {
   onExit: ['keep', 'close', 'closeIfClean', 'restart'],
   confirmCloseRunning: 'boolean',
   shellIntegration: 'boolean',
+  prompt: ['shell', 'kedalion'],
   commandDecorations: 'boolean',
   defaultCwd: 'string',
   defaultProfile: 'string',
@@ -108,7 +112,7 @@ function validProfiles(raw: unknown): TerminalProfile[] | null {
 /** The terminal group: a valid `shell` id plus the fields of `TERMINAL_SPEC`. */
 export function validTerminal(raw: unknown): TerminalServerSettings['terminal'] | null {
   if (!isRecord(raw)) return null;
-  const { shell, profiles, schemes, triggers, ...rest } = raw;
+  const { shell, profiles, schemes, triggers, promptStyle, ...rest } = raw;
   if (shell !== undefined && !isShellId(shell)) return null;
   const validated = profiles === undefined ? undefined : validProfiles(profiles);
   if (validated === null) return null;
@@ -116,12 +120,15 @@ export function validTerminal(raw: unknown): TerminalServerSettings['terminal'] 
   if (validSchemeList === null) return null;
   const validTriggerList = triggers === undefined ? undefined : validTriggers(triggers);
   if (validTriggerList === null) return null;
+  const validStyle = promptStyle === undefined ? undefined : validPromptStyle(promptStyle);
+  if (validStyle === null) return null;
   if (typeof rest.theme === 'string' && !/^[\w.-]{1,64}$/.test(rest.theme)) return null;
   const fields: NonNullable<TerminalServerSettings['terminal']> | null = validGroup(rest, TERMINAL_SPEC);
   if (!fields) return null;
   if (validated) fields.profiles = validated;
   if (validSchemeList) fields.schemes = validSchemeList;
   if (validTriggerList) fields.triggers = validTriggerList;
+  if (validStyle) fields.promptStyle = validStyle;
   return shell === undefined ? fields : { ...fields, shell };
 }
 
@@ -169,6 +176,8 @@ export function terminalServerView({ integrationDir, resolveCwd, launchers, sess
         return typeof v === 'string' ? v : '';
       },
       shellIntegration: async () => (await setting('shellIntegration')) !== false,
+      prompt: async () => ((await setting('prompt')) === 'kedalion' ? 'kedalion' : 'shell'),
+      promptStyle: async () => validPromptStyle((await ctx.settings.load()).terminal?.promptStyle) ?? undefined,
       integrationDir,
       resolveCwd,
       launchers,

@@ -5,6 +5,7 @@ import { isShellId, SHELL_ICONS, SHELL_IDS, SHELL_NAMES, type TerminalProfile, t
 import { t, type TerminalMessageKey } from '../i18n';
 import { terminalSettingDefs, type TerminalViewSettings } from '../settings';
 import { TriggersRow } from './TriggersRow';
+import { PromptRow } from './PromptRow';
 import { ProfileAppearanceFields, SchemesRow, ThemeRow } from '../TerminalSchemes';
 
 type Settings = TerminalViewSettings;
@@ -341,6 +342,7 @@ export const terminalSettingFields: Record<string, ComponentType<SettingsFieldPr
   'terminal.schemes': ({ settings, onChange }) => <SchemesRow settings={settings} onChange={onChange} />,
   'terminal.profiles': ({ settings, onChange }) => <ProfilesRow settings={settings} onChange={onChange} />,
   'terminal.triggers': ({ settings, onChange }) => <TriggersRow settings={settings} onChange={onChange} />,
+  'terminal.promptStyle': ({ settings, onChange }) => <PromptRow settings={settings} onChange={onChange} />,
   'terminal.pasteLargeSize': ({ def, settings, onChange }) =>
     settings.terminal?.pasteWarning === 'never'
       ? <fieldset className="setting-disabled" disabled><SettingRow def={def} settings={settings} onChange={onChange} /></fieldset>

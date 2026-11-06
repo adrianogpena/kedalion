@@ -7,7 +7,7 @@ export type TailEvent = ChatEvent;
 export const TAIL_BACKFILL_BYTES = 512 * 1024;
 export const TAIL_MAX_EVENTS = 600;
 const POLL_MS = 1000;
-const ECHO_PREFIXES = ['<command-name>', '<command-message>', '<command-args>', '<local-command-'];
+const ECHO_PREFIXES = ['<command-name>', '<command-message>', '<command-args>', '<local-command-', '<bash-input>', '<bash-stdout>', '<bash-stderr>'];
 
 /** Transcript events of one jsonl line: user text (not slash-command echoes), assistant text, tool calls and results (no thinking). */
 export function eventsOfLine(line: string): TailEvent[] {

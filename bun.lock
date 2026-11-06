@@ -11,7 +11,7 @@
     },
     "app": {
       "name": "@kedalion/app",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "dependencies": {
         "@kedalion/db": "workspace:*",
         "@kedalion/editor": "workspace:*",
@@ -345,6 +345,7 @@
       "name": "@kedalion/view-terminal",
       "version": "0.7.0",
       "dependencies": {
+        "@kedalion/editor": "workspace:*",
         "@kedalion/server-core": "workspace:*",
         "@kedalion/terminal": "workspace:*",
         "@kedalion/ui": "workspace:*",

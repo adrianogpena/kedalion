@@ -10,6 +10,7 @@
     "./styles.css": "./src/terminal-screen.css"
   },
   "dependencies": {
+    "@kedalion/editor": "workspace:*",
     "@kedalion/server-core": "workspace:*",
     "@kedalion/terminal": "workspace:*",
     "@kedalion/ui": "workspace:*"

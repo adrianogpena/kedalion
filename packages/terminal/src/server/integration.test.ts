@@ -32,6 +32,17 @@ describe('withIntegration', () => {
     expect(ps[4]).toContain("it''s");
     expect(withIntegration('cmd', ['cmd.exe'], dir, { PROMPT: '$G' }).env.PROMPT).toContain('$E]133;A$E\\$G$E]133;B$E\\');
   });
+  test('the kedalion prompt sets the spec and symbol, or a PROMPT for cmd', () => {
+    expect(withIntegration('bash', ['/bin/bash'], dir, {}, { prompt: 'kedalion' }).env).toEqual({ KEDALION_PROMPT: 'cwd:36 branch:35 status:31 symbol:32:31', KEDALION_PROMPT_SYMBOL: '$' });
+    expect(withIntegration('bash', ['/bin/bash'], dir, {}, { prompt: 'kedalion', style: { segments: [], symbol: '>' } }).env.KEDALION_PROMPT).toBe('-');
+    expect(withIntegration('bash', ['/bin/bash'], dir, {}, { prompt: 'shell' }).env).toEqual({});
+    const fns = withIntegration('bash', ['/bin/bash'], dir, {}, { prompt: 'kedalion', style: { segments: [{ kind: 'custom', name: 'jdkinfo' }], symbol: '$', customs: [{ name: 'jdkinfo', script: 'echo j' }, { name: 'off', script: 'echo o' }] } }).env;
+    expect(fns.KEDALION_PROMPT_FN_jdkinfo).toBe('echo j');
+    expect(fns.KEDALION_PROMPT_FN_off).toBeUndefined();
+    const cmd = withIntegration('cmd', ['cmd.exe'], dir, { PROMPT: '$G' }, { prompt: 'kedalion', style: { segments: [{ kind: 'cwd', color: 'cyan' }, { kind: 'branch' }, { kind: 'newline' }, { kind: 'symbol', color: 'green' }], symbol: '$' } }).env;
+    expect(cmd.KEDALION_PROMPT).toBeUndefined();
+    expect(cmd.PROMPT).toContain('$E[36m$P$E[0m$_$E[32m$$$E[0m $E]133;B');
+  });
 });
 
 describe('integration files', () => {

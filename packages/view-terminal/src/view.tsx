@@ -5,6 +5,7 @@ import { terminalCommands } from './commands';
 import { en, ptBR } from './i18n';
 import { terminalSettingDefs, type TerminalViewSettings, terminalSettingsOf } from './settings';
 import { TerminalProfilesCard, terminalSettingFields } from './settings/cards';
+import { PromptCard } from './settings/PromptRow';
 
 // xterm.js is large; the screen loads on first visit.
 const TerminalScreen = lazy(() => import('./TerminalScreen').then((m) => ({ default: m.TerminalScreen })));
@@ -36,8 +37,9 @@ export function terminalView({ group, order }: TerminalViewOptions) {
         { path: ['terminal', 'tabs'], order: 30, label: 'settings.section.terminal.tabs' },
         { path: ['terminal', 'behavior'], order: 40, label: 'settings.section.terminal.behavior' },
         { path: ['terminal', 'output'], order: 35, label: 'settings.section.terminal.output' },
+        { path: ['terminal', 'prompt'], order: 15, label: 'settings.section.terminal.prompt' },
       ],
-      cards: { 'terminal.profiles': TerminalProfilesCard },
+      cards: { 'terminal.profiles': TerminalProfilesCard, 'terminal.prompt': PromptCard },
       fields: terminalSettingFields,
     },
     messages: { en, 'pt-BR': ptBR },

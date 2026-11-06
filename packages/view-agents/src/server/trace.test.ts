@@ -27,3 +27,11 @@ test('caps labels at 72 chars', () => {
   const s = parseTrace(j({ type: 'user', message: { content: 'x'.repeat(200) } }));
   expect(s[0]!.label.length).toBe(72);
 });
+
+test('shell turns become shell-sourced steps with readable text', () => {
+  const s = parseTrace([
+    j({ type: 'user', message: { content: '<bash-input>git pull</bash-input>' } }),
+    j({ type: 'user', message: { content: '<bash-stdout>Already up to date.</bash-stdout><bash-stderr></bash-stderr>' } }),
+  ].join('\n'));
+  expect(s.map((x) => [x.source, x.label])).toEqual([['shell', '! git pull'], ['shell', 'Already up to date.']]);
+});

@@ -6,9 +6,22 @@ const MAX_LABEL = 72;
 const PRIMARY_KEYS = ['file_path', 'path', 'command', 'pattern', 'query', 'url', 'description'];
 
 const cap = (s: string) => (s.length > MAX_LABEL ? `${s.slice(0, MAX_LABEL - 1)}…` : s);
+const SHELL_TAG = /^<bash-(input|stdout|stderr)>/;
+
+/** Readable text of a `! cmd` turn: `! cmd` for the input, the plain output for stdout/stderr. */
+function shellText(text: string): string {
+  const input = /^<bash-input>([\s\S]*?)<\/bash-input>/.exec(text)?.[1];
+  if (input !== undefined) return `! ${input.trim()}`;
+  const out = text
+    .replace(/<\/?bash-(stdout|stderr)>/g, '\n')
+    .trim();
+  return out || '(no output)';
+}
+
 /** Who really wrote a `user` transcript entry, when it was not the person. */
 function userSource(e: { isMeta?: boolean; origin?: { kind?: string } }, text: string): AgentTraceStep['source'] {
   if (text.startsWith('Base directory for this skill')) return 'skill';
+  if (SHELL_TAG.test(text)) return 'shell';
   const kind = e.origin?.kind;
   if (kind === 'peer') return 'agent';
   if (kind === 'task-notification') return 'task';
@@ -107,7 +120,8 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
       const text = textOf(content).trim();
       if (text) {
         const source = userSource(e, text);
-        steps.push({ kind: 'user', label: firstLine(text), detail: text, ...(source ? { source } : {}), ...base });
+        const shown = source === 'shell' ? shellText(text) : text;
+        steps.push({ kind: 'user', label: firstLine(shown), detail: shown, ...(source ? { source } : {}), ...base });
       }
       if (ts !== undefined) prevTs = ts;
     } else if (e?.type === 'assistant') {

@@ -35,7 +35,7 @@ function uniqueId(schemes: readonly ColorScheme[]): string {
 }
 
 /** The colors of a built-in theme (`app` has no fixed ones, so Dark+ stands in) or a custom scheme. */
-function colorsOfTheme(id: string, schemes: readonly ColorScheme[]): SchemeColors {
+export function colorsOfTheme(id: string, schemes: readonly ColorScheme[]): SchemeColors {
   const custom = schemes.find((s) => s.id === id);
   if (custom) {
     const { id: _id, name: _name, ...rest } = custom;

@@ -288,6 +288,7 @@
 .agents-traj-src-skill .agents-traj-kind { color: var(--warn); }
 .agents-traj-src-agent .agents-traj-kind, .agents-traj-src-task .agents-traj-kind { color: var(--text-2); }
 .agents-traj-src-system .agents-traj-kind { color: var(--text-3); }
+.agents-traj-src-shell .agents-traj-kind { color: var(--info); }
 .agents-traj-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agents-traj-error .agents-traj-label { color: var(--err); }
 .agents-traj-detail { flex: 1; min-width: 0; margin: 0; padding: var(--space-4) var(--space-6); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text); background: var(--bg); border-radius: var(--radius-xs); }

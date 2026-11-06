@@ -338,7 +338,7 @@ export interface AgentTraceStep {
   label: string;
   detail: string;
   /** User step that the person did not type: an expanded skill, a subagent hand-back, a background-task notice or a system reminder. */
-  source?: 'skill' | 'agent' | 'task' | 'system';
+  source?: 'skill' | 'agent' | 'task' | 'system' | 'shell';
   error?: boolean;
   /** Time of the transcript entry, ms since epoch. */
   ts?: number;

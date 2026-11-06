@@ -1,6 +1,7 @@
 /// <reference path="./integration/scripts.d.ts" />
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DEFAULT_PROMPT_STYLE, type PromptStyle, promptSpec } from '../prompt.ts';
 import type { ShellId } from '../protocol.ts';
 // Text imports: `bun build --compile` inlines them, so the exe carries the scripts and writes them out at runtime.
 import bashScript from './integration/bash.sh' with { type: 'text' };
@@ -76,12 +77,37 @@ const LOGIN_FLAGS = new Set(['-l', '--login', '-i']);
 /**
  * Argv and env that load the integration script for `shell` (files already in `dir`).
  * `env` is the env the session would get otherwise; the result merges into it.
+ * `prompt: 'kedalion'` makes the script replace the shell's prompt with Kedalion's, drawn from `style`
+ * (`KEDALION_PROMPT` spec and `KEDALION_PROMPT_SYMBOL`; cmd gets a `PROMPT` built here).
  */
 export function withIntegration(
   shell: IntegratedShell,
   argv: string[],
   dir: string,
   env: Record<string, string | undefined>,
+  opts: { prompt?: TerminalPrompt; style?: PromptStyle } = {},
+): { argv: string[]; env: Record<string, string> } {
+  const style = opts.prompt === 'kedalion' ? (opts.style ?? DEFAULT_PROMPT_STYLE) : null;
+  const r = integrationArgs(shell, argv, dir, env, style);
+  if (style && shell !== 'cmd') {
+    // Never empty: an empty variable reads as unset, which would keep the shell's prompt.
+    r.env.KEDALION_PROMPT = promptSpec(style) || '-';
+    r.env.KEDALION_PROMPT_SYMBOL = style.symbol;
+    // Custom segment bodies: the bash and zsh scripts define prompt_<name> from these.
+    for (const c of style.customs ?? []) if (style.segments.some((s) => s.kind === 'custom' && s.name === c.name)) r.env[`KEDALION_PROMPT_FN_${c.name}`] = c.script;
+  }
+  return r;
+}
+
+/** `terminal.prompt`: keep the shell's own prompt, or use Kedalion's. */
+export type TerminalPrompt = 'shell' | 'kedalion';
+
+function integrationArgs(
+  shell: IntegratedShell,
+  argv: string[],
+  dir: string,
+  env: Record<string, string | undefined>,
+  style: PromptStyle | null,
 ): { argv: string[]; env: Record<string, string> } {
   const [exe = '', ...args] = argv;
   switch (shell) {
@@ -100,8 +126,33 @@ export function withIntegration(
       return { argv: [...argv, '-NoExit', '-Command', `. ([scriptblock]::Create([IO.File]::ReadAllText('${path}')))`], env: {} };
     }
     case 'cmd': {
-      const user = env.PROMPT || '$P$G';
+      const user = style ? cmdPrompt(style) : env.PROMPT || '$P$G';
       return { argv, env: { PROMPT: `$E]133;D$E\\$E]7;file://localhost/$P$E\\$E]133;A$E\\${user}$E]133;B$E\\` } };
     }
   }
+}
+
+/**
+ * A cmd `PROMPT` for the style: cmd knows only the path ($P) and line breaks ($_), so the other segments are left out;
+ * the symbol keeps its success color (cmd has no exit status at the prompt).
+ */
+export function cmdPrompt(style: PromptStyle): string {
+  const spec = promptSpec(style).split(' ');
+  let out = '';
+  let line = false;
+  for (const token of spec) {
+    const [kind, sgr] = token.split(':');
+    let text: string | null = null;
+    if (kind === 'newline') {
+      out += '$_';
+      line = false;
+      continue;
+    }
+    if (kind === 'cwd' || kind === 'folder') text = '$P';
+    else if (kind === 'symbol') text = style.symbol.replace(/\$/g, '$$$$');
+    if (text === null) continue;
+    out += `${line ? ' ' : ''}$E[${sgr}m${text}$E[0m`;
+    line = true;
+  }
+  return `${out} `;
 }

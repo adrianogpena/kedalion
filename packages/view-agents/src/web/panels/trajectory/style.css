@@ -14,6 +14,7 @@
 .agents-traj-tick-assistant { background: var(--ok); }
 .agents-traj-tick-src-skill { background: var(--warn); }
 .agents-traj-tick-src-agent, .agents-traj-tick-src-task { background: var(--text-2); opacity: 0.9; }
+.agents-traj-tick-src-shell { background: var(--info); }
 .agents-traj-tick-src-system { background: var(--text-3); opacity: 0.55; }
 .agents-traj-tick-tool { background: var(--text-2); }
 .agents-traj-tick-thinking { opacity: 0.3; }

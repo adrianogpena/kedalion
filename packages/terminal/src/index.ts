@@ -12,3 +12,5 @@ export { compileTriggers, detectResults, findLinks, type DetectedResult, type Li
 export type { TerminalView } from './view.ts';
 export { createXtermView, type TerminalFontWeight, type TerminalOptions, type XtermView, type XtermViewOptions } from './xterm-view.ts';
 export { terminalAppKeys } from './app-keys';
+export { DEFAULT_PROMPT_STYLE, MAX_PROMPT_SEGMENTS, MAX_PROMPT_SYMBOL, PROMPT_COLORS, PROMPT_CUSTOM_NAME, PROMPT_SEGMENT_KINDS, MAX_PROMPT_CUSTOMS, MAX_PROMPT_SCRIPT, promptPreview, promptSpec, validPromptStyle, type PromptColor, type PromptCustom, type PromptSample, type PromptSegment, type PromptSegmentKind, type PromptSpan, type PromptStyle } from './prompt.ts';
+export { parsePromptScript, promptScript, type PromptScriptError, type PromptScriptErrorCode } from './prompt-script.ts';

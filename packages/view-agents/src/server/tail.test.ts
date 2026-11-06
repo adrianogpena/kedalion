@@ -17,6 +17,7 @@ describe('eventsOfLine', () => {
     expect(eventsOfLine(user('hi'))).toEqual([{ type: 'user', text: 'hi' }]);
     expect(eventsOfLine(user('<command-name>/clear</command-name>'))).toEqual([]);
     expect(eventsOfLine(user('<local-command-stdout>x</local-command-stdout>'))).toEqual([]);
+    expect(eventsOfLine(user('<bash-input>git pull</bash-input>'))).toEqual([]);
     expect(eventsOfLine(asst({ type: 'thinking', thinking: 't' }, { type: 'tool_use', id: 'a', name: 'X' })).map((e) => e.type)).toEqual(['tool_use']);
     expect(eventsOfLine(asst({ type: 'text', text: 'yo' }))).toEqual([{ type: 'text', text: 'yo', messageId: 'm' }]);
   });
