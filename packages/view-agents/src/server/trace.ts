@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { contextPercentOf } from './discovery.ts';
 import type { AgentTraceEdit, AgentTraceStep } from '../protocol.ts';
+import { shellFileOps } from './shell-files.ts';
 
 const MAX_LABEL = 72;
 const PRIMARY_KEYS = ['file_path', 'path', 'command', 'pattern', 'query', 'url', 'description'];
@@ -28,6 +29,28 @@ function userSource(e: { isMeta?: boolean; origin?: { kind?: string } }, text: s
   if (/^<local-command-(stdout|stderr|caveat)>/.test(text) || text.startsWith('This session is being continued from a previous')) return 'system';
   if (e.isMeta || (kind !== undefined && kind !== 'human')) return 'system';
   return undefined;
+}
+
+const MAX_HITS = 300;
+
+function readRangeOf(rec: Record<string, unknown>): { offset?: number; limit?: number } | undefined {
+  const offset = typeof rec.offset === 'number' ? rec.offset : undefined;
+  const limit = typeof rec.limit === 'number' ? rec.limit : undefined;
+  return offset === undefined && limit === undefined ? undefined : { ...(offset !== undefined ? { offset } : {}), ...(limit !== undefined ? { limit } : {}) };
+}
+
+/** File paths listed in a Grep / Glob result (`path`, or `path:line:text` in content mode). */
+function hitsOf(text: string): string[] {
+  const seen = new Set<string>();
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || !/^([A-Za-z]:)?[\\/]/.test(line)) continue;
+    const m = /^((?:[A-Za-z]:)?[^:]+?)(?::\d+[:-].*)?$/.exec(line);
+    const p = m?.[1]?.trim();
+    if (p) seen.add(p);
+    if (seen.size >= MAX_HITS) break;
+  }
+  return [...seen];
 }
 
 const firstLine = (s: string) => cap(s.trim().split('\n')[0]!.trim());
@@ -83,19 +106,20 @@ function editsOf(name: string, input: unknown): AgentTraceEdit[] | undefined {
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
 /** Ordered steps (user prompts, assistant replies, tool calls with their results) of a session jsonl. */
-export function parseTrace(jsonl: string, windowOf?: (model: string) => number | undefined): AgentTraceStep[] {
+export function parseTrace(jsonl: string, windowOf?: (model: string) => number | undefined, out?: { cwd?: string }): AgentTraceStep[] {
   const steps: AgentTraceStep[] = [];
   const tools = new Map<string, AgentTraceStep>();
   const usageSeen = new Set<string>();
   let prevTs: number | undefined;
   for (const line of jsonl.split('\n')) {
     if (!line.trim()) continue;
-    let e: { type?: string; timestamp?: string; isSidechain?: boolean; isMeta?: boolean; origin?: { kind?: string }; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, unknown> } };
+    let e: { type?: string; cwd?: string; timestamp?: string; isSidechain?: boolean; isMeta?: boolean; origin?: { kind?: string }; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, unknown> } };
     try {
       e = JSON.parse(line);
     } catch {
       continue;
     }
+    if (out && !out.cwd && typeof e?.cwd === 'string') out.cwd = e.cwd;
     const content = e?.message?.content;
     const parsedTs = e?.timestamp ? Date.parse(e.timestamp) : Number.NaN;
     const ts = Number.isFinite(parsedTs) ? parsedTs : undefined;
@@ -113,6 +137,10 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
           step.detail += `\n\n${err ? 'Error:' : 'Result:'} ${text || '(empty)'}`;
           delete step.pending;
           step.resultChars = text.length;
+          if ((step.tool === 'Grep' || step.tool === 'Glob') && !err) {
+            const hits = hitsOf(text);
+            if (hits.length > 0) step.hits = hits;
+          }
           if (ts !== undefined && step.ts !== undefined && ts >= step.ts) step.durationMs = ts - step.ts;
           if (err) step.error = true;
         }
@@ -154,7 +182,9 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
           const rec = b.input && typeof b.input === 'object' ? (b.input as Record<string, unknown>) : {};
           const file = FILE_TOOLS.has(name) ? [rec.file_path, rec.notebook_path].find((v): v is string => typeof v === 'string' && !!v) : undefined;
           const edits = editsOf(name, b.input);
+          const range = name === 'Read' ? readRangeOf(rec) : undefined;
           const command = name === 'Bash' && typeof rec.command === 'string' ? rec.command : undefined;
+          const shellFiles = command ? shellFileOps(command, e.cwd ?? out?.cwd) : [];
           const step: AgentTraceStep = {
             kind: 'tool',
             label: toolLabel(b.name, b.input),
@@ -165,6 +195,8 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
             ...(file ? { file } : {}),
             ...(edits ? { edits } : {}),
             ...(command ? { command } : {}),
+            ...(range ? { readRange: range } : {}),
+            ...(shellFiles.length > 0 ? { shellFiles } : {}),
             ...take(),
           };
           steps.push(step);
@@ -182,9 +214,15 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
 }
 
 export function readTrace(file: string, windowOf?: (model: string) => number | undefined): AgentTraceStep[] {
+  return readTraceFull(file, windowOf).steps;
+}
+
+export function readTraceFull(file: string, windowOf?: (model: string) => number | undefined): { steps: AgentTraceStep[]; cwd?: string } {
   try {
-    return parseTrace(readFileSync(file, 'utf8'), windowOf);
+    const out: { cwd?: string } = {};
+    const steps = parseTrace(readFileSync(file, 'utf8'), windowOf, out);
+    return { steps, ...(out.cwd ? { cwd: out.cwd } : {}) };
   } catch {
-    return [];
+    return { steps: [] };
   }
 }

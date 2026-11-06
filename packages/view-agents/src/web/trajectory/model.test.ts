@@ -25,7 +25,9 @@ test('finds the nearest error in both directions', () => {
 
 test('tool stats and files', () => {
   expect(toolStats(steps).map((s) => [s.tool, s.calls, s.errors, s.maxMs])).toEqual([['Edit', 1, 1, 300], ['Read', 1, 0, 100]]);
-  expect(filesOf(steps)).toEqual([{ file: 'a.ts', reads: 1, edits: [{ i: 2, old: 'x', new: 'y', error: true }] }]);
+  const [f] = filesOf(steps);
+  expect(filesOf(steps)).toHaveLength(1);
+  expect(f).toMatchObject({ file: 'a.ts', reads: 1, kind: 'modified', failed: 1, added: 0, removed: 0, ranges: ['all'], firstI: 1, lastI: 2, edits: [{ i: 2, old: 'x', new: 'y', error: true }] });
 });
 
 test('line diff keeps shared lines', () => {
@@ -55,4 +57,16 @@ test('formats durations and tokens', () => {
   expect(fmtDuration(65_000)).toBe('1m 5s');
   expect(fmtTokens(84_200)).toBe('84.2k');
   expect(fmtTokens(1_500_000)).toBe('1.5M');
+});
+
+test('files merge reads, edits, shell changes, search hits and read ranges', () => {
+  const s: AgentTraceStep[] = [
+    { kind: 'tool', label: 'r', detail: '', tool: 'Read', file: 'C:/p/a.ts', readRange: { offset: 10, limit: 5 }, resultChars: 400 },
+    { kind: 'tool', label: 'w', detail: '', tool: 'Write', file: 'c:/p/a.ts', edits: [{ old: '', new: 'l1' + String.fromCharCode(10) + 'l2' }] },
+    { kind: 'tool', label: 'g', detail: '', tool: 'Grep', hits: ['C:/p/a.ts', 'C:/p/other.ts'] },
+    { kind: 'tool', label: 'b', detail: '', tool: 'Bash', shellFiles: [{ op: 'delete', path: 'C:/p/a.ts' }] },
+  ];
+  const files = filesOf(s);
+  expect(files).toHaveLength(1);
+  expect(files[0]).toMatchObject({ kind: 'deleted', added: 2, removed: 0, ranges: ['10-14'], hits: 1, readChars: 400, shell: [{ i: 3, op: 'delete' }] });
 });

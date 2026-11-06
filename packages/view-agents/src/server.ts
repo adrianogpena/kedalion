@@ -24,7 +24,8 @@ import { claudeCommand } from './server/claude-command.ts';
 import { findSessionFile, loadHistory, sessionFilesOf } from './server/chat/normalize.ts';
 import { createTailer, type Tailer } from './server/tail.ts';
 import { lastResponse } from './server/last-response.ts';
-import { readTrace } from './server/trace.ts';
+import { fileStatus } from './server/file-status.ts';
+import { readTraceFull } from './server/trace.ts';
 import { listScoped } from './server/skills.ts';
 import { capPerProject, createSessionScanner, matchProject } from './server/discovery.ts';
 import { createLifecycle, cwdProblem, planRestart, stopOutcome, type TermInfo } from './server/lifecycle.ts';
@@ -733,10 +734,21 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
             const file = findSessionFile(a.dir, id);
             if (file) {
               let windows: Map<string, number> | undefined;
-              return { steps: readTrace(file, (m) => (windows ??= usageReader.read(accounts(), undefined).windows).get(m)) };
+              return readTraceFull(file, (m) => (windows ??= usageReader.read(accounts(), undefined).windows).get(m));
             }
           }
           return { steps: [] };
+        },
+        'GET /api/agents/trace/files': async ({ url }) => {
+          const id = url?.searchParams.get('sessionId') ?? '';
+          for (const a of accounts()) {
+            const file = findSessionFile(a.dir, id);
+            if (file) {
+              const { steps, cwd } = readTraceFull(file);
+              return { status: await fileStatus(steps, cwd) };
+            }
+          }
+          return { status: {} };
         },
         'GET /api/agents/recovery': async () => {
           await syncRunning();

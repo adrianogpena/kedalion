@@ -2,8 +2,8 @@
 .agents-panel-trajectory-side { max-height: 420px; flex: 0 1 auto; }
 .agents-traj-root { display: flex; flex: 1; flex-direction: column; gap: var(--space-4); min-height: 0; min-width: 0; font-size: var(--fs-md); }
 .agents-traj-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-6); }
-.agents-traj-tabs { display: flex; gap: var(--space-2); }
-.agents-traj-tab { padding: var(--space-2) var(--space-5); background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-2); cursor: pointer; font: inherit; font-size: var(--fs-sm); }
+.agents-traj-tabs { display: flex; gap: var(--space-4); }
+.agents-traj-tab { padding: var(--space-6) var(--space-12); background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-2); cursor: pointer; font: inherit; font-size: var(--fs-sm); }
 .agents-traj-tab[aria-selected='true'] { color: var(--text); border-bottom-color: var(--accent); }
 .agents-traj-kinds, .agents-traj-nav { display: flex; align-items: center; gap: var(--space-2); }
 .agents-traj-nav { margin-left: auto; }
@@ -70,3 +70,25 @@
 .agents-traj-table th:first-child, .agents-traj-table td:first-child { text-align: left; }
 .agents-traj-table th { color: var(--text-3); font-weight: 500; border-bottom: 1px solid var(--border-soft); }
 .agents-traj-link { padding: 0; background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; }
+
+.agents-traj-filescol { display: flex; flex: 0 0 clamp(24ch, 42%, 52ch); flex-direction: column; gap: var(--space-4); min-width: 0; min-height: 0; border-right: 1px solid var(--border-soft); }
+.agents-traj-filescol .agents-traj-list { flex: 1; border-right: 0; }
+.agents-traj-filescol .agents-traj-list ul { list-style: none; margin: 0; padding: 0; }
+.agents-traj-filesbar { display: flex; flex-direction: column; gap: var(--space-4); }
+.agents-traj-fsearch { width: 100%; box-sizing: border-box; padding: var(--space-4) var(--space-8); background: var(--bg-2, transparent); border: 1px solid var(--border); border-radius: var(--radius-xs); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.agents-traj-dir { color: var(--text-3); font-size: var(--fs-sm); }
+.agents-traj-fgroup { padding: var(--space-4) var(--space-6); color: var(--text-3); font-size: var(--fs-sm); }
+.agents-traj-kindbadge { flex-shrink: 0; min-width: 6ch; font-size: var(--fs-sm); color: var(--text-3); }
+.agents-traj-fk-created { color: var(--ok); }
+.agents-traj-fk-modified { color: var(--warn); }
+.agents-traj-fk-deleted { color: var(--err); }
+.agents-traj-fail { color: var(--err); font-size: var(--fs-sm); }
+.agents-traj-fdelta { font-size: var(--fs-sm); white-space: nowrap; }
+.agents-traj-git { flex-shrink: 0; font-size: var(--fs-sm); }
+.agents-traj-git-ok { color: var(--ok); }
+.agents-traj-git-warn { color: var(--warn); }
+.agents-traj-git-info { color: var(--info); }
+.agents-traj-git-err { color: var(--err); }
+.agents-traj-git-muted { color: var(--text-3); }
+.agents-traj-shelllist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
+.agents-traj-shelllist li { display: flex; align-items: center; justify-content: space-between; }

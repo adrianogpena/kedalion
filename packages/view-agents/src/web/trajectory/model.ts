@@ -173,23 +173,104 @@ export const resultTokens = (s: AgentTraceStep): number | undefined => (s.result
 
 export const fmtDelta = (n: number): string => `${n >= 0 ? '+' : '−'}${fmtTokens(Math.abs(n))}`;
 
+export type FileKind = 'created' | 'modified' | 'deleted' | 'read';
+export type FileShellOp = NonNullable<AgentTraceStep['shellFiles']>[number]['op'];
+
 export interface FileEntry {
   file: string;
   reads: number;
-  edits: Array<{ i: number; old: string; new: string; error: boolean }>;
+  edits: Array<{ i: number; old: string; new: string; error: boolean; ts?: number }>;
+  kind: FileKind;
+  /** Lines added / removed over all edits. */
+  added: number;
+  removed: number;
+  /** Edits whose tool call failed. */
+  failed: number;
+  firstI: number;
+  lastI: number;
+  firstTs?: number;
+  lastTs?: number;
+  /** Read ranges, e.g. `1-200`, `from 300`, `all`. */
+  ranges: string[];
+  /** Times a Grep / Glob result listed the file. */
+  hits: number;
+  /** Changes made through Bash. */
+  shell: Array<{ i: number; op: FileShellOp }>;
+  /** Characters the Reads returned; about a quarter of it is the tokens they added to the context. */
+  readChars: number;
 }
 
-/** Files the session read or changed, most changed first. */
+export const fileKey = (p: string): string => p.replace(/\\/g, '/').toLowerCase();
+
+const SHELL_WRITES = new Set<FileShellOp>(['write', 'edit', 'delete', 'move-from', 'move-to']);
+
+function rangeLabel(r: { offset?: number; limit?: number } | undefined): string {
+  if (!r) return 'all';
+  const from = r.offset ?? 1;
+  return r.limit !== undefined ? `${from}-${from + r.limit - 1}` : `from ${from}`;
+}
+
+/** Lines added and removed by a change. */
+export function changeSize(old: string, next: string): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const l of lineDiff(old, next)) {
+    if (l.kind === 'add') added++;
+    else if (l.kind === 'del') removed++;
+  }
+  return { added, removed };
+}
+
+/** Files the session read, changed or searched, most changed first. */
 export function filesOf(steps: AgentTraceStep[]): FileEntry[] {
   const m = new Map<string, FileEntry>();
+  const get = (file: string, i: number, ts?: number): FileEntry => {
+    const k = fileKey(file);
+    let x = m.get(k);
+    if (!x) {
+      x = { file, reads: 0, edits: [], kind: 'read', added: 0, removed: 0, failed: 0, firstI: i, lastI: i, ranges: [], hits: 0, shell: [], readChars: 0, ...(ts !== undefined ? { firstTs: ts, lastTs: ts } : {}) };
+      m.set(k, x);
+    }
+    x.lastI = i;
+    if (ts !== undefined) {
+      x.firstTs ??= ts;
+      x.lastTs = ts;
+    }
+    return x;
+  };
   steps.forEach((s, i) => {
-    if (s.kind !== 'tool' || !s.file) return;
-    const x = m.get(s.file) ?? { file: s.file, reads: 0, edits: [] };
-    if (s.edits) for (const e of s.edits) x.edits.push({ i, old: e.old, new: e.new, error: s.error === true });
-    else x.reads++;
-    m.set(s.file, x);
+    if (s.kind !== 'tool') return;
+    if (s.file) {
+      const x = get(s.file, i, s.ts);
+      if (s.edits) {
+        for (const e of s.edits) {
+          x.edits.push({ i, old: e.old, new: e.new, error: s.error === true, ...(s.ts !== undefined ? { ts: s.ts } : {}) });
+          if (s.error === true) x.failed++;
+          else {
+            const size = changeSize(e.old, e.new);
+            x.added += size.added;
+            x.removed += size.removed;
+          }
+        }
+      } else {
+        x.reads++;
+        x.readChars += s.resultChars ?? 0;
+        const r = rangeLabel(s.readRange);
+        if (!x.ranges.includes(r)) x.ranges.push(r);
+      }
+    }
+    for (const f of s.shellFiles ?? []) get(f.path, i, s.ts).shell.push({ i, op: f.op });
+    for (const h of s.hits ?? []) {
+      const x = m.get(fileKey(h));
+      if (x) x.hits++;
+    }
   });
-  return [...m.values()].sort((a, b) => b.edits.length - a.edits.length || b.reads - a.reads || a.file.localeCompare(b.file));
+  for (const x of m.values()) {
+    const last = x.shell[x.shell.length - 1];
+    if (last && (last.op === 'delete' || last.op === 'move-from')) x.kind = 'deleted';
+    else if (x.edits.length > 0 || x.shell.some((s) => SHELL_WRITES.has(s.op))) x.kind = x.edits.length > 0 && x.edits[0]!.old === '' ? 'created' : 'modified';
+  }
+  return [...m.values()].sort((a, b) => b.edits.length + b.shell.length - (a.edits.length + a.shell.length) || b.reads - a.reads || a.file.localeCompare(b.file));
 }
 
 export interface DiffLine {

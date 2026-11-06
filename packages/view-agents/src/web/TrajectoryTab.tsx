@@ -129,6 +129,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
     setSeen(steps.length);
   }, [initialStep, steps, sessionId]);
   const entries = useMemo(() => entriesOf(steps ?? []), [steps]);
+  const files = useMemo(() => (tab === 'files' ? filesOf(steps ?? []) : []), [tab, steps]);
   const visible = useMemo(() => applyFilters(entries, filters), [entries, filters]);
   const infos = useMemo(() => infoOf(steps ?? []), [steps]);
   const tint = useMemo(() => {
@@ -407,7 +408,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
             {detail}
           </div>
         ))}
-      {tab === 'files' && <FilesView files={filesOf(steps)} onGoto={gotoStep} />}
+      {tab === 'files' && <FilesView files={files} cwd={state.data?.cwd} sessionId={sessionId} stamp={steps.length} onGoto={gotoStep} />}
       {tab === 'stats' && <StatsView steps={steps} onTool={openTool} />}
       {menuEl}
     </div>

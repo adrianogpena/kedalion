@@ -3,7 +3,7 @@ import { listSessions, openSession, type Ticketed } from '@kedalion/terminal/ses
 import type { ChatEvent } from '../chat-protocol.ts';
 import { t } from '../i18n';
 import { hydrateUiState, setUiStatePersister } from './ui-state';
-import type { AgentDeleteResult, AgentRestoreResult, AgentTrashEntry, AgentTrashError, AgentLaunch, AgentLifecycleError, AgentStopResult, AgentAccount,AgentAccountUsage, AgentProject, AgentRateLimit, AgentRunning, AgentSearchHit, AgentSessionView, AgentsCapWarn, AgentStatus, AgentStatuslineError, AgentStatuslineStatus, AgentSkillsResponse, AgentTagCount, AgentTraceResponse, AgentTree, AgentTreePatch } from '../protocol.ts';
+import type { AgentDeleteResult, AgentFileStatusResponse, AgentRestoreResult, AgentTrashEntry, AgentTrashError, AgentLaunch, AgentLifecycleError, AgentStopResult, AgentAccount,AgentAccountUsage, AgentProject, AgentRateLimit, AgentRunning, AgentSearchHit, AgentSessionView, AgentsCapWarn, AgentStatus, AgentStatuslineError, AgentStatuslineStatus, AgentSkillsResponse, AgentTagCount, AgentTraceResponse, AgentTree, AgentTreePatch } from '../protocol.ts';
 
 export type { AgentAccount, AgentAccountUsage, AgentProject, AgentRateLimit, AgentRunning, AgentSearchHit, AgentSessionView, AgentsCapWarn, AgentStatus, AgentStatuslineError, AgentStatuslineStatus, AgentTagCount, AgentTree, AgentTreePatch };
 
@@ -99,6 +99,8 @@ export const listAgentSessions = () => request<AgentSessionView[]>('GET', '/api/
 
 /** The trace (steps) of a session. */
 export const getTrace = (sessionId: string) => request<AgentTraceResponse>('GET', '/api/agents/trace', { sessionId });
+/** Git standing of the files a session touched. */
+export const getFileStatus = (sessionId: string) => request<AgentFileStatusResponse>('GET', '/api/agents/trace/files', { sessionId });
 /** Skills and agents of the active account; with `folder`, also the project's own. */
 export const listSkills = (folder?: string) => request<AgentSkillsResponse>('GET', '/api/agents/skills', folder ? { folder } : undefined);
 export const lastResponse =(sessionId: string) => request<{ text: string | null }>('GET', '/api/agents/last-response', { sessionId });

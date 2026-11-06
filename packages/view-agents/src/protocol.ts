@@ -355,6 +355,12 @@ export interface AgentTraceStep {
   edits?: AgentTraceEdit[];
   /** Bash command. */
   command?: string;
+  /** Read: the `offset` / `limit` it asked for. */
+  readRange?: { offset?: number; limit?: number };
+  /** Grep / Glob: files its result listed. */
+  hits?: string[];
+  /** Bash: files the command writes, edits, deletes, moves or restores. */
+  shellFiles?: AgentTraceShellFile[];
   /** Token usage of the assistant message (on its first step only). */
   tokens?: AgentTraceTokens;
   /** Context tokens the request carried (input + cache read + cache write). */
@@ -368,6 +374,11 @@ export interface AgentTraceStep {
   resultChars?: number;
   /** Written by a subagent. */
   sidechain?: boolean;
+}
+
+export interface AgentTraceShellFile {
+  op: 'write' | 'edit' | 'delete' | 'move-from' | 'move-to' | 'restore';
+  path: string;
 }
 
 export interface AgentTraceEdit {
@@ -417,6 +428,16 @@ export interface AgentSkillsResponse {
 
 export interface AgentTraceResponse {
   steps: AgentTraceStep[];
+  /** Working directory of the session. */
+  cwd?: string;
+}
+
+/** Where a file the session touched stands in git now. */
+export type AgentFileGit = 'modified' | 'untracked' | 'added' | 'deleted' | 'committed' | 'reverted' | 'clean' | 'ignored' | 'outside';
+
+export interface AgentFileStatusResponse {
+  /** File path as the trace has it -> status. Empty when the cwd is not in a git repository. */
+  status: Record<string, AgentFileGit>;
 }
 
 /** A project added to the Agents view. */
