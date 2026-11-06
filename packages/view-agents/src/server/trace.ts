@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { contextPercentOf } from './discovery.ts';
 import type { AgentTraceEdit, AgentTraceStep } from '../protocol.ts';
+import { costParts } from './pricing.ts';
 import { shellFileOps } from './shell-files.ts';
 
 const MAX_LABEL = 72;
@@ -163,7 +164,9 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
         const input = num(u.input_tokens);
         const cacheRead = num(u.cache_read_input_tokens);
         const cacheWrite = num(u.cache_creation_input_tokens);
-        meta = { tokens: { input, output: num(u.output_tokens), cacheRead, cacheWrite }, context: input + cacheRead + cacheWrite, ...(contextPercentOf(e.message?.model, input + cacheRead + cacheWrite, e.message?.model ? windowOf?.(e.message.model) : undefined) !== undefined ? { contextPercent: contextPercentOf(e.message?.model, input + cacheRead + cacheWrite, e.message?.model ? windowOf?.(e.message.model) : undefined) } : {}), ...(e.message?.model ? { model: e.message.model } : {}) };
+        const tk = { input, output: num(u.output_tokens), cacheRead, cacheWrite };
+        const cost = costParts(e.message?.model, tk);
+        meta = { tokens: tk, ...(cost ? { cost } : {}), context: input + cacheRead + cacheWrite, ...(contextPercentOf(e.message?.model, input + cacheRead + cacheWrite, e.message?.model ? windowOf?.(e.message.model) : undefined) !== undefined ? { contextPercent: contextPercentOf(e.message?.model, input + cacheRead + cacheWrite, e.message?.model ? windowOf?.(e.message.model) : undefined) } : {}), ...(e.message?.model ? { model: e.message.model } : {}) };
       }
       const take = (): Partial<AgentTraceStep> => {
         const m = meta;

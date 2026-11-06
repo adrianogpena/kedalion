@@ -49,6 +49,13 @@ export function costOf(model: string | undefined, tokens: PricedTokens): number 
   return (tokens.input * p.input + tokens.output * p.output + (tokens.cacheCreation - oneHour) * p.cacheWrite5m + oneHour * p.cacheWrite1h + tokens.cacheRead * p.cacheRead) / 1e6;
 }
 
+/** Estimated USD of one message's tokens split by kind (cache writes at the 5-minute rate); undefined for an unknown model. */
+export function costParts(model: string | undefined, tokens: { input: number; output: number; cacheRead: number; cacheWrite: number }): { input: number; output: number; cacheRead: number; cacheWrite: number } | undefined {
+  const p = priceOf(model);
+  if (!p) return undefined;
+  return { input: (tokens.input * p.input) / 1e6, output: (tokens.output * p.output) / 1e6, cacheRead: (tokens.cacheRead * p.cacheRead) / 1e6, cacheWrite: (tokens.cacheWrite * p.cacheWrite5m) / 1e6 };
+}
+
 /** Local day keys of today and yesterday, and the start of yesterday (ms). */
 export function costDays(now: number): { today: string; yesterday: string; since: number } {
   const d = new Date(now);

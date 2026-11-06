@@ -409,7 +409,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
           </div>
         ))}
       {tab === 'files' && <FilesView files={files} cwd={state.data?.cwd} sessionId={sessionId} stamp={steps.length} onGoto={gotoStep} />}
-      {tab === 'stats' && <StatsView steps={steps} onTool={openTool} />}
+      {tab === 'stats' && <StatsView steps={steps} onTool={openTool} onGoto={gotoStep} />}
       {menuEl}
     </div>
   );

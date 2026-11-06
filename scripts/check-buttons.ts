@@ -66,7 +66,7 @@ const RAW_BUTTONS: Record<string, number> = {
   'packages/view-agents/src/web/StoppedPane.tsx': 1,
   'packages/view-agents/src/web/TrajectoryTab.tsx': 2,
   'packages/view-agents/src/web/trajectory/FilesView.tsx': 1,
-  'packages/view-agents/src/web/trajectory/StatsView.tsx': 1,
+  'packages/view-agents/src/web/trajectory/StatsView.tsx': 3,
   'packages/view-agents/src/web/trajectory/Timeline.tsx': 1,
   'packages/view-agents/src/web/TrashPanel.tsx': 1,
   'packages/view-agents/src/web/UsageView.tsx': 1,

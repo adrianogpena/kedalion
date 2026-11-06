@@ -363,6 +363,8 @@ export interface AgentTraceStep {
   shellFiles?: AgentTraceShellFile[];
   /** Token usage of the assistant message (on its first step only). */
   tokens?: AgentTraceTokens;
+  /** Estimated USD of the request by token kind (on the same step as `tokens`; absent for an unknown model). */
+  cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
   /** Context tokens the request carried (input + cache read + cache write). */
   context?: number;
   /** `context` as a percent of the model's window (the statusLine window of the model, else 200k, 1M above that). */
