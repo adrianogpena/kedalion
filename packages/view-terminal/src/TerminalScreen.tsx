@@ -39,6 +39,7 @@ import {
   useDialogs,
   useKeybindings,
   useToast,
+  setViewBusy,
   useViewLink,
 } from '@kedalion/ui';
 import type { CommandRecord, ResultRecord, TerminalAlerts } from '@kedalion/terminal/protocol';
@@ -202,6 +203,7 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
     for (const id of closed) {
       void closeSession(id).catch(() => {});
       delete running.current[id];
+      setViewBusy('terminal', id, false);
       delete seenBells.current[id];
     }
     if (closed.length) {
@@ -533,7 +535,10 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
               onCwd={(cwd) => onCwd(tab.id, cwd)}
               onRunning={(on) => {
                 const session = sessionOf(tab.id);
-                if (session) running.current[session] = on;
+                if (session) {
+                  running.current[session] = on;
+                  setViewBusy('terminal', session, on);
+                }
               }}
               onBell={() => {
                 const session = sessionOf(tab.id);

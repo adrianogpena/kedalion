@@ -28,6 +28,7 @@ export * from './components/Tabs';
 export * from './components/ViewSidePanel';
 export * from './components/AppSidePanel';
 export * from './view-compact';
+export * from './view-busy';
 export * from './view-side';
 export * from './components/Toast';
 export * from './components/TreeView';

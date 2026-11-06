@@ -299,6 +299,13 @@ kbd {
 .sidebar.collapsed .side-item .icon, .sidebar.collapsed .side-footer .icon { width: 20px; height: 20px; }
 .nav-view-icon { display: inline-flex; width: var(--s); height: var(--s); }
 .sidebar.collapsed .side-item .nav-view-icon { width: 20px; height: 20px; }
+/* A view with a long-running job (setViewBusy) animates its icon; Charon's boat bobs while its waves flow left to right. */
+.nav-view-icon.busy svg path { transform-box: fill-box; transform-origin: center; }
+.nav-view-icon.busy svg path:nth-child(-n+2) { animation: icon-boat-bob 1.4s ease-in-out infinite; }
+.nav-view-icon.busy svg path:nth-child(3) { animation: icon-wave-flow 0.8s linear infinite; }
+@keyframes icon-boat-bob { 0%, 100% { transform: translateY(-0.9px) rotate(-2deg); } 50% { transform: translateY(0.9px) rotate(2deg); } }
+@keyframes icon-wave-flow { from { transform: translateX(0); } to { transform: translateX(9px); } }
+@media (prefers-reduced-motion: reduce) { .nav-view-icon.busy svg path { animation: none !important; } }
 .sidebar.collapsed .side-footer .btn-icon { width: 36px; height: 36px; }
 .sidebar.collapsed .side-item.active::before { top: 0; bottom: 0; border-radius: 0; }
 .sidebar.collapsed .brand-mark { width: 22px; height: 22px; }
