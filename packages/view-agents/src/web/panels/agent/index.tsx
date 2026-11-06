@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { errorOf, useDialogs } from '@kedalion/ui';
 import { TerminalPane, type TerminalPaneHandle } from '@kedalion/terminal';
 import { listSessions } from '@kedalion/terminal/session';
@@ -27,6 +27,7 @@ function AgentPanel({ params, api, update }: PanelProps) {
   const session = host.sessions.find((s) => s.id === sessionId);
   const [terminal, setTerminal] = useState<string | undefined>(hint);
   const [resolved, setResolved] = useState(hint !== undefined);
+  const lastTerminal = useRef<string | undefined>(hint);
   const stoppedNow = session !== undefined && !session.external && categoryOf(session) === 'stopped';
   const lifecycle = session?.lifecycle;
   const known = session !== undefined;
@@ -66,12 +67,18 @@ function AgentPanel({ params, api, update }: PanelProps) {
 
   // `/clear` gives the pty a new Claude session id (the server adopts it into the pty's meta): follow it.
   useEffect(() => {
-    if (!terminal || !sessionId) return;
+    if (terminal) lastTerminal.current = terminal;
+  }, [terminal]);
+  useEffect(() => {
+    const term = terminal ?? lastTerminal.current;
+    if (!term || !sessionId) return;
     let alive = true;
     void listSessions().then(
       (all) => {
-        const to = all.find((x) => x.id === terminal)?.meta?.agentSession;
+        const to = all.find((x) => x.id === term)?.meta?.agentSession;
         if (!alive || typeof to !== 'string' || to === sessionId) return;
+        setTerminal(term);
+        setResolved(true);
         const active = document.activeElement;
         const hadFocus = !active || active === document.body || active.closest('.agents-main') !== null;
         update({ sessionId: to });
