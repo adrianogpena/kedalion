@@ -57,7 +57,6 @@ export function TicketCard({ ticket, selected, jiraBaseUrl, jiraStatus, drift, o
       }}
     >
       <div className="tickets-card-head">
-        <Icon name="grip" size={12} />
         {url ? (
           <a className="tickets-key" href={url} target="_blank" rel="noreferrer" title={url} onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(url, '_blank', 'noreferrer'); }}>
             {ticket.key}
@@ -65,6 +64,15 @@ export function TicketCard({ ticket, selected, jiraBaseUrl, jiraStatus, drift, o
         ) : (
           <span className="tickets-key">{ticket.key}</span>
         )}
+        <Icon name="grip" size={12} />
+        {ticket.autoMovedAt !== undefined && Date.now() - ticket.autoMovedAt < AUTO_BADGE_MS && (
+          <span className="tickets-auto" title={tKey('dash.tickets.autoMove.badgeTitle')}>
+            {tKey('dash.tickets.autoMove.badge')}
+          </span>
+        )}
+      </div>
+      {(ticket.pcr || drift) && (
+        <div className="tickets-tags">
         {ticket.pcr && (
           <span className="tickets-pcr" title={tKey('dash.tickets.detail.pcr')}>
             PCR#{ticket.pcr}
@@ -83,12 +91,8 @@ export function TicketCard({ ticket, selected, jiraBaseUrl, jiraStatus, drift, o
             {tKey('dash.tickets.drift.chip', { status: jiraStatus ?? '' })}
           </span>
         )}
-        {ticket.autoMovedAt !== undefined && Date.now() - ticket.autoMovedAt < AUTO_BADGE_MS && (
-          <span className="tickets-auto" title={tKey('dash.tickets.autoMove.badgeTitle')}>
-            {tKey('dash.tickets.autoMove.badge')}
-          </span>
-        )}
-      </div>
+        </div>
+      )}
       {ticket.description && <div className="tickets-desc">{ticket.description}</div>}
       {menu && (
         <span style={{ display: 'contents' }} onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>

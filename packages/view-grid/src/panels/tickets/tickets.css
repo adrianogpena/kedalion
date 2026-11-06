@@ -11,14 +11,15 @@
 .tickets-card:hover { border-color: var(--accent); box-shadow: 0 3px 10px rgb(0 0 0 / 0.2); transform: translateY(-1px); }
 .tickets-card--selected { border-color: var(--accent); }
 .tickets-card:active { cursor: grabbing; }
-.tickets-card-head { display: flex; align-items: center; gap: var(--space-6); color: var(--text-dim); }
-.tickets-key { padding: 1px var(--space-6); border-radius: var(--radius-sm); font-size: var(--fs-xs); font-weight: 600; font-family: var(--font-mono, monospace); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); text-decoration: none; }
+.tickets-card-head { display: flex; align-items: flex-start; gap: var(--space-6); color: var(--text-dim); }
+.tickets-tags { display: flex; min-width: 0; flex-wrap: nowrap; align-items: center; gap: var(--space-4) var(--space-6); }
+.tickets-key { flex: none; align-self: flex-start; margin: calc(-1 * var(--space-8)) 0 0 calc(-1 * var(--space-8)); padding: 2px var(--space-8); border-radius: var(--radius-sm) 0 var(--radius-sm) 0; font-size: var(--fs-xs); font-weight: 600; font-family: var(--font-mono, monospace); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); text-decoration: none; }
 a.tickets-key:hover { text-decoration: underline; }
-.tickets-drift { display: inline-flex; align-items: center; gap: var(--space-4); padding: 1px var(--space-6); border: 0; border-radius: var(--radius-sm); font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tickets-drift { min-width: 0; display: inline-flex; align-items: center; gap: var(--space-4); padding: 1px var(--space-6); border: 0; border-radius: var(--radius-sm); font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tickets-drift--ahead { color: var(--warn); background: var(--warn-soft); }
 .tickets-drift--behind { color: var(--text-dim); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .tickets-drift-count { flex: none; min-width: 20px; padding: 0 var(--space-6); border-radius: 999px; text-align: center; font-weight: 600; letter-spacing: 0; color: var(--warn); background: var(--warn-soft); }
-.tickets-pcr { padding: 1px var(--space-6); border-radius: var(--radius-sm); font-size: var(--fs-xs); font-weight: 600; font-family: var(--font-mono, monospace); color: var(--info); background: var(--info-soft); }
+.tickets-pcr { flex: none; padding: 1px var(--space-6); border-radius: var(--radius-sm); font-size: var(--fs-xs); font-weight: 600; font-family: var(--font-mono, monospace); color: var(--info); background: var(--info-soft); }
 .tickets-desc { cursor: pointer; font-size: var(--fs-sm); line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tickets-desc-empty { color: var(--text-dim); font-style: italic; }
 .tickets-edit { width: 100%; resize: vertical; font: inherit; font-size: var(--fs-sm); }
