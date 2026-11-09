@@ -1,4 +1,6 @@
-import { isAbsolute } from 'node:path';
+import { isAbsolute, join } from 'node:path';
+import { createSidebarStore, type SidebarStore } from './sidebar-store.ts';
+import type { SidebarData } from './sidebar-types.ts';
 import { defineServerView, type FieldSpec, isRecord, validGroup } from '@kedalion/server-core';
 import {
   isShellId,
@@ -161,6 +163,7 @@ export interface TerminalServerViewOptions {
 export function terminalServerView({ integrationDir, resolveCwd, launchers, sessions = terminalSessions() }: TerminalServerViewOptions) {
   /** Shells of every Terminal tab; they outlive the window's sockets and end at app quit. */
   let mounted: ReturnType<typeof terminalRoutes> | undefined;
+  let sidebar: SidebarStore | undefined;
   const mount = (ctx: { settings: { load(): Promise<TerminalServerSettings> } }) => {
     const setting = async (key: string) => (await ctx.settings.load()).terminal?.[key];
     return (mounted ??= terminalRoutes({
@@ -186,7 +189,15 @@ export function terminalServerView({ integrationDir, resolveCwd, launchers, sess
   return defineServerView<TerminalServerSettings>({
     id: 'terminal',
     icon: 'terminal',
-    routes: (ctx) => mount(ctx).routes,
+    routes: (ctx) => {
+      sidebar ??= createSidebarStore(join(ctx.dataDir, 'terminal', 'sidebar.json'));
+      const store = sidebar;
+      return {
+        ...mount(ctx).routes,
+        'GET /api/terminal/sidebar': () => store.read(),
+        'PUT /api/terminal/sidebar': async ({ json }) => ({ ok: store.write(await json<SidebarData>()) }),
+      };
+    },
     sockets: (ctx) => mount(ctx).sockets,
     onQuit: () => sessions.closeAll(),
     settings: { validate: { terminal: validTerminal, terminalLayout: validLayout }, spec: TERMINAL_SPEC },
