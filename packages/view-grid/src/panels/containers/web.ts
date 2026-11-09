@@ -15,7 +15,7 @@ const containersPanel = definePanel<ContainersConfig, ContainersPanelData>({
   load: (config, ctx) => fetchSource<ContainersPanelData>('containers', config, ctx.signal),
   refreshMs: 30_000,
   allowMultiple: true,
-  render: ({ config, data, refresh }) => createElement(ContainersPanel, { config, data, refresh }),
+  render: ({ id, config, data, refresh, side, setConfig }) => createElement(ContainersPanel, { id, config, data, refresh, side, setConfig }),
 });
 
 export const panels: AnyPanelKind[] = [containersPanel];

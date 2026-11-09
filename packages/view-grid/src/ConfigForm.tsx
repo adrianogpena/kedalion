@@ -201,7 +201,7 @@ export function ConfigForm({ fields, value, onChange }: { fields: readonly Panel
   const connections: Connections = { list, create: (type, done) => setCreating({ type, done }) };
   return (
     <div className="grid-config-form">
-      {fields.map((f) => (
+      {fields.filter((f) => !f.hidden).map((f) => (
         <FieldRow key={f.key} field={f} value={value[f.key]} onChange={(v) => onChange({ ...value, [f.key]: v })} connections={connections} />
       ))}
       {creating && (

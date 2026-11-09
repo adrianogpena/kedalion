@@ -1,8 +1,19 @@
 .containers { display: flex; flex-direction: column; gap: var(--space-8); overflow: auto; height: 100%; }
 .containers-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.containers-row { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) 0; min-width: 0; }
+.containers-row { display: flex; flex-direction: column; gap: 2px; padding: var(--space-4); min-width: 0; border-radius: var(--radius-sm, 4px); cursor: pointer; }
+.containers-row:hover, .containers-row--selected { background: var(--muted-soft); }
+.containers-main { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
 .containers-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.containers-meta { color: var(--text-dim); font-size: var(--fs-xs); white-space: nowrap; }
-.containers-image { max-width: 30%; overflow: hidden; text-overflow: ellipsis; }
+.containers-sub { color: var(--text-dim); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .containers-error { color: var(--danger); font-size: var(--fs-xs); margin: 0; }
+.containers-error-row { display: flex; align-items: flex-start; gap: var(--space-4); }
+.containers-error-row .containers-error { flex: 1; word-break: break-word; }
 .containers-down { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); }
+
+.view-side .container-logs { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.view-side .container-logs-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.view-side .container-logs-foot { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) var(--space-8); border-top: 1px solid var(--border); }
+.view-side .container-logs-status { flex: 1; color: var(--err); font-size: var(--fs-xs); }
+.view-side .container-logs-path { color: var(--text-dim); font-size: var(--fs-xs); max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; }
+.view-side .container-localpath { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-12); }
+.view-side .container-localpath-actions { display: flex; gap: var(--space-8); }

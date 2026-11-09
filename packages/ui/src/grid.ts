@@ -12,6 +12,8 @@ interface PanelFieldBase {
   description?: string;
   /** Older keys of this setting; `validConfig` reads the first present one when `key` is absent. */
   legacyKeys?: readonly string[];
+  /** Kept in the config but not shown in the form; the panel edits it itself. */
+  hidden?: boolean;
 }
 
 export type PanelField =
