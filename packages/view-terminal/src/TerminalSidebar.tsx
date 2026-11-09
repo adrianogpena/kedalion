@@ -10,6 +10,8 @@ export interface TerminalSidebarProps {
   onChange(next: SidebarData): void;
   /** False when no terminal tab is focused: the rows do nothing. */
   canAct: boolean;
+  /** Saves the focused terminal's folder as a path. */
+  onAddCwd(): void;
   onCd(path: string): void;
   onPrint(command: string): void;
   onHide(): void;
@@ -82,7 +84,7 @@ function ItemForm({ kind, initial, onSave, onCancel }: FormProps) {
   );
 }
 
-export function TerminalSidebar({ data, loading, error, onChange, canAct, onCd, onPrint, onHide }: TerminalSidebarProps) {
+export function TerminalSidebar({ data, loading, error, onChange, canAct, onAddCwd, onCd, onPrint, onHide }: TerminalSidebarProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(readSections);
   /** The form shown: a new item of a kind, or an existing item's id. */
@@ -163,6 +165,7 @@ export function TerminalSidebar({ data, loading, error, onChange, canAct, onCd, 
           <Icon name={icon} />
           <span>{t(kind === 'paths' ? 'terminalScreen.sidebar.paths' : 'terminalScreen.sidebar.commands')}</span>
         </button>
+        {kind === 'paths' && <IconButton icon="folder" size="sm" label={t('terminalScreen.sidebar.addCwd')} disabled={!canAct} onClick={onAddCwd} />}
         <IconButton
           icon="plus"
           size="sm"

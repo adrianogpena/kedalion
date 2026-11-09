@@ -620,6 +620,19 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
     h.insert(expandPlaceholders(command, { cwd, clipboard }));
     h.focus();
   };
+  const normPath = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const onAddCwd = () => {
+    if (!focusedTab) return;
+    const cwd = cwdOf(focusedTab.route);
+    if (!cwd) return;
+    if (sidebarData.data.paths.some((p) => normPath(p.path) === normPath(cwd))) return;
+    const name = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
+    void sidebarData.add('paths', { name, path: cwd });
+  };
+  const onSaveCommand = (command: string) => {
+    if (sidebarData.data.commands.some((c) => c.command === command)) return;
+    void sidebarData.add('commands', { name: '', command });
+  };
   const sidebar = (
     <TerminalSidebar
       data={sidebarData.data}
@@ -627,6 +640,7 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
       error={sidebarData.error}
       onChange={sidebarData.update}
       canAct={!!focusedTab}
+      onAddCwd={onAddCwd}
       onCd={onCd}
       onPrint={(command) => void onPrint(command)}
       onHide={() => changeSidebar({ collapsed: true })}
@@ -654,6 +668,7 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
             onClose={() => changePanel({ open: false })}
             onRun={(command) => focusedTab && handles.current.get(focusedTab.id)?.submit(command)}
             onInsert={(command) => focusedTab && handles.current.get(focusedTab.id)?.insert(command)}
+            onSave={onSaveCommand}
             onJump={(command) => !!focusedTab && !!handles.current.get(focusedTab.id)?.scrollToCommand(command)}
             onAlerts={(patch) => focusedSession && setAlerts(focusedSession, patch)}
             onOpenResult={(r) => focusedTab && openResult(focusedTab.id, r)}

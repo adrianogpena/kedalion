@@ -25,6 +25,8 @@ export interface SessionPanelProps {
   /** Types the command and presses Enter in the session's pane. */
   onRun(command: string): void;
   onInsert(command: string): void;
+  /** Saves the command as a sidebar shortcut. */
+  onSave(command: string): void;
   /** Scrolls the pane to the command; false when it is no longer in the buffer. */
   onJump(command: string): boolean;
   onAlerts(patch: Partial<TerminalAlerts>): void;
@@ -125,6 +127,7 @@ export function SessionPanel(props: SessionPanelProps) {
           {session && <IconButton icon="play" size="sm" label={t('terminalScreen.panel.rerun')} onClick={() => props.onRun(c.command)} />}
           {session && <IconButton icon="edit" size="sm" label={t('terminalScreen.panel.insert')} onClick={() => props.onInsert(c.command)} />}
           <IconButton icon="copy" size="sm" label={t('terminalScreen.panel.copy')} onClick={() => void copyNotify(c.command)} />
+          <IconButton icon="bookmark" size="sm" label={t('terminalScreen.panel.saveShortcut')} onClick={() => props.onSave(c.command)} />
           {live && live.endedAt !== undefined && <IconButton icon="file-text" size="sm" label={t('terminalScreen.panel.copyOutput')} onClick={() => void copyOutput(live)} />}
         </span>
       </li>
