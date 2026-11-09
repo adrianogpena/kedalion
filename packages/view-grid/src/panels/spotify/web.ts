@@ -10,7 +10,7 @@ const spotifyPanel = definePanel<SpotifyConfig, SpotifyData>({
   title: 'dash.spotify.panel',
   description: 'dash.spotify.panel.description',
   icon: 'audio',
-  category: 'dash.category.spotify',
+  category: 'dash.category.daily',
   size: { w: 6, h: 18, minW: 4, minH: 8 },
   config: { fields: SPOTIFY_FIELDS },
   load: (config, ctx) => fetchSource<SpotifyData>('spotify', { clientId: config.clientId }, ctx.signal),

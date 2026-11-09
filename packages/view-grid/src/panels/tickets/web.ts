@@ -16,7 +16,7 @@ const ticketsPanel = definePanel<TicketsConfig, TicketsData>({
   title: 'dash.tickets.panel',
   description: 'dash.tickets.panel.description',
   icon: 'table',
-  category: 'dash.category.tickets',
+  category: 'dash.category.core',
   size: { w: 16, h: 12, minW: 6, minH: 5 },
   config: { fields: TICKETS_FIELDS },
   load: async (config, ctx) => {

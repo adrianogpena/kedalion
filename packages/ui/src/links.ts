@@ -8,7 +8,7 @@ export interface LinkSettings {
 
 export const DEFAULT_LINK_SETTINGS: LinkSettings = {
   openIn: 'internal',
-  scopes: { 'panel:tickets': 'external', 'panel:github-prs': 'external', 'panel:github-tracked': 'external' },
+  scopes: { 'panel:tickets': 'external', 'panel:github-prs': 'external', 'panel:github-pr-query': 'external', 'panel:github-tracked': 'external' },
 };
 
 /** Every `data-link-scope` from `el` outwards, innermost first. */

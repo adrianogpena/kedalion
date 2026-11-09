@@ -1,7 +1,6 @@
 import type { Messages } from '@kedalion/ui';
 
 export const en = {
-  'dash.category.meeting': 'Meeting',
   'dash.meeting.panel': 'Meeting',
   'dash.meeting.panel.description': 'Stand-up helper: team names with a "has spoken" toggle that resets every day.',
   'dash.meeting.empty': 'No names yet. Use + to add the team.',
@@ -15,7 +14,6 @@ export const en = {
 };
 
 export const ptBR: Messages<typeof en> = {
-  'dash.category.meeting': 'Reunião',
   'dash.meeting.panel': 'Reunião',
   'dash.meeting.panel.description': 'Apoio para a daily: nomes da equipe com marca de "já falou" que reinicia todo dia.',
   'dash.meeting.empty': 'Nenhum nome ainda. Use + para adicionar a equipe.',

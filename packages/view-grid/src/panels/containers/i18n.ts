@@ -1,7 +1,6 @@
 import type { Messages } from '@kedalion/ui';
 
 export const en = {
-  'dash.category.containers': 'Containers',
   'dash.containers.panel': 'Containers',
   'dash.containers.panel.description': 'Local containers with start and stop, and the Podman machine. Needs podman (or docker).',
   'dash.containers.engine': 'Engine',
@@ -45,7 +44,6 @@ export const en = {
 };
 
 export const ptBR: Messages<typeof en> = {
-  'dash.category.containers': 'Contêineres',
   'dash.containers.panel': 'Contêineres',
   'dash.containers.panel.description': 'Contêineres locais com iniciar e parar, e a máquina do Podman. Requer podman (ou docker).',
   'dash.containers.engine': 'Mecanismo',

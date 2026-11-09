@@ -9,7 +9,7 @@ const containersPanel = definePanel<ContainersConfig, ContainersPanelData>({
   title: 'dash.containers.panel',
   description: 'dash.containers.panel.description',
   icon: 'cube',
-  category: 'dash.category.containers',
+  category: 'dash.category.core',
   size: { w: 10, h: 10, minW: 5, minH: 4 },
   config: { fields: CONTAINERS_FIELDS },
   load: (config, ctx) => fetchSource<ContainersPanelData>('containers', config, ctx.signal),

@@ -9,7 +9,7 @@ import { ReleasesPanel, type ReleasesConfig } from './Releases';
 import { RepoOverviewPanel, type OverviewConfig } from './RepoOverview';
 import { TrackedPrsPanel, type TrackedConfig } from './TrackedPrsPanel';
 import type { TrackedPr } from './tracked';
-import { ACTIONS_FIELDS, ISSUES_FIELDS, NOTIFICATIONS_FIELDS, OVERVIEW_FIELDS, PULL_REQUESTS_FIELDS, RELEASES_FIELDS, TRACKED_FIELDS } from './fields';
+import { ACTIONS_FIELDS, ISSUES_FIELDS, NOTIFICATIONS_FIELDS, OVERVIEW_FIELDS, PULL_REQUESTS_FIELDS, PR_QUERY_FIELDS, RELEASES_FIELDS, TRACKED_FIELDS } from './fields';
 import { runsRefreshMs, type NotificationItem, type ReleaseItem, type RepoStats, type RunsData } from './more';
 import { PR_REFRESH_MS, searchRefreshMs,type IssueItem, type PrItem, type SearchData } from './map';
 
@@ -27,7 +27,21 @@ const prsPanel = definePanel<PullRequestsConfig, SearchData<PrItem>>({
   render: ({ id, config, data, side }) => createElement(PullRequestsPanel, { id, config, data, side }),
 });
 
-const issuesPanel = definePanel<IssuesConfig, SearchData<IssueItem>>({
+const prQueryPanel = definePanel<PullRequestsConfig, SearchData<PrItem>>({
+  kind: 'github-pr-query',
+  persist: true,
+  title: 'dash.github.panel.prq',
+  description: 'dash.github.panel.prq.description',
+  icon: 'link',
+  category: 'dash.category.github',
+  size: { w: 8, h: 14, minW: 4, minH: 6 },
+  config: { fields: PR_QUERY_FIELDS },
+  load: (config, ctx) => fetchSource<SearchData<PrItem>>('github-pr-query', config, ctx.signal),
+  refreshMs: (_config, data) => searchRefreshMs(data),
+  render: ({ id, config, data, side }) => createElement(PullRequestsPanel, { id, config, data, side }),
+});
+
+const issuesPanel =definePanel<IssuesConfig, SearchData<IssueItem>>({
   kind: 'github-issues',
   title: 'dash.github.panel.issues',
   description: 'dash.github.panel.issues.description',
@@ -108,4 +122,4 @@ const trackedPanel = definePanel<TrackedConfig, { items: TrackedPr[] }>({
 });
 
 /** The github panel kinds. */
-export const panels: AnyPanelKind[] = [prsPanel, issuesPanel, actionsPanel, notificationsPanel, releasesPanel, overviewPanel, trackedPanel];
+export const panels: AnyPanelKind[] = [prsPanel, prQueryPanel, issuesPanel, actionsPanel, notificationsPanel, releasesPanel, overviewPanel, trackedPanel];

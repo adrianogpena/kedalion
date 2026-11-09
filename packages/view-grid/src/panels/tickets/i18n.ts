@@ -1,7 +1,7 @@
 import type { Messages } from '@kedalion/ui';
 
 export const en = {
-  'dash.category.tickets': 'Tickets',
+  'dash.category.core': 'Dashboard Core',
   'dash.tickets.panel': 'Tickets',
   'dash.tickets.panel.description': 'Kanban board of the tickets you follow, one column per status.',
   'dash.tickets.connection': 'GitHub connection',
@@ -131,7 +131,7 @@ export const en = {
 };
 
 export const ptBR: Messages<typeof en> = {
-  'dash.category.tickets': 'Tickets',
+  'dash.category.core': 'Dashboard Core',
   'dash.tickets.panel': 'Tickets',
   'dash.tickets.panel.description': 'Quadro kanban dos tickets que você acompanha, uma coluna por status.',
   'dash.tickets.connection': 'Conexão do GitHub',

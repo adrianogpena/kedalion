@@ -25,6 +25,20 @@ export const PULL_REQUESTS_FIELDS: readonly PanelField[] = [
   notifyField(true),
 ];
 
+export const PR_QUERY_CI = ['pass', 'fail', 'pending', 'policy', 'none'] as const;
+
+export const PR_QUERY_FIELDS: readonly PanelField[] = [
+  connection,
+  { key: 'query', kind: 'string', label: 'dash.github.prq.query', description: 'dash.github.prq.query.hint', default: 'is:open review-requested:@me', maxLength: 300 },
+  { key: 'ci', kind: 'multi', label: 'dash.github.prq.ci', description: 'dash.github.prq.ci.hint', default: [], values: PR_QUERY_CI, optionLabel: 'dash.github.ci' },
+  max,
+  { key: 'columns', kind: 'multi', label: 'dash.github.columns', default: ['repo', 'review', 'checks', 'updated'], values: PR_COLUMNS, optionLabel: 'dash.github.col' },
+  density,
+  { key: 'ticketPattern', kind: 'string', label: 'dash.github.ticketPattern', description: 'dash.github.ticketPattern.hint', default: DEFAULT_TICKET_PATTERN, maxLength: 100 },
+  { key: 'rcLabel', kind: 'string', label: 'dash.github.rcLabel', description: 'dash.github.rcLabel.hint', default: 'RC branch', maxLength: 100 },
+  notifyField(true),
+];
+
 export const ISSUES_FIELDS: readonly PanelField[] = [
   connection,
   { key: 'mode', kind: 'enum', label: 'dash.github.mode', default: 'assigned', values: ISSUE_MODES, optionLabel: 'dash.github.issueMode' },
@@ -38,6 +52,7 @@ export const ISSUES_FIELDS: readonly PanelField[] = [
 
 /** What a panel sends to the github search sources. */
 export const PR_SOURCE_FIELDS: readonly PanelField[] = PULL_REQUESTS_FIELDS.filter((f) => f.key !== 'columns' && f.key !== 'density');
+export const PR_QUERY_SOURCE_FIELDS: readonly PanelField[] = PR_QUERY_FIELDS.filter((f) => f.key !== 'columns' && f.key !== 'density');
 export const ISSUE_SOURCE_FIELDS: readonly PanelField[] = ISSUES_FIELDS.filter((f) => f.key !== 'columns' && f.key !== 'density');
 
 const maxRows: PanelField = { key: 'max', kind: 'number', label: 'dash.github.max', default: 10, min: 1, max: 50 };
@@ -90,6 +105,7 @@ export const OVERVIEW_SOURCE_FIELDS: readonly PanelField[] = OVERVIEW_FIELDS.fil
 /** Config field lists of the github panels (no React), by kind. */
 export const fields: Record<string, readonly PanelField[]> = {
   'github-prs': PULL_REQUESTS_FIELDS,
+  'github-pr-query': PR_QUERY_FIELDS,
   'github-issues': ISSUES_FIELDS,
   'github-actions': ACTIONS_FIELDS,
   'github-notifications': NOTIFICATIONS_FIELDS,

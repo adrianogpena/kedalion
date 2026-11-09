@@ -1,7 +1,6 @@
 import type { Messages } from '@kedalion/ui';
 
 export const en = {
-  'dash.category.spotify': 'Music',
   'dash.spotify.panel': 'Spotify',
   'dash.spotify.panel.description': 'Now playing with playback control (Premium) and your recent tracks and playlists.',
   'dash.spotify.clientId': 'Spotify client ID',
@@ -42,7 +41,6 @@ export const en = {
 };
 
 export const ptBR: Messages<typeof en> = {
-  'dash.category.spotify': 'Música',
   'dash.spotify.panel': 'Spotify',
   'dash.spotify.panel.description': 'Reprodução atual com controle (Premium), faixas recentes e playlists.',
   'dash.spotify.clientId': 'Client ID do Spotify',

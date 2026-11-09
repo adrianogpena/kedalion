@@ -2,6 +2,12 @@ import type { Messages } from '@kedalion/ui';
 
 export const en = {
   'dash.category.github': 'GitHub',
+  'dash.github.panel.prq': 'PR query',
+  'dash.github.panel.prq.description': 'Pull requests from a GitHub search, optionally only those in chosen check states.',
+  'dash.github.prq.query': 'Search query',
+  'dash.github.prq.query.hint': 'GitHub search, e.g. review-requested:@me org:x. "is:pr" is added when missing.',
+  'dash.github.prq.ci': 'Only with checks',
+  'dash.github.prq.ci.hint': 'Keep only PRs in these check states; none selected shows all. "Policy-bot pending" means every check passed and only policy-bot waits for an approval.',
   'dash.github.panel.prs': 'Pull requests',
   'dash.github.panel.prs.description': 'Pull requests from a GitHub search, with review and CI state.',
   'dash.github.panel.issues': 'Issues',
@@ -76,6 +82,7 @@ export const en = {
   'dash.github.ci.fail': 'Checks fail',
   'dash.github.ci.pending': 'Checks running',
   'dash.github.ci.policy': 'Policy-bot pending',
+  'dash.github.ci.none': 'No checks',
   'dash.github.ci.failing': 'Failing: {names}',
   'dash.github.conflicts': 'Conflicts',
   'dash.github.noTicket': 'No ticket',
@@ -188,6 +195,12 @@ export const en = {
 
 export const ptBR: Messages<typeof en> = {
   'dash.category.github': 'GitHub',
+  'dash.github.panel.prq': 'Consulta de PRs',
+  'dash.github.panel.prq.description': 'Pull requests de uma busca no GitHub, opcionalmente só as com verificações nos estados escolhidos.',
+  'dash.github.prq.query': 'Consulta de busca',
+  'dash.github.prq.query.hint': 'Busca do GitHub, ex.: review-requested:@me org:x. "is:pr" é adicionado se faltar.',
+  'dash.github.prq.ci': 'Só com verificações',
+  'dash.github.prq.ci.hint': 'Mantém só as PRs nesses estados; nenhum selecionado mostra todas. "Policy-bot pendente" significa que todas as verificações passaram e só o policy-bot espera uma aprovação.',
   'dash.github.panel.prs': 'Pull requests',
   'dash.github.panel.prs.description': 'Pull requests de uma busca no GitHub, com revisão e estado do CI.',
   'dash.github.panel.issues': 'Issues',
@@ -262,6 +275,7 @@ export const ptBR: Messages<typeof en> = {
   'dash.github.ci.fail': 'Verificações falham',
   'dash.github.ci.pending': 'Verificações em execução',
   'dash.github.ci.policy': 'Policy-bot pendente',
+  'dash.github.ci.none': 'Sem verificações',
   'dash.github.ci.failing': 'Falhando: {names}',
   'dash.github.conflicts': 'Conflitos',
   'dash.github.noTicket': 'Sem ticket',

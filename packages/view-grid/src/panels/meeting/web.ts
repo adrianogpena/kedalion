@@ -10,7 +10,7 @@ const meetingPanel = definePanel<MeetingConfig, Meeting>({
   title: 'dash.meeting.panel',
   description: 'dash.meeting.panel.description',
   icon: 'check',
-  category: 'dash.category.meeting',
+  category: 'dash.category.daily',
   size: { w: 6, h: 10, minW: 3, minH: 4 },
   load: (config, ctx) => fetchSource<Meeting>('meeting', config, ctx.signal),
   refreshMs: 60_000,

@@ -4,7 +4,7 @@ import { createJsonStore, type JsonStore } from '../../json-store';
 import { graphql, rest } from './client';
 import { mapLimit } from './limit';
 import { parseTrackedPrRef, toTrackedPr, type PrNode, type PrRef, type TrackedPr } from './tracked';
-import { ACTIONS_SOURCE_FIELDS, TRACKED_SOURCE_FIELDS, fields,ISSUE_SOURCE_FIELDS, NOTIFICATIONS_SOURCE_FIELDS, OVERVIEW_SOURCE_FIELDS, PR_SOURCE_FIELDS, RELEASES_FIELDS } from './fields';
+import { ACTIONS_SOURCE_FIELDS, TRACKED_SOURCE_FIELDS, fields,ISSUE_SOURCE_FIELDS, NOTIFICATIONS_SOURCE_FIELDS, OVERVIEW_SOURCE_FIELDS, PR_SOURCE_FIELDS, PR_QUERY_SOURCE_FIELDS, RELEASES_FIELDS } from './fields';
 import { notifyChanges, notifyScope } from '../../notify-changes';
 import { latestSettledRuns, mapNotifications, mapReleases, mapRepoStats, mapRuns, parseRepo, runsPath, type RepoResponse } from './more';
 import { buildQuery, mapIssues, mapPullRequests, nextRefreshMs, PR_REFRESH_MS, type Node as PrNodeFull, type PrItem, type RequiredChecks, type SearchResponse } from './map';
@@ -152,32 +152,48 @@ async function search(kind: 'pr' | 'issue', config: SearchConfig, ctx: Parameter
   return { res, nextRefreshMs: next };
 }
 
+/** The PR list of a panel; `ci` (when not empty) keeps only PRs in those check states, searched over up to 50 results. */
+async function fetchPrList(scope: string, config: SearchConfig, ctx: Parameters<DataSource['fetch']>[1]) {
+  const ci = Array.isArray(config.ci) ? (config.ci as string[]) : [];
+  const { res, nextRefreshMs } = await search('pr', ci.length ? { ...config, max: 50 } : config, ctx);
+  const conn = await ctx.connection(config.connection, 'github');
+  const data = mapPullRequests(res, config.ticketPattern ?? '', await requiredChecks(conn, res.search?.nodes ?? [], ctx.signal));
+  let board: Set<string> | null = null;
+  try {
+    const { ticketsStore } = await import('../tickets/server');
+    board = new Set((await ticketsStore(ctx.dataDir).read()).tickets.map((t) => t.key.toUpperCase()));
+  } catch {
+    board = null;
+  }
+  let items = board ? data.items.map((pr) => ({ ...pr, linked: !!pr.ticket && board.has(pr.ticket.toUpperCase()) })) : data.items;
+  let total = data.total;
+  if (ci.length) {
+    items = items.filter((pr) => ci.includes(pr.ci));
+    total = items.length;
+    items = items.slice(0, config.max);
+  }
+  if (config.notify !== false) {
+    notifyChanges(ctx, notifyScope(scope, config), items, {
+      key: (pr) => pr.id,
+      sig: (pr) => [pr.state, pr.review, pr.ci, `${pr.checks.passed}/${pr.checks.total}`].join('|'),
+      title: 'Pull requests',
+      line: (pr) => pr.title,
+      heading: (pr, isNew) => (isNew ? 'New PR added' : prStatus(pr.state, pr.ci)),
+    });
+  }
+  return { ...data, items, total, ...(nextRefreshMs ? { nextRefreshMs } : {}) };
+}
+
+export const githubPrQuerySource = defineSource<SearchConfig>({
+  id: 'github-pr-query',
+  fields: PR_QUERY_SOURCE_FIELDS,
+  fetch: (config, ctx) => fetchPrList('github-pr-query', { ...config, mode: 'custom' }, ctx),
+});
+
 export const githubPrsSource = defineSource<SearchConfig>({
   id: 'github-prs',
   fields: PR_SOURCE_FIELDS,
-  async fetch(config, ctx) {
-    const { res, nextRefreshMs } = await search('pr', config, ctx);
-    const conn = await ctx.connection(config.connection, 'github');
-    const data = mapPullRequests(res, config.ticketPattern ?? '', await requiredChecks(conn, res.search?.nodes ?? [], ctx.signal));
-    let board: Set<string> | null = null;
-    try {
-      const { ticketsStore } = await import('../tickets/server');
-      board = new Set((await ticketsStore(ctx.dataDir).read()).tickets.map((t) => t.key.toUpperCase()));
-    } catch {
-      board = null;
-    }
-    const items = board ? data.items.map((pr) => ({ ...pr, linked: !!pr.ticket && board.has(pr.ticket.toUpperCase()) })) : data.items;
-    if (config.notify !== false) {
-      notifyChanges(ctx, notifyScope('github-prs', config), items, {
-        key: (pr) => pr.id,
-        sig: (pr) => [pr.state, pr.review, pr.ci, `${pr.checks.passed}/${pr.checks.total}`].join('|'),
-        title: 'Pull requests',
-        line: (pr) => pr.title,
-        heading: (pr, isNew) => (isNew ? 'New PR added' : prStatus(pr.state, pr.ci)),
-      });
-    }
-    return { ...data, items, ...(nextRefreshMs ? { nextRefreshMs } : {}) };
-  },
+  fetch: (config, ctx) => fetchPrList('github-prs', config, ctx),
   actions: {
     async pr(payload, config, ctx) {
       const p = payload as { repo?: unknown; number?: unknown } | null;
@@ -516,6 +532,7 @@ export const githubTrackedSource = defineSource<TrackedConfig>({
 /** Server specs and data sources of the github panels (no React). */
 export const specs: GridPanelSpec[] = [
   { kind: 'github-prs', fields: fields['github-prs'], allowMultiple: true },
+  { kind: 'github-pr-query', fields: fields['github-pr-query'], allowMultiple: true },
   { kind: 'github-issues', fields: fields['github-issues'], allowMultiple: true },
   { kind: 'github-actions', fields: fields['github-actions'], allowMultiple: true },
   { kind: 'github-notifications', fields: fields['github-notifications'], allowMultiple: true },
@@ -525,6 +542,7 @@ export const specs: GridPanelSpec[] = [
 ];
 export const sources: DataSource<any>[] = [
   githubPrsSource,
+  githubPrQuerySource,
   githubIssuesSource,
   githubActionsSource,
   githubNotificationsSource,

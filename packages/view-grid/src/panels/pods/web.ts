@@ -49,7 +49,7 @@ const podsPanel = definePanel<PodsConfig, PodsPanelData>({
   title: 'dash.pods.panel',
   description: 'dash.pods.panel.description',
   icon: 'cube',
-  category: 'dash.category.pods',
+  category: 'dash.category.core',
   size: { w: 10, h: 12, minW: 5, minH: 5 },
   config: { fields: PODS_FIELDS },
   load: loadPods,

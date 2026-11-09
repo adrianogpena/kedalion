@@ -9,13 +9,18 @@ import { fieldsOf, initialConfig, type AnyPanelKind } from './panel';
 export const addableKinds = (kinds: readonly AnyPanelKind[], items: readonly GridItem[]): AnyPanelKind[] =>
   kinds.filter((k) => k.allowMultiple !== false || !items.some((i) => i.kind === k.kind));
 
-/** Groups kinds by category, keeping the order of first appearance; kinds without one go last. */
+/** Groups kinds by category, keeping the order of first appearance; the core category goes first, kinds without one last. */
 export function groupByCategory(kinds: readonly AnyPanelKind[]): Array<{ category: string; kinds: AnyPanelKind[] }> {
   const other = 'grid.category.other';
+  const core = 'dash.category.core';
   const groups = new Map<string, AnyPanelKind[]>();
   for (const k of kinds) groups.set(k.category ?? other, [...(groups.get(k.category ?? other) ?? []), k]);
   const entries = [...groups.entries()].map(([category, list]) => ({ category, kinds: list }));
-  return [...entries.filter((g) => g.category !== other), ...entries.filter((g) => g.category === other)];
+  return [
+    ...entries.filter((g) => g.category === core),
+    ...entries.filter((g) => g.category !== other && g.category !== core),
+    ...entries.filter((g) => g.category === other),
+  ];
 }
 
 /** "Add panel": pick a kind, set it up when it has fields, then `onAdd`. */

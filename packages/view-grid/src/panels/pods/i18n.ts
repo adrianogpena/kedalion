@@ -1,7 +1,6 @@
 import type { Messages } from '@kedalion/ui';
 
 export const en = {
-  'dash.category.pods': 'Pods',
   'dash.pods.panel': 'Pods',
   'dash.pods.panel.description': 'Tracked Kubernetes pods across clusters, with health, restarts and ingress URLs. Needs kubectl.',
   'dash.pods.clusters': 'Clusters',
@@ -87,7 +86,6 @@ export const en = {
 };
 
 export const ptBR: Messages<typeof en> = {
-  'dash.category.pods': 'Pods',
   'dash.pods.panel': 'Pods',
   'dash.pods.panel.description': 'Pods do Kubernetes acompanhados em vários clusters, com saúde, reinícios e URLs de ingress. Requer kubectl.',
   'dash.pods.clusters': 'Clusters',

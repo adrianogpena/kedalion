@@ -80,7 +80,7 @@ export const clockPanel = definePanel<ClockConfig>({
   title: 'grid.panel.clock',
   description: 'grid.panel.clock.description',
   icon: 'refresh',
-  category: 'grid.category.time',
+  category: 'dash.category.calendar',
   size: { w: 6, h: 8, minW: 3, minH: 4 },
   config: { fields: CLOCK_FIELDS },
   allowMultiple: true,
