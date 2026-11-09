@@ -21,21 +21,18 @@ export const PULL_REQUESTS_FIELDS: readonly PanelField[] = [
   { key: 'columns', kind: 'multi', label: 'dash.github.columns', default: ['repo', 'review', 'checks', 'updated'], values: PR_COLUMNS, optionLabel: 'dash.github.col' },
   density,
   { key: 'ticketPattern', kind: 'string', label: 'dash.github.ticketPattern', description: 'dash.github.ticketPattern.hint', default: DEFAULT_TICKET_PATTERN, maxLength: 100 },
-  { key: 'rcLabel', kind: 'string', label: 'dash.github.rcLabel', description: 'dash.github.rcLabel.hint', default: 'RC branch', maxLength: 100 },
+  { key: 'rcLabel', kind: 'label', label: 'dash.github.rcLabel', description: 'dash.github.rcLabel.hint', default: ['RC branch'] },
   notifyField(true),
 ];
-
-export const PR_QUERY_CI = ['pass', 'fail', 'pending', 'policy', 'none'] as const;
 
 export const PR_QUERY_FIELDS: readonly PanelField[] = [
   connection,
   { key: 'query', kind: 'string', label: 'dash.github.prq.query', description: 'dash.github.prq.query.hint', default: 'is:open review-requested:@me', maxLength: 300 },
-  { key: 'ci', kind: 'multi', label: 'dash.github.prq.ci', description: 'dash.github.prq.ci.hint', default: [], values: PR_QUERY_CI, optionLabel: 'dash.github.ci' },
   max,
   { key: 'columns', kind: 'multi', label: 'dash.github.columns', default: ['repo', 'review', 'checks', 'updated'], values: PR_COLUMNS, optionLabel: 'dash.github.col' },
   density,
   { key: 'ticketPattern', kind: 'string', label: 'dash.github.ticketPattern', description: 'dash.github.ticketPattern.hint', default: DEFAULT_TICKET_PATTERN, maxLength: 100 },
-  { key: 'rcLabel', kind: 'string', label: 'dash.github.rcLabel', description: 'dash.github.rcLabel.hint', default: 'RC branch', maxLength: 100 },
+  { key: 'rcLabel', kind: 'label', label: 'dash.github.rcLabel', description: 'dash.github.rcLabel.hint', default: ['RC branch'] },
   notifyField(true),
 ];
 
@@ -91,11 +88,12 @@ export const OVERVIEW_FIELDS: readonly PanelField[] = [
 
 export const TRACKED_FIELDS: readonly PanelField[] = [
   connection,
-  { key: 'readyLabel', kind: 'string', label: 'dash.github.tracked.readyLabel', default: 'ready to merge', maxLength: 100 },
-  { key: 'rcLabel', kind: 'string', label: 'dash.github.tracked.rcLabel', default: 'rc', maxLength: 100 },
+  { key: 'readyLabel', kind: 'label', label: 'dash.github.tracked.readyLabel', default: ['ready to merge'] },
+  { key: 'rcLabel', kind: 'label', label: 'dash.github.tracked.rcLabel', default: ['rc'] },
   notifyField(false),
 ];
 export const TRACKED_SOURCE_FIELDS: readonly PanelField[] = TRACKED_FIELDS;
+export const LABELS_SOURCE_FIELDS: readonly PanelField[] = [connection];
 
 /** Fields the sources of the more panels receive. */
 export const ACTIONS_SOURCE_FIELDS: readonly PanelField[] = ACTIONS_FIELDS.filter((f) => f.key !== 'columns');

@@ -7,8 +7,8 @@ import './github.css';
 import type { CheckState, TrackedPr } from './tracked';
 
 export interface TrackedConfig {
-  readyLabel: string;
-  rcLabel: string;
+  readyLabel: string | string[];
+  rcLabel: string | string[];
   [key: string]: unknown;
 }
 

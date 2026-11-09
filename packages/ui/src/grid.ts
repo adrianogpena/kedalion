@@ -27,7 +27,15 @@ export type PanelField =
   /** An absolute folder inside an Explorer project, chosen with a dialog that lists only the projects. */
   | (PanelFieldBase & { kind: 'folder'; default: '' })
   /** A connection id (see the Dashboard's Connections); the form shows a select of the connections of `connectionType`. */
-  | (PanelFieldBase & { kind: 'connection'; connectionType: 'jira' | 'github' | 'todoist'; default: '' });
+  | (PanelFieldBase & { kind: 'connection'; connectionType: 'jira' | 'github' | 'todoist'; default: '' })
+  /** GitHub labels: chips with a remove button and a + that opens a filterable checklist of the labels the connection in `connectionKey` (default `connection`) can see; a saved label not in the list is kept. A saved single string counts as one label. */
+  | (PanelFieldBase & { kind: 'label'; default: string[]; connectionKey?: string });
+
+const MAX_LABELS = 20;
+
+/** The labels of a `label` field value: a list, or a legacy single string. */
+export const labelList = (v: unknown): string[] =>
+  (Array.isArray(v) ? v : typeof v === 'string' ? [v] : []).filter((x): x is string => typeof x === 'string' && x.trim() !== '' && x.length <= 100).slice(0, MAX_LABELS);
 
 export const MAX_FIELD_TEXT = 200;
 export const MAX_TEXT_FIELD = 4000;
@@ -76,6 +84,9 @@ export function validConfig(fields: readonly PanelField[], raw: unknown): PanelC
         break;
       case 'folder':
         out[f.key] = typeof v === 'string' && v.length <= 500 ? v : f.default;
+        break;
+      case 'label':
+        out[f.key] = v === undefined ? f.default : [...new Set(labelList(v))];
         break;
       case 'connection':
         out[f.key] = typeof v === 'string' && v.length <= MAX_ID ? v : f.default;

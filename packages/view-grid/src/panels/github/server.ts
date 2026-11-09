@@ -4,7 +4,7 @@ import { createJsonStore, type JsonStore } from '../../json-store';
 import { graphql, rest } from './client';
 import { mapLimit } from './limit';
 import { parseTrackedPrRef, toTrackedPr, type PrNode, type PrRef, type TrackedPr } from './tracked';
-import { ACTIONS_SOURCE_FIELDS, TRACKED_SOURCE_FIELDS, fields,ISSUE_SOURCE_FIELDS, NOTIFICATIONS_SOURCE_FIELDS, OVERVIEW_SOURCE_FIELDS, PR_SOURCE_FIELDS, PR_QUERY_SOURCE_FIELDS, RELEASES_FIELDS } from './fields';
+import { ACTIONS_SOURCE_FIELDS, LABELS_SOURCE_FIELDS, TRACKED_SOURCE_FIELDS, fields,ISSUE_SOURCE_FIELDS, NOTIFICATIONS_SOURCE_FIELDS, OVERVIEW_SOURCE_FIELDS, PR_SOURCE_FIELDS, PR_QUERY_SOURCE_FIELDS, RELEASES_FIELDS } from './fields';
 import { notifyChanges, notifyScope } from '../../notify-changes';
 import { latestSettledRuns, mapNotifications, mapReleases, mapRepoStats, mapRuns, parseRepo, runsPath, type RepoResponse } from './more';
 import { buildQuery, mapIssues, mapPullRequests, nextRefreshMs, PR_REFRESH_MS, type Node as PrNodeFull, type PrItem, type RequiredChecks, type SearchResponse } from './map';
@@ -152,10 +152,9 @@ async function search(kind: 'pr' | 'issue', config: SearchConfig, ctx: Parameter
   return { res, nextRefreshMs: next };
 }
 
-/** The PR list of a panel; `ci` (when not empty) keeps only PRs in those check states, searched over up to 50 results. */
+/** The PR list of a panel. */
 async function fetchPrList(scope: string, config: SearchConfig, ctx: Parameters<DataSource['fetch']>[1]) {
-  const ci = Array.isArray(config.ci) ? (config.ci as string[]) : [];
-  const { res, nextRefreshMs } = await search('pr', ci.length ? { ...config, max: 50 } : config, ctx);
+  const { res, nextRefreshMs } = await search('pr', config, ctx);
   const conn = await ctx.connection(config.connection, 'github');
   const data = mapPullRequests(res, config.ticketPattern ?? '', await requiredChecks(conn, res.search?.nodes ?? [], ctx.signal));
   let board: Set<string> | null = null;
@@ -165,13 +164,7 @@ async function fetchPrList(scope: string, config: SearchConfig, ctx: Parameters<
   } catch {
     board = null;
   }
-  let items = board ? data.items.map((pr) => ({ ...pr, linked: !!pr.ticket && board.has(pr.ticket.toUpperCase()) })) : data.items;
-  let total = data.total;
-  if (ci.length) {
-    items = items.filter((pr) => ci.includes(pr.ci));
-    total = items.length;
-    items = items.slice(0, config.max);
-  }
+  const items = board ? data.items.map((pr) => ({ ...pr, linked: !!pr.ticket && board.has(pr.ticket.toUpperCase()) })) : data.items;
   if (config.notify !== false) {
     notifyChanges(ctx, notifyScope(scope, config), items, {
       key: (pr) => pr.id,
@@ -181,7 +174,7 @@ async function fetchPrList(scope: string, config: SearchConfig, ctx: Parameters<
       heading: (pr, isNew) => (isNew ? 'New PR added' : prStatus(pr.state, pr.ci)),
     });
   }
-  return { ...data, items, total, ...(nextRefreshMs ? { nextRefreshMs } : {}) };
+  return { ...data, items, ...(nextRefreshMs ? { nextRefreshMs } : {}) };
 }
 
 export const githubPrQuerySource = defineSource<SearchConfig>({
@@ -343,8 +336,8 @@ const CONCURRENCY = 4;
 export const MAX_TRACKED = 50;
 
 export interface TrackedOptions {
-  readyLabel: string;
-  rcLabel: string;
+  readyLabel: string | string[];
+  rcLabel: string | string[];
 }
 
 const DEFAULT_LABELS: TrackedOptions = { readyLabel: 'ready to merge', rcLabel: 'rc' };
@@ -487,8 +480,8 @@ const sameRef = (a: PrRef, b: PrRef) => a.number === b.number && a.owner.toLower
 
 interface TrackedConfig {
   connection: string;
-  readyLabel: string;
-  rcLabel: string;
+  readyLabel: string | string[];
+  rcLabel: string | string[];
   [key: string]: unknown;
 }
 
@@ -529,6 +522,36 @@ export const githubTrackedSource = defineSource<TrackedConfig>({
   },
 });
 
+const LABEL_POOL_QUERY = `query {
+  mine: search(query: "is:pr is:open author:@me", type: ISSUE, first: 50) { nodes { ... on PullRequest { repository { nameWithOwner } } } }
+  review: search(query: "is:pr is:open review-requested:@me", type: ISSUE, first: 50) { nodes { ... on PullRequest { repository { nameWithOwner } } } }
+}`;
+const LABEL_REPOS = 12;
+
+/** The labels of the repositories behind the user's open and review-requested PRs, sorted and unique. */
+export async function fetchPrLabels(conn: ResolvedConnection, signal?: AbortSignal): Promise<string[]> {
+  const pool = await graphql<Record<'mine' | 'review', { nodes: ({ repository?: { nameWithOwner: string } } | null)[] }>>(conn, LABEL_POOL_QUERY, {}, signal);
+  const repos = [...new Set([...pool.mine.nodes, ...pool.review.nodes].flatMap((n) => (n?.repository?.nameWithOwner ? [n.repository.nameWithOwner] : [])))].slice(0, LABEL_REPOS);
+  if (!repos.length) return [];
+  const parts = repos.map((r, i) => {
+    const [owner, name] = r.split('/');
+    return `r${i}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { labels(first: 100) { nodes { name } } }`;
+  });
+  const res = await graphql<Record<string, { labels?: { nodes?: ({ name: string } | null)[] } } | null>>(conn, `query { ${parts.join(' ')} }`, {}, signal);
+  const names = new Set<string>();
+  for (const v of Object.values(res)) for (const l of v?.labels?.nodes ?? []) if (l?.name) names.add(l.name);
+  return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+export const githubLabelsSource = defineSource<{ connection: string; [key: string]: unknown }>({
+  id: 'github-labels',
+  fields: LABELS_SOURCE_FIELDS,
+  async fetch(config, ctx) {
+    const conn = await ctx.connection(config.connection, 'github');
+    return { labels: await fetchPrLabels(conn, ctx.signal) };
+  },
+});
+
 /** Server specs and data sources of the github panels (no React). */
 export const specs: GridPanelSpec[] = [
   { kind: 'github-prs', fields: fields['github-prs'], allowMultiple: true },
@@ -549,4 +572,5 @@ export const sources: DataSource<any>[] = [
   githubReleasesSource,
   githubOverviewSource,
   githubTrackedSource,
+  githubLabelsSource,
 ];

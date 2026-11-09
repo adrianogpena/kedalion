@@ -1,5 +1,5 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
-import { copyNotify, IconButton, useAsync, type SidePanelContent } from '@kedalion/ui';
+import { copyNotify, IconButton, labelList, useAsync, type SidePanelContent } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { Chip, relTime, type Tone } from '../../kit';
 import { runAction } from '../../source';
@@ -142,8 +142,9 @@ const STEP_TONE: Record<RcStepState, Tone> = { ok: 'ok', fail: 'danger', none: '
 const STEP_MARK: Record<RcStepState, string> = { ok: '✅', fail: '❌', none: '🚧' };
 
 const hasRcLabel = (labels: readonly string[], wanted: unknown) => {
-  const w = (typeof wanted === 'string' && wanted.trim() ? wanted : 'RC branch').trim().toLowerCase();
-  return labels.some((l) => l.toLowerCase().includes(w));
+  const list = labelList(wanted);
+  const ws = (list.length ? list : ['RC branch']).map((w) => w.trim().toLowerCase());
+  return labels.some((l) => ws.some((w) => l.toLowerCase().includes(w)));
 };
 
 function BuildDate({ date }: { date: string }) {

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
-import { Button, IconButton, MAX_TEXT_FIELD, Modal, OnOffField, validConfig, type PanelConfig, type PanelField } from '@kedalion/ui';
+import { Button, IconButton, labelList, MAX_TEXT_FIELD, Modal, OnOffField, validConfig, type PanelConfig, type PanelField } from '@kedalion/ui';
 import { ConnectionDialog, listConnections, type ConnectionType, type PublicConnection } from './connections/ConnectionDialog';
 import { FolderField } from './FolderField';
 import { tKey } from './i18n';
+import { fetchSource } from './source';
 import { opmlUrls } from './panels/feeds/opml';
 import { feedUrls } from './panels/feeds/rss';
 
@@ -73,6 +74,62 @@ function TextField({ field, value, hint, onChange }: { field: Extract<PanelField
   );
 }
 
+function LabelField({ field, value, hint, connection, onChange }: { field: Extract<PanelField, { kind: 'label' }>; value: string[]; hint?: string; connection: string; onChange: (value: string[]) => void }) {
+  const [labels, setLabels] = useState<string[] | undefined>();
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    setLabels(undefined);
+    if (!connection) return setLabels([]);
+    const ctl = new AbortController();
+    fetchSource<{ labels: string[] }>('github-labels', { connection }, ctl.signal).then((r) => setLabels(r.labels), () => setLabels([]));
+    return () => ctl.abort();
+  }, [open, connection]);
+  const toggle = (l: string, on: boolean) => onChange(on ? [...value, l] : value.filter((x) => x !== l));
+  const all = [...new Set([...(labels ?? []), ...value])].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  const needle = filter.trim().toLowerCase();
+  const shown = all.filter((l) => l.toLowerCase().includes(needle));
+  return (
+    <div className="field grid-config-labels">
+      <span className="mono-label">{tKey(field.label)}</span>
+      <span className="grid-config-label-box">
+        <span className="grid-config-label-chips">
+          {value.map((l) => (
+            <span key={l} className="grid-config-label-chip">
+              {l}
+              <IconButton icon="close" size="xs" label={tKey('grid.field.label.remove', { label: l })} onClick={() => toggle(l, false)} />
+            </span>
+          ))}
+        </span>
+        <IconButton icon="plus" label={tKey('grid.field.label.add')} pressed={open} onClick={() => setOpen((o) => !o)} />
+      </span>
+      {open && (
+        <Modal
+          title={tKey('grid.field.label.add')}
+          onClose={() => setOpen(false)}
+          footer={<Button variant="primary" onClick={() => setOpen(false)}>{tKey('grid.field.label.done')}</Button>}
+        >
+          <div className="grid-config-label-popup">
+            <input autoFocus value={filter} placeholder={tKey('grid.field.label.filter')} aria-label={tKey('grid.field.label.filter')} spellCheck={false} onChange={(e) => setFilter(e.target.value)} />
+            <div className="grid-config-label-list">
+              {labels === undefined && <span className="muted">{tKey('grid.field.label.loading')}</span>}
+              {labels !== undefined && shown.length === 0 && <span className="muted">{tKey('grid.field.label.none')}</span>}
+              {shown.map((l) => (
+                <label key={l} className="grid-config-check">
+                  <input type="checkbox" checked={value.includes(l)} onChange={(e) => toggle(l, e.target.checked)} />
+                  <span>{l}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
+      {hint && <span className="muted">{hint}</span>}
+    </div>
+  );
+}
+
 const NEW_CONNECTION = 'new:connection';
 
 interface Connections {
@@ -81,7 +138,7 @@ interface Connections {
   create(type: ConnectionType, done: (c: PublicConnection) => void): void;
 }
 
-function FieldRow({ field, value, onChange, connections }: { field: PanelField; value: unknown; onChange: (value: unknown) => void; connections: Connections }) {
+function FieldRow({ field, value, config, onChange, connections }: { field: PanelField; value: unknown; config: PanelConfig; onChange: (value: unknown) => void; connections: Connections }) {
   const hint = field.description ? tKey(field.description) : undefined;
   switch (field.kind) {
     case 'connection': {
@@ -107,6 +164,10 @@ function FieldRow({ field, value, onChange, connections }: { field: PanelField; 
           {hint && <span className="muted">{hint}</span>}
         </label>
       );
+    }
+    case 'label': {
+      const conn = config[field.connectionKey ?? 'connection'];
+      return <LabelField field={field} value={Array.isArray(value) || typeof value === 'string' ? labelList(value) : field.default} hint={hint} connection={typeof conn === 'string' ? conn : ''} onChange={onChange} />;
     }
     case 'folder':
       return <FolderField label={tKey(field.label)} hint={hint} value={typeof value === 'string' ? value : field.default} onChange={onChange} />;
@@ -202,7 +263,7 @@ export function ConfigForm({ fields, value, onChange }: { fields: readonly Panel
   return (
     <div className="grid-config-form">
       {fields.filter((f) => !f.hidden).map((f) => (
-        <FieldRow key={f.key} field={f} value={value[f.key]} onChange={(v) => onChange({ ...value, [f.key]: v })} connections={connections} />
+        <FieldRow key={f.key} field={f} value={value[f.key]} config={value} onChange={(v) => onChange({ ...value, [f.key]: v })} connections={connections} />
       ))}
       {creating && (
         <ConnectionDialog

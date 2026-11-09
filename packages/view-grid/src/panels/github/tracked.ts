@@ -131,14 +131,15 @@ export function summarizeChecks(nodes: readonly ContextNode[] | undefined): Trac
   return { state, passed, total: details.length, details };
 }
 
-const hasLabel = (labels: readonly string[], wanted: string): boolean => {
-  const w = wanted.trim().toLowerCase();
-  return !!w && labels.some((l) => l.toLowerCase().includes(w));
-};
+const hasLabel = (labels: readonly string[], wanted: string | readonly string[]): boolean =>
+  (typeof wanted === 'string' ? [wanted] : wanted).some((raw) => {
+    const w = raw.trim().toLowerCase();
+    return !!w && labels.some((l) => l.toLowerCase().includes(w));
+  });
 
 const DECISIONS = ['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED'] as const;
 
-export function toTrackedPr(node: PrNode, ref: PrRef, opts: { readyLabel: string; rcLabel: string }): TrackedPr {
+export function toTrackedPr(node: PrNode, ref: PrRef, opts: { readyLabel: string | readonly string[]; rcLabel: string | readonly string[] }): TrackedPr {
   const labels = (node.labels?.nodes ?? []).map((l) => l.name);
   const decision = DECISIONS.find((d) => d === node.reviewDecision) ?? null;
   const contexts = node.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes;
