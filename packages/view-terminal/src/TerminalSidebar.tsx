@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, ErrorBanner, errorOf, Icon, IconButton } from '@kedalion/ui';
+import { Button, ContextMenu, ErrorBanner, errorOf, Icon, IconButton } from '@kedalion/ui';
 import { t } from './i18n';
 import { postExists } from './sidebar-api';
 import type { SavedCommand, SavedPath, SidebarData } from './sidebar-types';
@@ -114,6 +114,7 @@ export function TerminalSidebar({ data, loading, error, onChange, canAct, onAddC
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set());
   /** The form shown: a new item of a kind, or an existing item's id. */
   const [form, setForm] = useState<{ kind: Kind; id?: string }>();
+  const [menu, setMenu] = useState<{ x: number; y: number; kind: Kind; row: Row; canUp: boolean; canDown: boolean }>();
   const q = query.trim().toLowerCase();
   const match = (...texts: string[]) => !q || texts.some((s) => s.toLowerCase().includes(q));
 
@@ -201,7 +202,14 @@ export function TerminalSidebar({ data, loading, error, onChange, canAct, onAddC
           <ItemForm kind={kind} groups={groups} initial={{ name: i.name, value: i.value, group: i.group }} onSave={(n, v, g) => commit(kind, i.id, n, v, g)} onCancel={() => setForm(undefined)} />
         </li>
       ) : (
-        <li key={i.id} className={`term-side-row${canAct ? '' : ' inert'}`}>
+        <li
+          key={i.id}
+          className={`term-side-row${canAct ? '' : ' inert'}`}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, kind, row: i, canUp: canMove(i, -1), canDown: canMove(i, 1) });
+          }}
+        >
           <button
             type="button"
             className="term-side-main"
@@ -217,12 +225,6 @@ export function TerminalSidebar({ data, loading, error, onChange, canAct, onAddC
               <Icon name="alert" size={14} />
             </span>
           )}
-          <span className="term-side-actions">
-            <IconButton icon="chevron-up" size="sm" label={t('terminalScreen.sidebar.moveUp')} disabled={!canMove(i, -1)} onClick={() => move(kind, i.id, -1)} />
-            <IconButton icon="chevron-down" size="sm" label={t('terminalScreen.sidebar.moveDown')} disabled={!canMove(i, 1)} onClick={() => move(kind, i.id, 1)} />
-            <IconButton icon="edit" size="sm" label={t('terminalScreen.sidebar.edit')} onClick={() => setForm({ kind, id: i.id })} />
-            <IconButton icon="trash" size="sm" label={t('terminalScreen.sidebar.delete')} onClick={() => remove(kind, i.id)} />
-          </span>
         </li>
       );
     const shownGroups = groups.filter((g) => shown.some((i) => i.group === g));
@@ -280,6 +282,18 @@ export function TerminalSidebar({ data, loading, error, onChange, canAct, onAddC
         <IconButton icon="sidebar" size="sm" label={t('terminalScreen.sidebar.hide')} onClick={onHide} />
       </div>
       {error !== undefined && <ErrorBanner compact error={errorOf(error)} />}
+      {menu && (
+        <ContextMenu
+          at={menu}
+          onClose={() => setMenu(undefined)}
+          items={[
+            { id: 'up', label: t('terminalScreen.sidebar.moveUp'), icon: 'chevron-up', disabled: !menu.canUp, run: () => move(menu.kind, menu.row.id, -1) },
+            { id: 'down', label: t('terminalScreen.sidebar.moveDown'), icon: 'chevron-down', disabled: !menu.canDown, run: () => move(menu.kind, menu.row.id, 1) },
+            { id: 'edit', label: t('terminalScreen.sidebar.edit'), icon: 'edit', run: () => setForm({ kind: menu.kind, id: menu.row.id }) },
+            { id: 'delete', label: t('terminalScreen.sidebar.delete'), icon: 'trash', danger: true, run: () => remove(menu.kind, menu.row.id) },
+          ]}
+        />
+      )}
       <div className="term-side-body">{!loading && (<>{section('paths', 'folder')}{section('commands', 'terminal')}</>)}</div>
     </div>
   );

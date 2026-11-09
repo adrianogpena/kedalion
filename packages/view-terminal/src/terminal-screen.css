@@ -46,10 +46,7 @@
 .term-side-row.inert .term-side-main { cursor: default; }
 .term-side-main > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .term-side-value { font-family: var(--font-mono); font-size: var(--fs-xs); }
-.term-side-actions { position: absolute; right: var(--space-4); display: none; gap: 2px; padding-left: var(--space-8); background: var(--hover); }
-.term-side-row:hover .term-side-actions, .term-side-row:focus-within .term-side-actions { display: flex; }
 .term-side-missing { display: flex; align-items: center; padding-right: var(--space-8); }
-.term-side-row:hover .term-side-missing, .term-side-row:focus-within .term-side-missing { display: none; }
 .term-side-group-head { width: 100%; justify-content: flex-start; font-weight: 600; }
 .term-side-form { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6) var(--space-8); }
 .term-side-form input, .term-side-form textarea { width: 100%; min-width: 0; box-sizing: border-box; }
