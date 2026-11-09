@@ -41,6 +41,9 @@ let latest: Pod[] = [];
 /** Pod state seen so far, shared by every panel instance so an event notifies once. */
 const podWatch = newPodWatch();
 
+/** The tracked pod patterns each cluster was last fetched with; a change makes the next poll silent (no Deleted/Running for pods added or removed from the tracker). */
+const trackedSig = new Map<string, string>();
+
 const POD_HEADING: Record<PodEventKind, string> = { crashloop: 'CrashLoop', running: 'Running', killed: 'Killed', image: 'Image error' };
 
 /** One cluster per distinct (context, namespace), with the pod texts of its entries. */
@@ -122,6 +125,19 @@ function publish(config: PodsConfig, clusters: readonly Cluster[], notify?: (n: 
     out.pods.push(...r.pods);
   }
   latest = out.pods;
+  for (const c of clusters) {
+    const r = clusterResults.get(clusterKey(c));
+    if (!r) continue;
+    const sig = [...r.c.patterns].sort().join('\n');
+    const key = `${c.context}/${c.namespace}`;
+    if (trackedSig.get(key) !== sig) {
+      if (trackedSig.has(key)) {
+        podWatch.primed.delete(key);
+        for (const k of [...podWatch.pods.keys()]) if (k.startsWith(`${key}/`)) podWatch.pods.delete(k);
+      }
+      trackedSig.set(key, sig);
+    }
+  }
   if (config.notify !== false && notify) {
     const live = new Set(out.clusters.filter((c) => !c.error).map((c) => `${c.context}/${c.namespace}`));
     notifyLines(
