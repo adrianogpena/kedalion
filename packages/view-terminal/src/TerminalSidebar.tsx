@@ -64,7 +64,7 @@ function ItemForm({ kind, initial, groups, onSave, onCancel }: FormProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [value, setValue] = useState(initial?.value ?? '');
   const [group, setGroup] = useState(initial?.group ?? '');
-  const listId = `term-side-groups-${kind}`;
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const ok = value.trim().length > 0;
   const save = () => {
     if (!ok) return;
@@ -89,12 +89,27 @@ function ItemForm({ kind, initial, groups, onSave, onCancel }: FormProps) {
       ) : (
         <textarea rows={3} value={value} placeholder={t('terminalScreen.sidebar.command')} aria-label={t('terminalScreen.sidebar.command')} onChange={(e) => setValue(e.target.value)} />
       )}
-      <input list={listId} value={group} maxLength={100} placeholder={t('terminalScreen.sidebar.group')} aria-label={t('terminalScreen.sidebar.group')} onChange={(e) => setGroup(e.target.value)} />
-      <datalist id={listId}>
-        {groups.map((g) => (
-          <option key={g} value={g} />
-        ))}
-      </datalist>
+      <div className="term-side-group-field">
+        <input value={group} maxLength={100} placeholder={t('terminalScreen.sidebar.group')} aria-label={t('terminalScreen.sidebar.group')} onChange={(e) => setGroup(e.target.value)} />
+        {groups.length > 0 && (
+          <IconButton
+            icon="chevron-down"
+            size="sm"
+            label={t('terminalScreen.sidebar.group')}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setMenuAt({ x: r.left, y: r.bottom });
+            }}
+          />
+        )}
+      </div>
+      {menuAt && (
+        <ContextMenu
+          at={menuAt}
+          onClose={() => setMenuAt(null)}
+          items={groups.map((g) => ({ id: g, label: g, radio: true, checked: g === group, run: () => setGroup(g) }))}
+        />
+      )}
       <div className="term-side-form-actions">
         <Button size="sm" variant="primary" disabled={!ok} onClick={save}>
           {t('terminalScreen.sidebar.save')}

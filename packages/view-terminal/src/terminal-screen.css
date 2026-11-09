@@ -50,6 +50,8 @@
 .term-side-group-head { width: 100%; justify-content: flex-start; font-weight: 600; }
 .term-side-form { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6) var(--space-8); }
 .term-side-form input, .term-side-form textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.term-side-group-field { display: flex; align-items: center; gap: var(--space-4); }
+.term-side-group-field input { flex: 1; }
 .term-side-form-actions { display: flex; gap: var(--space-4); }
 .prompt-note { font-style: italic; }
 .prompt-seg-name { min-width: 70px; font-size: var(--fs-sm); }
