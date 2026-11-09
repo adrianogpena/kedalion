@@ -1,4 +1,5 @@
 import { isAbsolute, join } from 'node:path';
+import { missingPaths, validExistsBody } from './sidebar-exists.ts';
 import { createSidebarStore, type SidebarStore } from './sidebar-store.ts';
 import type { SidebarData } from './sidebar-types.ts';
 import { defineServerView, type FieldSpec, isRecord, validGroup } from '@kedalion/server-core';
@@ -196,6 +197,7 @@ export function terminalServerView({ integrationDir, resolveCwd, launchers, sess
         ...mount(ctx).routes,
         'GET /api/terminal/sidebar': () => store.read(),
         'PUT /api/terminal/sidebar': async ({ json }) => ({ ok: store.write(await json<SidebarData>()) }),
+        'POST /api/terminal/sidebar/exists': async ({ json }) => ({ missing: missingPaths(validExistsBody(await json<unknown>()) ?? []) }),
       };
     },
     sockets: (ctx) => mount(ctx).sockets,
