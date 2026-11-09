@@ -7,10 +7,16 @@ import { VIEW_ICON_SVGS } from '../view-icons';
 const WAVE = 'M3 21.5q2-1.3 4.5 0t4.5 0 4.5 0 4.5 0';
 const WAVE_LONG = `M-15 21.5q2-1.3 4.5 0${'t4.5 0'.repeat(9)}`;
 
+/** View ids with a Forge PNG tile in /view-icons. */
+const FORGE_VIEW_IDS = new Set(['explorer', 'terminal', 'rest', 'workbench', 'git', 'dashboard', 'browser', 'agents', 'settings']);
+
 /** Icon of a view entry in the Navigation: the view's mythology icon when the navIcons setting asks for it, else the icon set's `name`. */
 export function NavIcon({ viewId, name, size = 16 }: { viewId: string; name: IconName; size?: number }) {
   const { navIcons } = useLayout();
   const busy = useViewBusy(viewId);
+  if (navIcons === 'forge' && FORGE_VIEW_IDS.has(viewId)) {
+    return <img className="icon nav-view-icon" width={size} height={size} style={{ '--s': `${size}px`, borderRadius: Math.round(size / 4) } as React.CSSProperties} src={`/view-icons/${viewId}.png`} alt="" aria-hidden="true" />;
+  }
   const svg = navIcons === 'mythology' ? VIEW_ICON_SVGS[viewId] : undefined;
   if (!svg) return <Icon name={name} size={size} />;
   return <span className={`icon nav-view-icon${busy ? ' busy' : ''}`} style={{ '--s': `${size}px` } as React.CSSProperties} aria-hidden="true" dangerouslySetInnerHTML={{ __html: (busy ? svg.replace(WAVE, WAVE_LONG) : svg).replace('width="24" height="24"', 'width="100%" height="100%"') }} />;

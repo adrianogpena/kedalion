@@ -107,6 +107,18 @@ function Main({ settings: saved, setSettings, screen, go, overlay, setOverlay }:
   }, [appearance.uiFontFamily, appearance.editorFontFamily, appearance.editorFontSize, appearance.editorLineHeight, appearance.editorLigatures, appearance.reduceMotion]);
 
   useEffect(() => {
+    let link = document.head.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    const png = appearance.appIcon !== 'default';
+    link.type = png ? 'image/png' : 'image/svg+xml';
+    link.href = png ? `/icons/${appearance.appIcon}.png` : '/favicon.svg';
+  }, [appearance.appIcon]);
+
+  useEffect(() => {
     const root = document.documentElement;
     root.dataset.tabSizing = windowOptions.tabSizing;
     root.dataset.tabClose = windowOptions.tabCloseButton;

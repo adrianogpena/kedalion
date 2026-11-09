@@ -12,6 +12,9 @@ Colours: violet `#9b8cff` on the dark tile `#120d2b` is the brand. Gold stands f
 | `docs/logo/kedalion-anvil.svg` | Main icon, 64 px source |
 | `packages/ui/src/components/ui.tsx` `BrandMark` | Main icon without the tile, in the header and sidebar: anvil in the accent colour, spark in `--brand-spark` |
 | `docs/logo/kedalion-eye.svg` | Alternative icon |
+| `app/web/public/icons/forge.png` | Alternative: anvil with spark. Chosen in Settings > Appearance > App icon (browser tab only; exe icon stays build time) |
+| `app/web/public/icons/hephaestus.png` | Alternative: Hephaestus and the apprentice at the anvil |
+| `app/web/public/icons/apprentice.png` | Alternative: Kedalion on the anvil under the stars |
 | `docs/logo/logo-wordmark-dark.svg`, `logo-wordmark-light.svg` | Icon with the name, for dark and light backgrounds |
 | `docs/logo/logo-readme.svg` | README header |
 
@@ -38,3 +41,17 @@ A violet eye whose iris is a gold rising sun. Orion, blinded, carried Kedalion o
 | `odysseus.svg` | Odysseus | Browser | A desk globe with a dashed gold route across its face. Odysseus wandered ten years across the known world to reach Ithaca; the Browser follows a route from site to site. The stand makes it an object, so it does not read as an eye. |
 | `kourai.svg` | Kourai | Agents | Three figures, the centre one gold. The Kourai were the golden maidens Hephaestus built to help at the forge, who could think and act by themselves. There were many of them, as agents run side by side. |
 | `themis.svg` | Themis | Settings | The scales of Themis with a gold knob on top. Themis is the goddess of order and custom: how things are set and done. |
+
+### Forge set
+
+A second, complete set of view icons: 256 px rounded PNG tiles in `app/web/public/view-icons/`, served at `/view-icons/<viewId>.png`. It is chosen as a whole with the Navigation icons setting (`navIcons: 'forge'`); views without a PNG fall back to the icon set, and notifications keep the SVG badges above.
+
+- `app/web/public/view-icons/explorer.png`
+- `app/web/public/view-icons/terminal.png`
+- `app/web/public/view-icons/rest.png`
+- `app/web/public/view-icons/workbench.png`
+- `app/web/public/view-icons/git.png`
+- `app/web/public/view-icons/dashboard.png`
+- `app/web/public/view-icons/browser.png`
+- `app/web/public/view-icons/agents.png`
+- `app/web/public/view-icons/settings.png`

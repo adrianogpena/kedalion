@@ -90,6 +90,7 @@ const APPEARANCE_SPEC: Record<string, FieldSpec> = {
   editorLineHeight: [1, 3],
   editorLigatures: 'boolean',
   reduceMotion: 'boolean',
+  appIcon: ['default', 'forge', 'hephaestus', 'apprentice'],
 };
 const EDITOR_SPEC: Record<string, FieldSpec> = {
   tabSize: [1, 8],

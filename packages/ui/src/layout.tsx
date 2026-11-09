@@ -46,7 +46,7 @@ export interface LayoutContext {
   mainMenu: MainMenu;
   iconSet: string;
   /** Icons of the view entries in the Navigation: '' = the icon set, 'mythology' = the view icons. */
-  navIcons: '' | 'mythology';
+  navIcons: '' | 'mythology' | 'forge';
   navParts: NavigationComponents;
   resolved: ResolvedLayouts;
 }
@@ -56,7 +56,7 @@ type Base = Pick<LayoutContext, 'layout' | 'iconSet' | 'navIcons' | 'mainMenu' |
 const defaultResolved = resolveLayouts();
 const Ctx = createContext<Base>({ layout: resolveLayout(legacyLayoutId(defaultResolved)), iconSet: defaultResolved.icons, navIcons: '', mainMenu: 'labels', resolved: defaultResolved });
 
-export function LayoutProvider({ layouts, icons, navIcons = '', children }: { layouts?: LayoutsSetting; icons?: string; navIcons?: '' | 'mythology'; children: ReactNode }) {
+export function LayoutProvider({ layouts, icons, navIcons = '', children }: { layouts?: LayoutsSetting; icons?: string; navIcons?: '' | 'mythology' | 'forge'; children: ReactNode }) {
   const resolved = useMemo(() => resolveLayouts(layouts, icons), [layouts, icons]);
   const iconSet = resolved.icons;
   const layout = useMemo(() => resolveLayout(legacyLayoutId(resolved)), [resolved]);

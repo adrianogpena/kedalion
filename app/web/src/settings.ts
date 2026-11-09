@@ -52,6 +52,7 @@ settingsRegistry.registerSettings([
   groupField('appearance', 'editorLineHeight', 130, num(1.55, 1, 3)),
   groupField('appearance', 'editorLigatures', 140, bool(false)),
   groupField('appearance', 'reduceMotion', 150, bool(false)),
+  groupField('appearance', 'appIcon', 160, oneOf('default', ['default', 'forge', 'hephaestus', 'apprentice'])),
 
   groupField('editor', 'tabSize', 100, num(4, 1, 8)),
   groupField('editor', 'insertSpaces', 110, bool(true)),

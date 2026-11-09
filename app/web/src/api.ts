@@ -70,6 +70,8 @@ export interface AppearanceSettings {
   editorLineHeight?: number;
   editorLigatures?: boolean;
   reduceMotion?: boolean;
+  /** Browser tab icon; the exe and window icon stay build time. */
+  appIcon?: 'default' | 'forge' | 'hephaestus' | 'apprentice';
 }
 
 export interface EditorSettings {
