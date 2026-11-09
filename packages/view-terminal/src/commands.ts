@@ -1,4 +1,4 @@
-import { type CommandDef, tabCommands } from '@kedalion/ui';
+import { type CommandDef, explorerCommands, tabCommands } from '@kedalion/ui';
 import { t, type TerminalMessageKey } from './i18n';
 
 const PANE_DIRS = ['Left', 'Right', 'Up', 'Down'] as const;
@@ -21,6 +21,7 @@ export function terminalCommands(): CommandDef[] {
   });
   return [
     ...tabCommands('terminal'),
+    ...explorerCommands('terminal'),
     { id: 'terminal.find', scope: 'terminal', label: t('keys.terminal.find'), keys: ['Ctrl+Shift+F'] },
     { id: 'terminal.prevCommand', scope: 'terminal', label: t('keys.terminal.prevCommand'), keys: ['Ctrl+ArrowUp'] },
     { id: 'terminal.nextCommand', scope: 'terminal', label: t('keys.terminal.nextCommand'), keys: ['Ctrl+ArrowDown'] },

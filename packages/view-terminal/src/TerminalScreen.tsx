@@ -16,6 +16,7 @@ import {
   activeTab,
   addTab,
   closeTabs,
+  Explorer,
   focusedPane,
   nudgeSplit,
   paneInDirection,
@@ -45,6 +46,9 @@ import {
 import type { CommandRecord, ResultRecord, TerminalAlerts } from '@kedalion/terminal/protocol';
 import { TERMINAL_SCREEN_COMMANDS, terminalCommandById } from './commands';
 import { t } from './i18n';
+import { cdCommand, expandPlaceholders, hasClipboardPlaceholder } from './shell-path';
+import { TerminalSidebar } from './TerminalSidebar';
+import { useSidebarData } from './useSidebarData';
 import { emptySessionData, type PanelTab, SessionPanel, type SessionData } from './SessionPanel';
 import { type TerminalViewSettings as Settings, terminalSettingsOf } from './settings';
 import './terminal-screen.css';
@@ -124,7 +128,30 @@ const savePanel = (v: { open: boolean; tab: PanelTab }) => {
   }
 };
 
-const normPath = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+const SIDEBAR_KEY = 'kedalion.terminal.sidebar';
+interface SidebarView {
+  sizes: [number, number];
+  collapsed: boolean;
+}
+const readSidebar = (): SidebarView => {
+  try {
+    const v = JSON.parse(localStorage.getItem(SIDEBAR_KEY) ?? 'null') as { sizes?: unknown; collapsed?: unknown } | null;
+    const s = v?.sizes;
+    const ok = Array.isArray(s) && s.length === 2 && s.every((n) => typeof n === 'number' && n > 0);
+    return { sizes: ok ? [s[0], s[1]] : [0.25, 0.75], collapsed: v?.collapsed === true };
+  } catch {
+    return { sizes: [0.25, 0.75], collapsed: false };
+  }
+};
+const saveSidebar = (v: SidebarView) => {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, JSON.stringify(v));
+  } catch {
+    // no storage: the sidebar just starts open next time
+  }
+};
+
+const normPath =(p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
 /** The project whose folder holds `abs` (the deepest one), with the path inside it. */
 function projectOf(projects: ExplorerProject[], abs: string): { project: ExplorerProject; rel: string } | null {
@@ -178,6 +205,14 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
       savePanel(next);
       return next;
     });
+  const [sidebarView, setSidebarView] = useState(readSidebar);
+  const changeSidebar = (patch: Partial<SidebarView>) =>
+    setSidebarView((v) => {
+      const next = { ...v, ...patch };
+      saveSidebar(next);
+      return next;
+    });
+  const sidebarData = useSidebarData();
   /** Commands, results, captures and alerts of each session (frames from its pane, seeded from the server). */
   const [sessionData, setSessionData] = useState<Record<string, SessionData>>({});
   const patchData = (session: string, fn: (d: SessionData) => SessionData) =>
@@ -403,6 +438,7 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
         })
       : []),
     { id: 'panel', label: t('terminalScreen.panel'), icon: 'panel-right', checked: panel.open, run: () => changePanel({ open: !panel.open }) },
+    { id: 'sidebar', label: t('terminalScreen.sidebar'), icon: 'sidebar', checked: !sidebarView.collapsed, run: () => changeSidebar({ collapsed: !sidebarView.collapsed }) },
   ];
 
   const newMenu = (paneId: string): Array<ContextMenuItem | 'sep'> => {
@@ -569,8 +605,44 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
     </>
   );
 
+  const focusedHandle = () => (focusedTab ? handles.current.get(focusedTab.id) : undefined);
+  const onCd = (path: string) => {
+    const h = focusedHandle();
+    if (!h || !focusedTab) return;
+    h.submit(cdCommand(path, focusedSession ? infos[focusedSession]?.shell : undefined));
+    h.focus();
+  };
+  const onPrint = async (command: string) => {
+    const h = focusedHandle();
+    if (!h || !focusedTab) return;
+    const cwd = cwdOf(focusedTab.route);
+    const clipboard = hasClipboardPlaceholder(command) ? await navigator.clipboard.readText().catch(() => undefined) : undefined;
+    h.insert(expandPlaceholders(command, { cwd, clipboard }));
+    h.focus();
+  };
+  const sidebar = (
+    <TerminalSidebar
+      data={sidebarData.data}
+      loading={sidebarData.loading}
+      error={sidebarData.error}
+      onChange={sidebarData.update}
+      canAct={!!focusedTab}
+      onCd={onCd}
+      onPrint={(command) => void onPrint(command)}
+      onHide={() => changeSidebar({ collapsed: true })}
+    />
+  );
+
   return (
     <div className="terminal-screen screen-edges">
+      <Explorer
+        scope="terminal"
+        sidebar={sidebar}
+        sizes={sidebarView.sizes}
+        onResize={(sizes) => changeSidebar({ sizes })}
+        collapsed={sidebarView.collapsed}
+        onCollapsedChange={(collapsed) => changeSidebar({ collapsed })}
+      >
       <div className="terminal-screen-body">
         {workspace}
         {panel.open && (
@@ -588,6 +660,7 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
           />
         )}
       </div>
+      </Explorer>
       {extras}
     </div>
   );

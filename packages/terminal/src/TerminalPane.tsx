@@ -38,6 +38,8 @@ export interface TerminalPaneHandle {
   submit(text: string): void;
   /** Scrolls to the newest command with this line still in the buffer; false when none. */
   scrollToCommand(command: string): boolean;
+  /** Gives the terminal keyboard focus. */
+  focus(): void;
 }
 
 /** Where a pane opens what its links point at; paths arrive absolute and existing. */
@@ -413,6 +415,7 @@ export function TerminalPane(props: TerminalPaneProps) {
         insert: (text) => view.paste(text),
         submit: (text) => send(encoder.encode(text + String.fromCharCode(13))),
         scrollToCommand: (command) => view.scrollToCommand(command),
+        focus: () => view.focus(),
       });
     }
     view.onResize((cols, rows) => {

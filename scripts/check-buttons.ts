@@ -35,6 +35,7 @@ const RAW_BUTTONS: Record<string, number> = {
   'packages/editor/src/rich/Toolbar.tsx': 1,
   'packages/terminal/src/TerminalPane.tsx': 4,
   'packages/view-terminal/src/SessionPanel.tsx': 5,
+  'packages/view-terminal/src/TerminalSidebar.tsx': 2,
   'packages/ui/src/components/AppearanceFields.tsx': 3,
   'packages/ui/src/components/Breadcrumbs.tsx': 6,
   'packages/ui/src/components/CommandPalette.tsx': 2,

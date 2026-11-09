@@ -28,6 +28,29 @@
 .term-panel-alerts { display: flex; flex-direction: column; gap: var(--space-4); margin: 0; padding: var(--space-8) var(--space-10); border: 0; border-top: 1px solid var(--border); font-size: var(--fs-sm); }
 .term-panel-alerts legend { float: left; margin-bottom: var(--space-4); padding: 0; font-size: var(--fs-xs); }
 .term-panel-alerts label { display: flex; align-items: center; gap: var(--space-6); }
+/* Sidebar: saved paths and commands. */
+.terminal-screen > .explorer { flex: 1; min-height: 0; }
+.explorer-main > .terminal-screen-body { height: 100%; }
+.term-side { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--panel); }
+.term-side-head { display: flex; align-items: center; gap: var(--space-6); padding: var(--space-6) var(--space-8); border-bottom: 1px solid var(--border); }
+.term-side-head input { flex: 1; min-width: 0; }
+.term-side-body { flex: 1; min-height: 0; overflow: auto; }
+.term-side-section-head { display: flex; align-items: center; justify-content: space-between; padding-right: var(--space-4); border-bottom: 1px solid var(--border-subtle, var(--border)); }
+.term-side-toggle { display: flex; flex: 1; align-items: center; gap: var(--space-6); padding: var(--space-6) var(--space-8); border: 0; background: transparent; color: var(--text); font-size: var(--fs-sm); font-weight: 600; text-align: left; cursor: pointer; }
+.term-side-empty { padding: var(--space-8) var(--space-12); font-size: var(--fs-sm); }
+.term-side-list { margin: 0; padding: 0; list-style: none; }
+.term-side-row { position: relative; display: flex; align-items: center; }
+.term-side-row:hover { background: var(--hover); }
+.term-side-row.inert { opacity: 0.55; }
+.term-side-main { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; padding: var(--space-4) var(--space-12); border: 0; background: transparent; color: var(--text); font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+.term-side-row.inert .term-side-main { cursor: default; }
+.term-side-main > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.term-side-value { font-family: var(--font-mono); font-size: var(--fs-xs); }
+.term-side-actions { position: absolute; right: var(--space-4); display: none; gap: 2px; padding-left: var(--space-8); background: var(--hover); }
+.term-side-row:hover .term-side-actions, .term-side-row:focus-within .term-side-actions { display: flex; }
+.term-side-form { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6) var(--space-8); }
+.term-side-form input, .term-side-form textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.term-side-form-actions { display: flex; gap: var(--space-4); }
 .prompt-note { font-style: italic; }
 .prompt-seg-name { min-width: 70px; font-size: var(--fs-sm); }
 .prompt-symbol { width: 9ch; }
