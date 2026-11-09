@@ -25,6 +25,16 @@
 .pods-entry-compact { flex: 1; min-width: 0; }
 .pods-entry-row { display: flex; align-items: flex-end; gap: var(--space-8); }
 .pods-editor { display: flex; flex-direction: column; gap: var(--space-8); }
+.pods-editor-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.pods-editor-list { display: flex; flex-direction: column; gap: var(--space-8); max-height: 220px; overflow-y: auto; }
+.pods-group { display: flex; flex-direction: column; gap: var(--space-4); }
+.pods-group-head { font-size: var(--fs-xs); color: var(--text-dim); font-family: var(--font-mono); }
+.pods-subgroup { display: flex; flex-direction: column; gap: var(--space-4); }
+.pods-group-ns { padding-left: var(--space-8); }
+.pods-entry-nested { padding-left: var(--space-16, 16px); }
+.pods-entry-summary { display: flex; align-items: center; gap: var(--space-4); padding-left: var(--space-8); min-width: 0; }
+.pods-entry-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pods-dim { color: var(--text-dim); margin: 0; }
 .view-side .pod-overview { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-12); overflow: auto; height: 100%; font-size: var(--fs-sm); }
 .view-side .pod-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-8); margin: 0; }
 .view-side .pod-fact { min-width: 0; }
