@@ -55,10 +55,12 @@ export function FileDialog({ mode, title, filters, start, purpose, suggestedName
   const [editing, setEditing] = useState(false);
   const [pathText, setPathText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
   const navSeq = useRef(0);
   const root = useRef<HTMLDivElement>(null);
   const side = useRef<HTMLDivElement>(null);
   const crumbs = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const filter = filters?.[filterIndex];
   useRovingList(side, '.fd-side-item');
 
@@ -68,6 +70,7 @@ export function FileDialog({ mode, title, filters, start, purpose, suggestedName
       const next = await request<Listing>('GET', '/api/file-dialog/list', { path });
       if (seq !== navSeq.current) return false;
       setListing(next);
+      setSearch('');
       setError(null);
       return true;
     } catch (err) {
@@ -97,8 +100,10 @@ export function FileDialog({ mode, title, filters, start, purpose, suggestedName
   const entries = useMemo(() => {
     const rows = (listing?.entries ?? []).filter((e) => (mode === 'folder' ? e.kind !== 'file' : e.kind !== 'file' || matchesPatterns(e.name, filter?.patterns ?? [])));
     const rank = (e: FileDialogEntry) => (e.kind === 'dir' ? 0 : e.kind === 'link' ? 1 : 2);
-    return [...rows].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-  }, [listing, mode, filter]);
+    const needle = search.trim().toLowerCase();
+    const shown = needle === '' ? rows : rows.filter((e) => e.name.toLowerCase().includes(needle));
+    return [...shown].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [listing, mode, filter, search]);
 
   const commit = async (path: string) => {
     setBusy(true);
@@ -233,6 +238,10 @@ export function FileDialog({ mode, title, filters, start, purpose, suggestedName
     if (e.ctrlKey && e.key.toLowerCase() === 'l') {
       e.preventDefault();
       startEdit();
+    } else if (e.ctrlKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
     } else if ((e.altKey && e.key === 'ArrowUp') || (e.key === 'Backspace' && !typing && !e.ctrlKey && !e.altKey)) {
       e.preventDefault();
       up();
@@ -287,6 +296,31 @@ export function FileDialog({ mode, title, filters, start, purpose, suggestedName
             </div>
           )}
           <IconButton icon="folder-plus" label={t('fileDialog.newFolder')} disabled={!listing} onClick={() => void makeFolder()} />
+          <input
+            ref={searchRef}
+            className="fd-search"
+            autoFocus
+            placeholder={t('fileDialog.search')}
+            aria-label={t('fileDialog.search')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (entries[0]) void activate(entries[0]);
+              } else if (e.key === 'ArrowDown') {
+                const row = root.current?.querySelector<HTMLElement>('.fd-row[tabindex="0"], .fd-row');
+                if (row) {
+                  e.preventDefault();
+                  row.focus();
+                }
+              } else if (e.key === 'Escape' && search !== '') {
+                e.preventDefault();
+                e.stopPropagation();
+                setSearch('');
+              }
+            }}
+          />
         </div>
         <div className="fd-main">
           <div ref={side} className="fd-side">
@@ -314,7 +348,6 @@ export function FileDialog({ mode, title, filters, start, purpose, suggestedName
           <label className="fd-field">
             <span>{t('fileDialog.name')}</span>
             <input
-              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
