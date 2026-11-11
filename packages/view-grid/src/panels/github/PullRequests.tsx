@@ -30,15 +30,15 @@ export function prRows(config: PullRequestsConfig, items: readonly PrItem[], act
         {pr.draft && <Chip>{tKey('dash.github.draft')}</Chip>}
         {pr.conflicts && <Chip tone="danger">{tKey('dash.github.conflicts')}</Chip>}
         {has('review') && pr.review !== 'none' && <Chip tone={REVIEW_TONE[pr.review]}>{tKey(`dash.github.review.${pr.review}`)}</Chip>}
+        {pr.threads > 0 && (
+          <Chip tone="warn" title={tKey('dash.github.threads', { n: pr.threads })}>
+            {tKey('dash.github.unresolved')}
+          </Chip>
+        )}
         {has('checks') && pr.ci !== 'none' && (
           <Chip tone={CI_TONE[pr.ci]} title={pr.failing.length ? tKey('dash.github.ci.failing', { names: pr.failing.join(', ') }) : undefined}>
             {tKey(`dash.github.ci.${pr.ci}`)}
             {pr.checks.total > 0 && ` ${pr.checks.passed}/${pr.checks.total}`}
-          </Chip>
-        )}
-        {has('threads') && pr.threads > 0 && (
-          <Chip tone="warn" title={tKey('dash.github.pr.threadsHint')}>
-            {tKey('dash.github.threads', { n: pr.threads })}
           </Chip>
         )}
       </span>

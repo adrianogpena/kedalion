@@ -3,7 +3,7 @@ import { notifyField } from '../../notify-field';
 import { DEFAULT_TICKET_PATTERN, ISSUE_MODES, PR_MODES } from './map';
 import { NOTIFICATION_COLUMNS, OVERVIEW_STATS, RUN_COLUMNS } from './more';
 
-export const PR_COLUMNS = ['repo', 'author', 'review', 'checks', 'labels', 'branch', 'ticket', 'size', 'threads', 'created', 'updated'] as const;
+export const PR_COLUMNS = ['repo', 'author', 'review', 'checks', 'labels', 'branch', 'ticket', 'size', 'created', 'updated'] as const;
 export const ISSUE_COLUMNS = ['repo', 'author', 'labels', 'assignees', 'comments', 'milestone', 'updated'] as const;
 
 const connection: PanelField = { key: 'connection', kind: 'connection', connectionType: 'github', label: 'dash.github.connection', default: '' };

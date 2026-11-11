@@ -5,6 +5,7 @@ import { Chip, relTime, type Tone } from '../../kit';
 import { runAction } from '../../source';
 import { latestRc, RC_STEPS, type RcBuild, type RcInfo, type RcStepState } from './rc';
 import type { BotEntry } from './bot';
+import type { ThreadsInfo } from './threads';
 import { POLICY_BOT, type Approvals, type PrItem } from './map';
 import type { PullRequestsConfig } from './PullRequests';
 import { safeHttpUrl, type CheckDetail, type CheckState, type TrackedPr } from './tracked';
@@ -171,6 +172,7 @@ function Steps({ build }: { build: RcBuild }) {
 interface PrExtra {
   rc: RcInfo | null;
   bot: BotEntry[];
+  threads?: ThreadsInfo;
 }
 
 function BotCard({ entries }: { entries: readonly BotEntry[] }) {
@@ -196,6 +198,49 @@ function BotCard({ entries }: { entries: readonly BotEntry[] }) {
         })}
       </details>
     </section>
+  );
+}
+
+const THREAD_CHARS = 240;
+
+function ThreadsCard({ pr, info }: { pr: PrItem; info: ThreadsInfo | undefined }) {
+  return (
+    <Card title={tKey('dash.github.pr.unresolved', { n: pr.threads })}>
+      {!info ? (
+        <span className="muted">{tKey('dash.github.rc.loading')}</span>
+      ) : (
+        <>
+          {info.items.map((t, i) => {
+            const at = Date.parse(t.createdAt);
+            const long = t.body.length > THREAD_CHARS;
+            const link = safeHttpUrl(t.url);
+            return (
+              <div key={i} className="gh-thread">
+                <div className="gh-pr-line">
+                  <strong>{t.author}</strong>
+                  {t.copilot && <Chip tone="info">{tKey('dash.github.thread.copilot')}</Chip>}
+                  {t.outdated && <Chip tone="neutral" title={tKey('dash.github.thread.outdatedHint')}>{tKey('dash.github.thread.outdated')}</Chip>}
+                  {!Number.isNaN(at) && <span className="muted" title={new Date(at).toLocaleString()}>{relTime(at)}</span>}
+                  {t.path && <IconButton icon="copy" label={tKey('dash.github.thread.copyPath')} onClick={() => void copyNotify(`${t.path.split('/').pop()}${t.line ? `:${t.line}` : ''}`)} />}
+                  {link && <IconButton icon="link" label={tKey('dash.github.thread.open')} onClick={() => window.open(link, '_blank', 'noreferrer')} />}
+                </div>
+                {t.path && <code className="gh-thread-path">{t.path}{t.line ? `:${t.line}` : ''}</code>}
+                {long ? (
+                  <details className="gh-thread-body">
+                    <summary>{t.body.slice(0, THREAD_CHARS).trimEnd()}…</summary>
+                    <div>{t.body}</div>
+                  </details>
+                ) : (
+                  <div className="gh-thread-body">{t.body}</div>
+                )}
+                {t.replies > 0 && <span className="muted">{tKey('dash.github.thread.replies', { n: t.replies, who: t.lastReplier })}</span>}
+              </div>
+            );
+          })}
+          {info.more > 0 && <span className="muted">{tKey('dash.github.thread.more', { n: info.more })}</span>}
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -324,6 +369,7 @@ function PrOverview({ pr: listed, config, extraSource = PRS_EXTRA }: { pr: PrIte
           <span>{pr.threads}</span>
         </Line>
       </Card>
+      {pr.threads > 0 && <ThreadsCard pr={pr} info={extra.data?.threads} />}
       <Card title={tKey('dash.github.pr.checks')}>
         {pr.ci === 'none' ? (
           <span>{tKey('dash.github.pr.noChecks')}</span>

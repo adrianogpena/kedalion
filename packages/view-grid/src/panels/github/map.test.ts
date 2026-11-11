@@ -146,7 +146,7 @@ describe('mapping', () => {
           issueCount: 7,
           nodes: [
             null,
-            { number: 3, url: 'u3', title: 'ABC-9 x', isDraft: true, state: 'OPEN', headRefName: 'b', reviewDecision: 'APPROVED', author: { login: 'me' }, repository: { nameWithOwner: 'a/b' }, labels: { nodes: [{ name: 'bug' }] }, commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }] }, updatedAt: 't', createdAt: 'c', additions: 5, deletions: 2, changedFiles: 3, mergeable: 'CONFLICTING', baseRefName: 'main', autoMergeRequest: { enabledAt: 'x' }, comments: { totalCount: 2 }, reviewThreads: { nodes: [{ isResolved: false }, { isResolved: true }] } },
+            { number: 3, url: 'u3', title: 'ABC-9 x', isDraft: true, state: 'OPEN', headRefName: 'b', reviewDecision: 'APPROVED', author: { login: 'me' }, repository: { nameWithOwner: 'a/b' }, labels: { nodes: [{ name: 'bug' }] }, commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }] }, updatedAt: 't', createdAt: 'c', additions: 5, deletions: 2, changedFiles: 3, mergeable: 'CONFLICTING', baseRefName: 'main', autoMergeRequest: { enabledAt: 'x' }, comments: { nodes: [{ author: { login: 'bot', __typename: 'Bot' } }, { author: { login: 'copilot-pull-request-reviewer', __typename: 'Bot' } }] }, reviewThreads: { nodes: [{ isResolved: false, comments: { nodes: [{ author: { login: 'rev', __typename: 'User' } }] } }, { isResolved: true, comments: { nodes: [{ author: { login: 'me', __typename: 'User' } }] } }] } },
           ],
         },
       },

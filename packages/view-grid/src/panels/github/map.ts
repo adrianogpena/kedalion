@@ -169,7 +169,7 @@ export interface Node {
   latestOpinionatedReviews?: { nodes?: (ReviewNode | null)[] } | null;
   commits?: { nodes?: ({ commit?: { statusCheckRollup?: Rollup | null } } | null)[] } | null;
   assignees?: { nodes?: ({ login?: string } | null)[] } | null;
-  comments?: { totalCount?: number } | null;
+  comments?: { totalCount?: number; nodes?: (CommentNode | null)[] } | null;
   milestone?: { title?: string } | null;
   createdAt?: string;
   additions?: number;
@@ -178,7 +178,20 @@ export interface Node {
   mergeable?: string;
   baseRefName?: string;
   autoMergeRequest?: { enabledAt?: string } | null;
-  reviewThreads?: { nodes?: ({ isResolved?: boolean } | null)[] } | null;
+  reviewThreads?: { nodes?: ({ isResolved?: boolean; comments?: { nodes?: (CommentNode | null)[] } | null } | null)[] } | null;
+}
+
+interface CommentNode {
+  author?: { login?: string; __typename?: string } | null;
+}
+
+const isCopilot = (login: string) => /copilot/i.test(login);
+
+/** A comment to review: from someone other than the PR author, and not from a bot unless it is Copilot. */
+function countsAsComment(c: CommentNode | null | undefined, prAuthor: string): boolean {
+  const login = c?.author?.login ?? '';
+  if (!c || !login || login === prAuthor) return false;
+  return c.author?.__typename !== 'Bot' || isCopilot(login);
 }
 
 export interface SearchResponse {
@@ -292,7 +305,9 @@ export function mapPullRequests(res: SearchResponse, ticketPattern: string, requ
       files: n.changedFiles ?? 0,
       conflicts: n.mergeable === 'CONFLICTING',
       threads: (n.reviewThreads?.nodes ?? []).filter((t) => t && t.isResolved === false).length,
-      comments: n.comments?.totalCount ?? 0,
+      comments:
+        (n.reviewThreads?.nodes ?? []).filter((t) => t && countsAsComment(t.comments?.nodes?.[0], n.author?.login ?? '')).length +
+        (n.comments?.nodes ?? []).filter((c) => countsAsComment(c, n.author?.login ?? '')).length,
       base: n.baseRefName ?? '',
       autoMerge: !!n.autoMergeRequest?.enabledAt,
       checks: countChecks(rollup),

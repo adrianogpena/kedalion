@@ -11,6 +11,7 @@ import { buildQuery, mapIssues, mapPullRequests, nextRefreshMs, PR_REFRESH_MS, t
 
 import { BOT_LOGIN, parseBotComments, type BotComment } from './bot';
 import { isRcComment, parseRcComment } from './rc';
+import { mapThreads, type ThreadNode } from './threads';
 
 const RATE ='rateLimit { remaining limit resetAt }';
 
@@ -18,8 +19,8 @@ const PR_ITEM_FIELDS = `number title url isDraft state headRefName headRefOid ba
         latestOpinionatedReviews(first: 20) { nodes { state author { login } commit { oid } } }
         additions deletions changedFiles mergeable
         autoMergeRequest { enabledAt }
-        comments { totalCount }
-        reviewThreads(first: 100) { nodes { isResolved } }
+        comments(first: 100) { nodes { author { login __typename } } }
+        reviewThreads(first: 100) { nodes { isResolved comments(first: 1) { nodes { author { login __typename } } } } }
         author { login }
         repository { nameWithOwner }
         labels(first: 10) { nodes { name } }
@@ -75,7 +76,13 @@ export async function fetchPrItem(conn: ResolvedConnection, repo: string, number
   return node ? (mapPullRequests({ search: { nodes: [node] } }, ticketPattern, await requiredChecks(conn, [node], signal)).items[0] ?? null) : null;
 }
 
-/** The RC build comment and the bot comments of one PR. */
+const THREADS_QUERY = `query($o: String!, $n: String!, $p: Int!) {
+  repository(owner: $o, name: $n) { pullRequest(number: $p) {
+    reviewThreads(first: 100) { nodes { isResolved isOutdated path line originalLine comments(first: 30) { totalCount nodes { author { login } body createdAt url } } } }
+  } }
+}`;
+
+/** The RC build comment, the bot comments and the unresolved review threads of one PR. */
 export async function fetchPrExtra(conn: ResolvedConnection, repo: string, number: number, signal?: AbortSignal) {
   let found: string | null = null;
   const botComments: BotComment[] = [];
@@ -89,7 +96,15 @@ export async function fetchPrExtra(conn: ResolvedConnection, repo: string, numbe
     }
     if (list.length < 100) break;
   }
-  return { rc: found ? parseRcComment(found) : null, bot: parseBotComments(botComments) };
+  let threads = mapThreads([]);
+  try {
+    const [owner, name] = repo.split('/');
+    const res = await graphql<{ repository?: { pullRequest?: { reviewThreads?: { nodes?: (ThreadNode | null)[] } } | null } | null }>(conn, THREADS_QUERY, { o: owner, n: name, p: number }, signal);
+    threads = mapThreads(res.repository?.pullRequest?.reviewThreads?.nodes ?? []);
+  } catch {
+    // the threads are optional; the rest of the extra still shows
+  }
+  return { rc: found ? parseRcComment(found) : null, bot: parseBotComments(botComments), threads };
 }
 
 const ISSUE_QUERY = `query($q: String!, $n: Int!) {
