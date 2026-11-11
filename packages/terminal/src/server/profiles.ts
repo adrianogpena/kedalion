@@ -1,9 +1,9 @@
 import { posix, win32 } from 'node:path';
-import { isShellId, SHELL_ICONS, SHELL_IDS, SHELL_NAMES, type TerminalProfile, type TerminalProfileInfo } from '../protocol.ts';
+import { isShellId, KEDALION_PROFILE_ICON, KEDALION_PROFILE_ID, SHELL_ICONS, SHELL_IDS, SHELL_NAMES, type TerminalProfile, type TerminalProfileInfo } from '../protocol.ts';
 import { resolveShell, type ShellLookup } from './shells.ts';
 
 /** Fields a saved entry with a built-in id may override. */
-const OVERRIDABLE = ['name', 'icon', 'args', 'env', 'cwd', 'hidden', 'shellIntegration', 'appearance'] as const;
+const OVERRIDABLE = ['name', 'icon', 'args', 'env', 'cwd', 'hidden', 'shellIntegration', 'prompt', 'appearance'] as const;
 
 /** Argv a profile runs on this machine; null when its shell or command is missing. */
 export function profileArgv(p: TerminalProfile, lookup: ShellLookup): string[] | null {
@@ -31,9 +31,15 @@ export function mergeProfiles(saved: TerminalProfile[], lookup: ShellLookup): Te
     const o = byId.get(id);
     if (o) for (const k of OVERRIDABLE) if (o[k] !== undefined) (p as unknown as Record<string, unknown>)[k] = o[k];
     out.push(p);
+    if (id === 'git-bash') {
+      const k: TerminalProfileInfo = { id: KEDALION_PROFILE_ID, name: 'Kedalion', shell: 'git-bash', icon: KEDALION_PROFILE_ICON, prompt: 'kedalion', available: true };
+      const ko = byId.get(KEDALION_PROFILE_ID);
+      if (ko) for (const key of OVERRIDABLE) if (ko[key] !== undefined) (k as unknown as Record<string, unknown>)[key] = ko[key];
+      out.push(k);
+    }
   }
   for (const p of saved) {
-    if (isShellId(p.id)) continue;
+    if (isShellId(p.id) || p.id === KEDALION_PROFILE_ID) continue;
     out.push({ ...p, available: profileArgv(p, lookup) !== null });
   }
   return out;

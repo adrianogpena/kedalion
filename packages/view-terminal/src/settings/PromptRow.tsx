@@ -96,7 +96,6 @@ function PromptStyleEditor({ settings, onChange, prompt }: { settings: TerminalV
                   saveScript();
                 }
               }}>
-                {settings.terminal?.prompt !== 'kedalion' && <span className="muted prompt-note">{t('settings.terminal.promptStyle.inactive')}</span>}
                 <span className="muted">{t('settings.terminal.promptStyle.script.hint')}</span>
                 <div className="prompt-script">
                   <Suspense fallback={null}><CodeEditor value={text} lang="shell" onChange={(v) => setDraftText(v)} /></Suspense>
@@ -123,7 +122,7 @@ export function PromptRow(props: { settings: TerminalViewSettings; onChange: (pa
   return <PromptStyleEditor {...props} />;
 }
 
-/** The Terminal > Prompt page: the Prompt select and the style editor beside a live preview. */
-export function PromptCard({ settings, onChange, row }: SettingsCardProps<TerminalViewSettings>) {
-  return <PromptStyleEditor settings={settings} onChange={onChange} prompt={row('terminal.prompt')} />;
+/** The Terminal > Prompt page: the style editor beside a live preview. */
+export function PromptCard({ settings, onChange }: SettingsCardProps<TerminalViewSettings>) {
+  return <PromptStyleEditor settings={settings} onChange={onChange} />;
 }

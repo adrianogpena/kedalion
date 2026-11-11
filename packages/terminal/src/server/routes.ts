@@ -6,7 +6,7 @@ import { appHome } from '@kedalion/platform';
 import { isAbsolute, join, posix, resolve, win32 } from 'node:path';
 import { decodeClientMessage, MAX_COLS, MAX_ROWS, TERMINAL_SOCKET_PATH, type TerminalProfile, type TerminalProfileInfo } from '../protocol.ts';
 import type { PromptStyle } from '../prompt.ts';
-import { ensureIntegrationFiles, integratedShell, type TerminalPrompt, withIntegration } from './integration.ts';
+import { ensureIntegrationFiles, integratedShell, withIntegration } from './integration.ts';
 import type { Launchers } from './launchers.ts';
 import { mergeProfiles, profileArgv } from './profiles.ts';
 import { availableShells, isShellId, resolveShell, type ShellId, type ShellLookup } from './shells.ts';
@@ -31,8 +31,6 @@ export interface TerminalRoutesOptions {
   defaultCwd?: () => Promise<string>;
   /** The `terminal.shellIntegration` setting; integration is on unless this resolves false. */
   shellIntegration?: () => Promise<boolean>;
-  /** The `terminal.prompt` setting; `'kedalion'` replaces the shell's prompt (needs shell integration). */
-  prompt?: () => Promise<TerminalPrompt>;
   /** The `terminal.promptStyle` setting (already validated); the default style when undefined. */
   promptStyle?: () => Promise<PromptStyle | undefined>;
   /** Where the integration scripts are written (default: `shell-integration` in the app data dir). */
@@ -175,7 +173,7 @@ export function terminalRoutes(opts: TerminalRoutesOptions): { routes: Routes; s
         const kind = shell.id === 'custom' ? null : integratedShell(shell.id, cmd);
         if (kind && profile?.shellIntegration !== false && (await opts.shellIntegration?.()) !== false) {
           ensureIntegrationFiles(integrationDir);
-          const injected = withIntegration(kind, cmd, integrationDir, { ...lookup.env, ...env }, { prompt: await opts.prompt?.(), style: await opts.promptStyle?.() });
+          const injected = withIntegration(kind, cmd, integrationDir, { ...lookup.env, ...env }, { prompt: profile?.prompt, style: await opts.promptStyle?.() });
           cmd = injected.argv;
           env = { ...env, ...injected.env };
         }

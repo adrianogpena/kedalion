@@ -1,8 +1,8 @@
 import { type ComponentType, type ReactNode, useEffect, useState } from 'react';
-import { Button, deepEqual, ErrorBanner, IconButton, IconPicker, type IconName, isModified, SettingItem, SettingRow, type SettingsFieldProps, Spinner, useAsync, type SettingsCardProps } from '@kedalion/ui';
+import { Button, deepEqual, ErrorBanner, IconButton, IconPicker, type IconName, SettingItem, SettingRow, type SettingsFieldProps, Spinner, useAsync, type SettingsCardProps } from '@kedalion/ui';
 import { listProfiles, listShells } from '@kedalion/terminal/session';
-import { isShellId, SHELL_ICONS, SHELL_IDS, SHELL_NAMES, type TerminalProfile, type TerminalProfileInfo } from '@kedalion/terminal/protocol';
-import { t, type TerminalMessageKey } from '../i18n';
+import { isShellId, KEDALION_PROFILE_ICON, KEDALION_PROFILE_ID, SHELL_ICONS, SHELL_IDS, SHELL_NAMES, type TerminalProfile, type TerminalProfileInfo } from '@kedalion/terminal/protocol';
+import { t } from '../i18n';
 import { terminalSettingDefs, type TerminalViewSettings } from '../settings';
 import { TriggersRow } from './TriggersRow';
 import { PromptRow } from './PromptRow';
@@ -11,53 +11,40 @@ import { ProfileAppearanceFields, SchemesRow, ThemeRow } from '../TerminalScheme
 type Settings = TerminalViewSettings;
 type Change = (patch: Partial<Settings>) => void;
 
-const tr = (key: string | undefined) => (key ? t(key as TerminalMessageKey) : '');
 
+/** The Shell select; Kedalion (Git Bash with Kedalion's prompt) sits beside Git Bash and is stored as the default profile. */
 function TerminalCard({ shell, onShell }: { shell: string; onShell: (shell: string) => void }) {
   const shells = useAsync(() => listShells(), []);
   return (
     <section className="section">
       <div className="card form">
+        <SettingItem id="terminal.shell" modified={shell !== KEDALION_PROFILE_ID} onReset={() => onShell(KEDALION_PROFILE_ID)}>
         {shells.error && <ErrorBanner error={shells.error} onRetry={shells.reload} compact />}
         <label className="field">
           <span className="mono-label">{t('settings.terminal.shell')}</span>
           <select value={shell} disabled={!shells.data} onChange={(e) => onShell(e.target.value)}>
-            <option value="auto">{t('settings.terminal.auto')}</option>
-            {shells.data?.filter((id) => id !== 'auto').map((id) => <option key={id} value={id}>{SHELL_NAMES[id as keyof typeof SHELL_NAMES] ?? id}</option>)}
+            {shells.data?.filter((id) => id !== 'auto').flatMap((id) => [
+              <option key={id} value={id}>{SHELL_NAMES[id as keyof typeof SHELL_NAMES] ?? id}</option>,
+              ...(id === 'git-bash' ? [<option key={KEDALION_PROFILE_ID} value={KEDALION_PROFILE_ID}>Kedalion</option>] : []),
+            ])}
           </select>
           <span className="muted">{t('settings.terminal.hint')}</span>
         </label>
+        </SettingItem>
       </div>
     </section>
   );
 }
 
-/** The default profile: a select of the available, visible profiles; empty follows the shell setting. */
-function DefaultProfileRow({ def, settings, onChange }: SettingsFieldProps<Settings>) {
-  const infos = useAsync(() => listProfiles(), []);
-  const value = def.kind === 'custom' ? '' : String(def.get(settings) ?? '');
-  const options = mergeProfiles(infos.data ?? [], settings.terminal?.profiles ?? []).filter((p) => p.available && !p.hidden);
-  const known = options.some((p) => p.id === value);
-  return (
-    <SettingItem id={def.id} modified={isModified(def, settings)}>
-      <label className="field">
-        <span className="mono-label">{tr(def.label)}</span>
-        <select value={value} onChange={(e) => onChange({ terminal: { ...settings.terminal, defaultProfile: e.target.value } })}>
-          <option value="">{t('settings.terminal.defaultProfile.none')}</option>
-          {!known && value && <option value={value}>{value}</option>}
-          {options.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <span className="muted">{tr(def.description)}</span>
-      </label>
-    </SettingItem>
-  );
-}
-
-const isBuiltinId = (id: string) => isShellId(id) && id !== 'auto';
+const isShellProfileId = (id: string) => isShellId(id) && id !== 'auto';
+const isBuiltinId = (id: string) => isShellProfileId(id) || id === KEDALION_PROFILE_ID;
+/** Name, icon and shell of a built-in id: the Kedalion profile is Git Bash with its own name. */
+const builtinName = (id: string) => (id === KEDALION_PROFILE_ID ? 'Kedalion' : SHELL_NAMES[id as keyof typeof SHELL_NAMES]);
+const builtinShell = (id: string) => (id === KEDALION_PROFILE_ID ? 'git-bash' : id);
 const DEFAULT_ICON = 'terminal';
 const iconOf = (p: TerminalProfile): IconName =>
-  (p.icon || (isBuiltinId(p.shell) ? SHELL_ICONS[p.shell as keyof typeof SHELL_ICONS] : '') || DEFAULT_ICON) as IconName;
-const defaultIconOf = (p: TerminalProfile): IconName => (isBuiltinId(p.id) ? SHELL_ICONS[p.id as keyof typeof SHELL_ICONS] : DEFAULT_ICON) as IconName;
+  (p.icon || (p.id === KEDALION_PROFILE_ID ? KEDALION_PROFILE_ICON : isBuiltinId(p.shell) ? SHELL_ICONS[p.shell as keyof typeof SHELL_ICONS] : '') || DEFAULT_ICON) as IconName;
+const defaultIconOf = (p: TerminalProfile): IconName => (p.id === KEDALION_PROFILE_ID ? KEDALION_PROFILE_ICON : isBuiltinId(p.id) ? SHELL_ICONS[p.id as keyof typeof SHELL_ICONS] : DEFAULT_ICON) as IconName;
 const ABSOLUTE = /^([a-zA-Z]:[\\/]|\/|\\\\)/;
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const MAX_PROFILES = 50;
@@ -160,8 +147,8 @@ function ProfilesField({ value: saved, terminal, onChange: save }: { value: Term
       onChange(value.map((p) => (p.id === id ? compact({ ...p, ...patch }) : p)));
       return;
     }
-    const name = SHELL_NAMES[id as keyof typeof SHELL_NAMES];
-    const next = compact({ ...(current ?? { id, name, shell: id as TerminalProfile['shell'] }), ...patch });
+    const name = builtinName(id);
+    const next = compact({ ...(current ?? { id, name, shell: builtinShell(id) as TerminalProfile['shell'] }), ...patch });
     const bare = next.name === name && Object.keys(next).every((k) => ['id', 'name', 'shell'].includes(k));
     const others = value.filter((p) => p.id !== id);
     onChange(bare ? others : current ? value.map((p) => (p.id === id ? next : p)) : [...others, next]);
@@ -169,7 +156,7 @@ function ProfilesField({ value: saved, terminal, onChange: save }: { value: Term
   const add = () => {
     let id = `custom-${Date.now().toString(36)}`;
     while (value.some((p) => p.id === id)) id += 'x';
-    const shell = ((infos.data ?? []).find((p) => isBuiltinId(p.id) && p.available)?.id ?? 'powershell') as TerminalProfile['shell'];
+    const shell = ((infos.data ?? []).find((p) => isShellProfileId(p.id) && p.available)?.id ?? 'powershell') as TerminalProfile['shell'];
     onChange([...value, { id, name: t('settings.terminal.profiles.newName'), shell }]);
     setEditing(id);
   };
@@ -242,7 +229,7 @@ function ProfileEditor({ profile: p, terminal, builtin, onChange, onPickIcon, on
   onReset?: () => void;
 }) {
   const shells = SHELL_IDS.filter((id) => id !== 'auto');
-  const defaultName = builtin ? SHELL_NAMES[p.id as keyof typeof SHELL_NAMES] : undefined;
+  const defaultName = builtin ? builtinName(p.id) : undefined;
   const invalid = invalidProfile(p);
   const field = (id: string, modified: boolean, child: ReactNode) => <SettingItem id={`terminal.profiles.${p.id}.${id}`} modified={modified}>{child}</SettingItem>;
   return (
@@ -324,7 +311,13 @@ function ProfileEditor({ profile: p, terminal, builtin, onChange, onPickIcon, on
 export function TerminalProfilesCard({ settings, onChange, rows }: SettingsCardProps<Settings>) {
   return (
     <>
-      <TerminalCard shell={settings.terminal?.shell ?? 'auto'} onShell={(shell) => onChange({ terminal: { ...settings.terminal, shell } })} />
+      <TerminalCard
+        shell={(settings.terminal?.defaultProfile ?? KEDALION_PROFILE_ID) === KEDALION_PROFILE_ID ? KEDALION_PROFILE_ID : (settings.terminal?.shell ?? 'auto')}
+        onShell={(shell) => {
+          const kedalion = shell === KEDALION_PROFILE_ID;
+          onChange({ terminal: { ...settings.terminal, shell: kedalion ? 'git-bash' : shell, defaultProfile: kedalion ? KEDALION_PROFILE_ID : '' } });
+        }}
+      />
       {rows(PROFILE_IDS)}
     </>
   );
@@ -337,7 +330,6 @@ const PROFILE_IDS = terminalSettingDefs
 
 /** The hand-written rows of the terminal settings (search results show them too). */
 export const terminalSettingFields: Record<string, ComponentType<SettingsFieldProps<Settings>>> = {
-  'terminal.defaultProfile': (p) => <DefaultProfileRow {...p} />,
   'terminal.theme': ({ settings, onChange }) => <ThemeRow settings={settings} onChange={onChange} />,
   'terminal.schemes': ({ settings, onChange }) => <SchemesRow settings={settings} onChange={onChange} />,
   'terminal.profiles': ({ settings, onChange }) => <ProfilesRow settings={settings} onChange={onChange} />,

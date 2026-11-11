@@ -71,6 +71,7 @@ export const TERMINAL_SPEC: Record<string, FieldSpec> = {
   onExit: ['keep', 'close', 'closeIfClean', 'restart'],
   confirmCloseRunning: 'boolean',
   shellIntegration: 'boolean',
+  // Retired global setting: still accepted from older settings files, ignored (the prompt is per profile).
   prompt: ['shell', 'kedalion'],
   commandDecorations: 'boolean',
   defaultCwd: 'string',
@@ -82,7 +83,7 @@ export const TERMINAL_SPEC: Record<string, FieldSpec> = {
 };
 
 const MAX_PROFILES = 50;
-const PROFILE_KEYS = new Set(['id', 'name', 'shell', 'command', 'args', 'env', 'cwd', 'icon', 'hidden', 'shellIntegration', 'appearance']);
+const PROFILE_KEYS = new Set(['id', 'name', 'shell', 'command', 'args', 'env', 'cwd', 'icon', 'hidden', 'shellIntegration', 'prompt', 'appearance']);
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const strUpTo = (v: unknown, max: number): v is string => typeof v === 'string' && v.length <= max;
 const optional = (v: unknown, ok: (v: unknown) => boolean) => v === undefined || ok(v);
@@ -100,6 +101,7 @@ function validProfile(v: unknown): TerminalProfile | null {
   if (!optional(v.env, envOk)) return null;
   if (!optional(v.cwd, (c) => strUpTo(c, 1024)) || !optional(v.icon, (c) => strUpTo(c, 64))) return null;
   if (!optional(v.hidden, (b) => typeof b === 'boolean') || !optional(v.shellIntegration, (b) => typeof b === 'boolean')) return null;
+  if (!optional(v.prompt, (p) => p === 'shell' || p === 'kedalion')) return null;
   if (!optional(v.appearance, (a) => validAppearance(a) !== null)) return null;
   return v as unknown as TerminalProfile;
 }
@@ -173,14 +175,13 @@ export function terminalServerView({ integrationDir, resolveCwd, launchers, sess
       profiles: async () => (await ctx.settings.load()).terminal?.profiles ?? [],
       defaultProfile: async () => {
         const v = await setting('defaultProfile');
-        return typeof v === 'string' ? v : '';
+        return typeof v === 'string' ? v : 'kedalion';
       },
       defaultCwd: async () => {
         const v = await setting('defaultCwd');
         return typeof v === 'string' ? v : '';
       },
       shellIntegration: async () => (await setting('shellIntegration')) !== false,
-      prompt: async () => ((await setting('prompt')) === 'kedalion' ? 'kedalion' : 'shell'),
       promptStyle: async () => validPromptStyle((await ctx.settings.load()).terminal?.promptStyle) ?? undefined,
       integrationDir,
       resolveCwd,

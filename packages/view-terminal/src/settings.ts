@@ -51,14 +51,14 @@ export interface TerminalSettings {
   confirmCloseRunning?: boolean;
   /** OSC 133/OSC 7 scripts injected into supported shells; default true. */
   shellIntegration?: boolean;
-  /** `kedalion` replaces the shell's prompt with folder, git branch and exit status; default `shell`. */
+  /** Retired: the prompt is now per profile (the built-in Kedalion profile uses Kedalion's). */
   prompt?: 'shell' | 'kedalion';
   /** Segments, colors and symbol of Kedalion's prompt; default `DEFAULT_PROMPT_STYLE`. */
   promptStyle?: PromptStyle;
   commandDecorations?: boolean;
   /** Start directory when the tab and profile give none; `~` = home. */
   defaultCwd?: string;
-  /** Profile id for new tabs; '' = the `shell` setting. */
+  /** Profile id for new tabs; unset = Kedalion, '' = the `shell` setting. Set by the Shell select. */
   defaultProfile?: string;
   /** Overrides of built-in profiles (shell id as `id`) and custom profiles. */
   profiles?: TerminalProfile[];
@@ -121,7 +121,6 @@ export const terminalSettingDefs: SettingDef<TerminalViewSettings>[] = [
   field('bellStyle', 340, oneOf('tab', ['tab', 'sound', 'both', 'none']), 'tabs'),
   field('restoreTabs', 400, bool(true), 'tabs'),
   field('tabTitle', 410, str('{name}'), 'tabs'),
-  field('defaultProfile', 420, str(''), 'profiles'),
   field('defaultCwd', 430, str(''), 'profiles'),
   field('onExit', 440, oneOf('keep', ['keep', 'close', 'closeIfClean', 'restart']), 'tabs'),
   field('confirmCloseRunning', 450, bool(true), 'tabs'),
@@ -131,7 +130,6 @@ export const terminalSettingDefs: SettingDef<TerminalViewSettings>[] = [
   field('earlierOutput', 730, bool(true), 'output'),
   { id: 'terminal.triggers', kind: 'custom', section: ['terminal', 'output'], order: 740, label: 'settings.terminal.triggers', description: 'settings.terminal.triggers.hint', default: [] as TerminalTrigger[], get: (s) => s.terminal?.triggers ?? [], set: (s, v) => ({ terminal: { ...s.terminal, triggers: v as TerminalTrigger[] } }) },
   field('shellIntegration', 500, bool(true), 'profiles'),
-  field('prompt', 505, oneOf('shell', ['shell', 'kedalion']), 'prompt'),
   { id: 'terminal.promptStyle', kind: 'custom', section: ['terminal', 'prompt'], order: 506, label: 'settings.terminal.promptStyle', description: 'settings.terminal.promptStyle.hint', default: DEFAULT_PROMPT_STYLE, get: (s) => s.terminal?.promptStyle ?? DEFAULT_PROMPT_STYLE, set: (s, v) => ({ terminal: { ...s.terminal, promptStyle: v as PromptStyle } }) },
   field('commandDecorations', 510, bool(true), 'profiles'),
   { id: 'terminal.profiles', kind: 'custom', section: ['terminal', 'profiles'], order: 600, label: 'settings.terminal.profiles', description: 'settings.terminal.profiles.hint', default: [] as TerminalProfile[], get: (s) => s.terminal?.profiles ?? [], set: (s, v) => ({ terminal: { ...s.terminal, profiles: v as TerminalProfile[] } }) },
@@ -145,7 +143,7 @@ export const terminalDefault = <V = unknown>(key: string): V => (defaults as Rec
 /** The terminal look and behavior settings (not the shell) with their defaults filled in. */
 export const terminalSettingsOf = (s: TerminalViewSettings): Required<TerminalSettings> => {
   const { shell: _shell, ...fields } = s.terminal ?? {};
-  const merged = { ...defaults, ...fields };
+  const merged = { ...defaults, ...fields, defaultProfile: fields.defaultProfile ?? 'kedalion' };
   if (merged.ligatures && merged.fontFamily === MONO_FONT) merged.fontFamily = LIGATURE_FONT;
   return merged;
 };

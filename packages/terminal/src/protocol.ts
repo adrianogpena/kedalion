@@ -25,6 +25,10 @@ export const SHELL_NAMES: Record<Exclude<ShellId, 'auto'>, string> = {
   sh: 'sh',
 };
 
+/** Id of the built-in profile that runs Git Bash with Kedalion's prompt. */
+export const KEDALION_PROFILE_ID = 'kedalion';
+export const KEDALION_PROFILE_ICON = 'terminal-kedalion';
+
 /** Default icon names of the built-in profiles. */
 export const SHELL_ICONS: Record<Exclude<ShellId, 'auto'>, string> = {
   powershell: 'terminal-powershell',
@@ -40,7 +44,7 @@ export const SHELL_ICONS: Record<Exclude<ShellId, 'auto'>, string> = {
 
 /**
  * A terminal profile. Built-ins have a shell id as `id`; a saved entry with that id overrides
- * name, icon, args (appended to the shell's own), env, cwd, hidden, shellIntegration and appearance.
+ * name, icon, args (appended to the shell's own), env, cwd, hidden, shellIntegration, prompt and appearance.
  * Other ids are custom: `shell: 'custom'` runs `command` (absolute path) with `args`; a known
  * `shell` runs that shell with `args` appended.
  */
@@ -55,6 +59,8 @@ export interface TerminalProfile {
   icon?: string;
   hidden?: boolean;
   shellIntegration?: boolean;
+  /** `kedalion` draws Kedalion's prompt (needs shell integration); default `shell`, which keeps the shell's own (.bash_profile, .bashrc). */
+  prompt?: 'shell' | 'kedalion';
   /** Look of this profile's panes over the global terminal settings. */
   appearance?: ProfileAppearance;
 }

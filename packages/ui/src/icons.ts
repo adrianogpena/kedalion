@@ -108,7 +108,7 @@ export const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-const terminalIcon = (file: string) => new URL(`./assets/terminal/${file}.png`, import.meta.url).href;
+const terminalIcon = (file: string, ext = 'png') => new URL(`./assets/terminal/${file}.${ext}`, import.meta.url).href;
 
 /** Coloured shell logos for terminal profiles (pack `icons-original/terminal/`). Drawn as images by `Icon`, in every icon set, and not offered by `IconPicker`. */
 export const IMAGE_ICONS = {
@@ -117,6 +117,7 @@ export const IMAGE_ICONS = {
   'terminal-cmd': terminalIcon('cmd'),
   'terminal-git-bash': terminalIcon('git-bash'),
   'terminal-wsl': terminalIcon('wsl'),
+  'terminal-kedalion': terminalIcon('kedalion', 'svg'),
 } as const;
 export type ImageIconName = keyof typeof IMAGE_ICONS;
 
