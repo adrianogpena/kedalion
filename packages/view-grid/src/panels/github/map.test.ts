@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildQuery, countChecks, mapApprovals, mapCheckList, mapIssues, mapPullRequests, nextRefreshMs, reduceChecks, searchRefreshMs, ticketKey, withExpected } from './map';
+import { buildQuery, ciLabelKey, countChecks, mergeReadiness, mapApprovals, mapCheckList, mapIssues, mapPullRequests, nextRefreshMs, reduceChecks, searchRefreshMs, ticketKey, withExpected } from './map';
 
 describe('buildQuery', () => {
   test('fixed modes', () => {
@@ -168,5 +168,17 @@ describe('searchRefreshMs', () => {
     expect(searchRefreshMs({ items: [{ ci: 'pass' }] })).toBe(300_000);
     expect(searchRefreshMs({ items: [{ ci: 'pending' }] })).toBe(60_000);
     expect(searchRefreshMs({ items: [{ ci: 'pending' }], nextRefreshMs: 600_000 })).toBe(600_000);
+  });
+});
+
+describe('merge readiness label', () => {
+  const pr = (ci: 'pass' | 'fail' | 'pending' | 'policy', status: string) => ({ ci, merge: mergeReadiness(status), state: 'open', draft: false });
+  test('checks state wins, then Blocked, then Ready to Merge', () => {
+    expect(ciLabelKey(pr('pending', 'BLOCKED'))).toBe('pending');
+    expect(ciLabelKey(pr('fail', 'BLOCKED'))).toBe('fail');
+    expect(ciLabelKey(pr('policy', 'BLOCKED'))).toBe('policy');
+    expect(ciLabelKey(pr('pass', 'BLOCKED'))).toBe('blocked');
+    expect(ciLabelKey(pr('pass', 'CLEAN'))).toBe('ready');
+    expect(ciLabelKey(pr('pass', 'BEHIND'))).toBe('pass');
   });
 });

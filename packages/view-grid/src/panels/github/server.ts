@@ -17,14 +17,14 @@ const RATE ='rateLimit { remaining limit resetAt }';
 
 const PR_ITEM_FIELDS = `number title url isDraft state headRefName headRefOid baseRefName updatedAt createdAt reviewDecision
         latestOpinionatedReviews(first: 20) { nodes { state author { login } commit { oid } } }
-        additions deletions changedFiles mergeable
+        additions deletions changedFiles mergeable mergeStateStatus
         autoMergeRequest { enabledAt }
         comments(first: 100) { nodes { author { login __typename } } }
         reviewThreads(first: 100) { nodes { isResolved comments(first: 1) { nodes { author { login __typename } } } } }
         author { login }
         repository { nameWithOwner }
         labels(first: 10) { nodes { name } }
-        commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 50) { nodes { __typename ... on CheckRun { name status conclusion startedAt completedAt detailsUrl title summary checkSuite { workflowRun { workflow { name } } } } ... on StatusContext { context state targetUrl description } } } } } } }`;
+        commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 50) { nodes { __typename ... on CheckRun { name status conclusion startedAt completedAt detailsUrl title summary checkSuite { createdAt workflowRun { workflow { name } } } } ... on StatusContext { context state targetUrl description createdAt } } } } } } }`;
 
 const PR_QUERY = `query($q: String!, $n: Int!) {
   search(query: $q, type: ISSUE, first: $n) {

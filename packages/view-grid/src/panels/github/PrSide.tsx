@@ -6,13 +6,13 @@ import { runAction } from '../../source';
 import { latestRc, RC_STEPS, type RcBuild, type RcInfo, type RcStepState } from './rc';
 import type { BotEntry } from './bot';
 import type { ThreadsInfo } from './threads';
-import { POLICY_BOT, type Approvals, type PrItem } from './map';
+import { ciLabelKey, POLICY_BOT, type Approvals, type PrItem } from './map';
 import type { PullRequestsConfig } from './PullRequests';
 import { safeHttpUrl, type CheckDetail, type CheckState, type TrackedPr } from './tracked';
 import './github.css';
 
 export const REVIEW_TONE: Record<string, Tone> = { approved: 'ok', changes: 'danger', required: 'warn' };
-export const CI_TONE: Record<string, Tone> = { pass: 'ok', fail: 'danger', pending: 'warn', policy: 'info' };
+export const CI_TONE: Record<string, Tone> = { pass: 'ok', fail: 'danger', pending: 'warn', policy: 'info', blocked: 'warn', ready: 'ok' };
 
 export interface PrSideInput {
   instanceId: string;
@@ -72,20 +72,21 @@ function CheckRow({ check, approvals }: { check: CheckDetail; approvals?: Approv
   const end = check.completedAt ? Date.parse(check.completedAt) : NaN;
   let took = '';
   if (check.state === 'pending') {
-    if (!Number.isNaN(start)) took = tKey('dash.github.pr.check.running', { elapsed: duration(Date.now() - start) });
+    const since = check.waiting ? Date.parse(check.queuedAt ?? '') : start;
+    if (!Number.isNaN(since)) took = duration(Date.now() - since);
   } else if (!Number.isNaN(start) && !Number.isNaN(end)) took = duration(end - start);
   const endMs = check.completedAt ? Date.parse(check.completedAt) : NaN;
   const finished = Number.isNaN(endMs) ? '' : relTime(endMs);
   const finishedAbs = check.completedAt ? when(check.completedAt) : '';
   const policy = POLICY_BOT.test(check.name);
-  const note = check.state === 'failure' ? (check.note ?? '').split('\n')[0]!.trim() : '';
+  const note = check.state === 'failure' || check.waiting ?(check.note ?? '').split('\n')[0]!.trim() : '';
   const cut = check.name.lastIndexOf(' / ');
   const group = cut > 0 ? check.name.slice(0, cut) : check.workflow && !check.name.includes(check.workflow) ? check.workflow : '';
   const job = cut > 0 ? check.name.slice(cut + 3) : check.name;
   return (
     <div className={`gh-check gh-check-${check.state}`}>
       <div className="gh-check-row">
-        <Chip tone={CHECK_TONE[check.state]}>{tKey(`dash.github.pr.check.${check.state}`)}</Chip>
+        <Chip tone={CHECK_TONE[check.state]}>{tKey(`dash.github.pr.check.${check.state === 'pending' ? (check.waiting ? 'waiting' : 'running') : check.state}`)}</Chip>
         <span className="gh-check-name" title={check.name}>
           {group && <span className="muted">{group} / </span>}
           <strong>{job}</strong>
@@ -375,7 +376,7 @@ function PrOverview({ pr: listed, config, extraSource = PRS_EXTRA }: { pr: PrIte
           <span>{tKey('dash.github.pr.noChecks')}</span>
         ) : (
           <div className="gh-pr-line">
-            <Chip tone={CI_TONE[pr.ci]}>{tKey(`dash.github.ci.${pr.ci}`)} {c.passed}/{c.total}</Chip>
+            <Chip tone={CI_TONE[ciLabelKey(pr)]}>{tKey(`dash.github.ci.${ciLabelKey(pr)}`)} {c.passed}/{c.total}</Chip>
             <span>{tKey('dash.github.pr.checkCounts', { passed: c.passed, failed: c.failed, pending: c.pending })}</span>
           </div>
         )}

@@ -35,7 +35,7 @@
 .gh-check-list { display: flex; flex-direction: column; }
 .gh-check-sub { margin-top: var(--space-4); font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); cursor: default; }
 .gh-check-fold > summary { cursor: pointer; }
-.gh-check-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) 64px 64px 28px; align-items: center; gap: var(--space-6); font-size: var(--fs-sm); white-space: nowrap; }
+.gh-check-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) 84px 64px 28px; align-items: center; gap: var(--space-6); font-size: var(--fs-sm); white-space: nowrap; }
 .gh-check-row .chip { justify-self: start; }
 .gh-check-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .gh-check-num { text-align: right; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }

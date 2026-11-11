@@ -13,6 +13,10 @@ export interface CheckDetail {
   workflow?: string;
   startedAt?: string;
   completedAt?: string;
+  /** When a waiting check was created (its suite or status), for how long it has waited. */
+  queuedAt?: string;
+  /** Pending but not started: queued, waiting for a runner or approval, or a status not reported yet. */
+  waiting?: boolean;
   /** Output title or description, first line of the summary otherwise. */
   note?: string;
 }
@@ -53,7 +57,8 @@ export interface ContextNode {
   description?: string | null;
   title?: string | null;
   summary?: string | null;
-  checkSuite?: { workflowRun?: { workflow?: { name?: string } | null } | null } | null;
+  createdAt?: string | null;
+  checkSuite?: { createdAt?: string | null; workflowRun?: { workflow?: { name?: string } | null } | null } | null;
 }
 
 export interface PrNode {
@@ -116,13 +121,14 @@ export function summarizeChecks(nodes: readonly ContextNode[] | undefined): Trac
       workflow: node.checkSuite?.workflowRun?.workflow?.name ?? '',
       startedAt: node.startedAt ?? '',
       completedAt: node.completedAt ?? '',
+      ...(state === 'pending' && node.status !== 'IN_PROGRESS' ? { waiting: true, queuedAt: node.checkSuite?.createdAt ?? '' } : {}),
       note,
     });
   }
   for (const node of nodes ?? []) {
     if (!(node.__typename === 'StatusContext' || (node.context !== undefined && node.name === undefined))) continue;
     const state: CheckState = node.state === 'SUCCESS' ? 'success' : node.state === 'PENDING' || node.state === 'EXPECTED' ? 'pending' : 'failure';
-    details.push({ name: node.context ?? '', state, url: node.targetUrl ?? '', note: node.description ?? '' });
+    details.push({ name: node.context ?? '', state, url: node.targetUrl ?? '', ...(state === 'pending' ? { waiting: true, queuedAt: node.createdAt ?? '' } : {}), note: node.description ?? '' });
   }
   for (const d of details) {
     const m = /^(.+?) \/ (.+)$/.exec(d.name);

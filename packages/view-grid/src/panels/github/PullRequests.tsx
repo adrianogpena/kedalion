@@ -2,7 +2,7 @@ import { tKey } from '../../i18n';
 import { Chip, hasColumn, ListRows, relTime, type ListRow } from '../../kit';
 import type { PanelSide } from '../../panel';
 import './github.css';
-import type { PrItem, SearchData } from './map';
+import { ciLabelKey, type PrItem, type SearchData } from './map';
 import { CI_TONE, prSideContent, REVIEW_TONE } from './PrSide';
 
 export interface PullRequestsConfig {
@@ -36,8 +36,8 @@ export function prRows(config: PullRequestsConfig, items: readonly PrItem[], act
           </Chip>
         )}
         {has('checks') && pr.ci !== 'none' && (
-          <Chip tone={CI_TONE[pr.ci]} title={pr.failing.length ? tKey('dash.github.ci.failing', { names: pr.failing.join(', ') }) : undefined}>
-            {tKey(`dash.github.ci.${pr.ci}`)}
+          <Chip tone={CI_TONE[ciLabelKey(pr)]} title={pr.failing.length ? tKey('dash.github.ci.failing', { names: pr.failing.join(', ') }) : undefined}>
+            {tKey(`dash.github.ci.${ciLabelKey(pr)}`)}
             {pr.checks.total > 0 && ` ${pr.checks.passed}/${pr.checks.total}`}
           </Chip>
         )}

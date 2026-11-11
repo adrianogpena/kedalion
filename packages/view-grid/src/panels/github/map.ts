@@ -176,6 +176,7 @@ export interface Node {
   deletions?: number;
   changedFiles?: number;
   mergeable?: string;
+  mergeStateStatus?: string;
   baseRefName?: string;
   autoMergeRequest?: { enabledAt?: string } | null;
   reviewThreads?: { nodes?: ({ isResolved?: boolean; comments?: { nodes?: (CommentNode | null)[] } | null } | null)[] } | null;
@@ -199,7 +200,21 @@ export interface SearchResponse {
   rateLimit?: { remaining?: number; limit?: number } | null;
 }
 
-export type Review = 'approved' | 'changes' | 'required' | 'none';
+export type MergeReadiness = 'blocked' | 'ready' | 'none';
+
+/** mergeStateStatus -> BLOCKED means a required rule is unmet; CLEAN, HAS_HOOKS and UNSTABLE mean nothing blocks the merge. */
+export function mergeReadiness(status: string | undefined): MergeReadiness {
+  if (status === 'BLOCKED') return 'blocked';
+  return status === 'CLEAN' || status === 'HAS_HOOKS' || status === 'UNSTABLE' ? 'ready' : 'none';
+}
+
+/** The key of the label a PR's check chip shows: a running, failed or policy-bot state first, then Blocked or Ready to Merge once all checks pass. */
+export function ciLabelKey(pr: Pick<PrItem, 'ci' | 'merge' | 'state' | 'draft'>): string {
+  if (pr.ci === 'pass' && pr.state === 'open' && !pr.draft && pr.merge !== 'none') return pr.merge;
+  return pr.ci;
+}
+
+export type Review ='approved' | 'changes' | 'required' | 'none';
 
 export interface PrItem {
   id: string;
@@ -224,6 +239,8 @@ export interface PrItem {
   deletions: number;
   files: number;
   conflicts: boolean;
+  /** GitHub's merge state once all checks pass: blocked by branch rules, ready to merge, or neither. */
+  merge: MergeReadiness;
   threads: number;
   comments: number;
   base: string;
@@ -304,6 +321,7 @@ export function mapPullRequests(res: SearchResponse, ticketPattern: string, requ
       deletions: n.deletions ?? 0,
       files: n.changedFiles ?? 0,
       conflicts: n.mergeable === 'CONFLICTING',
+      merge: mergeReadiness(n.mergeStateStatus),
       threads: (n.reviewThreads?.nodes ?? []).filter((t) => t && t.isResolved === false).length,
       comments:
         (n.reviewThreads?.nodes ?? []).filter((t) => t && countsAsComment(t.comments?.nodes?.[0], n.author?.login ?? '')).length +
