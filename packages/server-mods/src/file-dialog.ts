@@ -100,7 +100,7 @@ export function fileDialogRoutes(opts: { home: string; picks: DialogPicks; now?:
   const userHome = opts.userHome ?? homedir();
 
   const load = async (): Promise<DialogState> => {
-    const raw = await readJsonFile(file, isState).catch(() => undefined);
+    const raw = await readJsonFile(file, isState);
     const state = (raw ?? {}) as Partial<DialogState>;
     const last: Record<string, string> = {};
     if (isRecord(state.last)) for (const [k, v] of Object.entries(state.last)) if (typeof v === 'string') last[k] = v;

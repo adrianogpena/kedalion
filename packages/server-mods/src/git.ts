@@ -1,3 +1,4 @@
+import { lstat } from 'node:fs/promises';
 import { runWithTimeout, type Runner } from '@kedalion/platform';
 import {
   AppError,
@@ -248,7 +249,9 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
     const [work, cached] = await Promise.all([numstat(false), numstat(true)]);
     const countUntracked = async (path: string): Promise<{ added?: number; removed?: number }> => {
       try {
-        const file = Bun.file(`${root.path}/${path}`);
+        const full = `${root.path}/${path}`;
+        if ((await lstat(full)).isSymbolicLink()) return {};
+        const file = Bun.file(full);
         if (file.size > MAX_UNTRACKED_BYTES) return {};
         const bytes = new Uint8Array(await file.arrayBuffer());
         if (isBinary(bytes.subarray(0, 8192))) return {};

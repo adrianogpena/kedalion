@@ -49,9 +49,14 @@ function lookupIn(source: WebSource): (path: string) => string | null {
   if ('files' in source) return (path) => (Object.hasOwn(source.files, path) ? source.files[path]! : null);
   const base = resolve(source.dir);
   return (path) => {
+    if (path.includes('\0')) return null;
     const target = resolve(base, path);
     if (!target.startsWith(base + sep)) return null;
-    return statSync(target, { throwIfNoEntry: false })?.isFile() ? target : null;
+    try {
+      return statSync(target, { throwIfNoEntry: false })?.isFile() ? target : null;
+    } catch {
+      return null;
+    }
   };
 }
 

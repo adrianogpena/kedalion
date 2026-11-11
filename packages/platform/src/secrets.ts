@@ -18,7 +18,8 @@ const unavailable = (detail?: string) => new PlatformError('secretsUnavailable',
 
 /**
  * Passwords and tokens an app keeps for the current OS user. Windows: DPAPI-encrypted blobs in
- * `<dir>/secrets.json`, readable only by this Windows account. Linux: libsecret via `secret-tool`;
+ * `<dir>/secrets.json`, decryptable only under this Windows account; the DPAPI entropy is the public app id,
+ * so any process of the same Windows user can decrypt them. Linux: libsecret via `secret-tool`;
  * macOS: the login keychain via `security` (both best-effort, untested).
  */
 export function secretStore(appId: string, dir = appHome(appId)): SecretStore {
