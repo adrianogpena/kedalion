@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, Icon } from '@kedalion/ui';
+import { Fragment, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { Button, ContextMenu, copyNotify, Icon } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { Chip } from '../../kit';
 import { runAction } from '../../source';
@@ -45,8 +45,26 @@ function attention(pr: TrackedPr): Tone {
 /** One PR as a card: a status stripe and state/checks/review chips; a click opens the PR side panel over this one. */
 function PrCard({ pr, onOpen }: { pr: TrackedPr; onOpen(pr: TrackedPr): void }) {
   const review = pr.reviewDecision ? tKey(REVIEW[pr.reviewDecision] as 'dash.tickets.pipeline.approved') : tKey('dash.tickets.pipeline.noReview');
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   return (
-    <div className={`tickets-card tickets-pr-card tickets-pr-${attention(pr)}`}>
+    <div
+      className={`tickets-card tickets-pr-card tickets-pr-${attention(pr)}`}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}
+    >
+      {menu && (
+        <ContextMenu
+          at={menu}
+          onClose={() => setMenu(null)}
+          items={[
+            { id: 'open', label: tKey('dash.tickets.ctx.open'), icon: 'link', run: () => onOpen(pr) },
+            { id: 'copy', label: tKey('dash.tickets.ctx.copyPrLink'), icon: 'copy', run: () => void copyNotify(pr.url) },
+          ]}
+        />
+      )}
       <button type="button" className="tickets-card-edit" onClick={() => onOpen(pr)}>
         <strong>
           {pr.repo}#{pr.number}
@@ -82,6 +100,7 @@ export function TicketOverview({ ticket, link, jira, allPods, config, onChanged,
   const [pcr, setPcr] = useState(ticket.pcr ?? '');
   const [editingPcr, setEditingPcr] = useState(false);
   const [error, setError] = useState('');
+  const [podMenu, setPodMenu] = useState<{ at: { x: number; y: number }; items: ComponentProps<typeof ContextMenu>['items'] } | null>(null);
   const [showComment, setShowComment] = useState(false);
   const none = <p className="tickets-detail-none">{tKey('dash.tickets.detail.none')}</p>;
 
@@ -149,7 +168,22 @@ export function TicketOverview({ ticket, link, jira, allPods, config, onChanged,
   };
 
   const podRow = (p: Pod, byHand: boolean) => (
-    <div key={podId(p)} className="tickets-detail-pod tickets-ov-pod">
+    <div
+      key={podId(p)}
+      className="tickets-detail-pod tickets-ov-pod"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setPodMenu({
+          at: { x: e.clientX, y: e.clientY },
+          items: [
+            { id: 'open', label: tKey('dash.tickets.ctx.open'), icon: 'link', run: () => onOpenPod(p) },
+            { id: 'copy', label: tKey('dash.tickets.ctx.copyPod'), icon: 'copy', run: () => void copyNotify(p.name) },
+            ...(byHand ? [{ id: 'unlink', label: tKey('dash.tickets.detail.unlinkPod'), icon: 'close' as const, run: () => void setLinked(podId(p), false) }] : []),
+          ],
+        });
+      }}
+    >
       <Button className="tickets-detail-podname" onClick={() => onOpenPod(p)}>
         {workloadName(p.name)} · {p.status} · {tKey('dash.tickets.pipeline.restarts', { n: p.restarts })}
       </Button>
@@ -188,6 +222,7 @@ export function TicketOverview({ ticket, link, jira, allPods, config, onChanged,
 
   return (
     <div className="tickets-ov">
+      {podMenu && <ContextMenu at={podMenu.at} items={podMenu.items} onClose={() => setPodMenu(null)} />}
       {error && <div className="tickets-error" role="alert">{error}</div>}
       <div className="tickets-ov-top">
         <div className="tickets-card tickets-ov-small">

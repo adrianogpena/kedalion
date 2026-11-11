@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import type { GitCommit, GitCommitFile } from '@kedalion/server-core/protocol';
-import { type ApiError, ErrorBanner, errorOf, fileIconOf, Icon, useFileIconVersion, useRovingList } from '@kedalion/ui';
+import { type ApiError, ContextMenu, type ContextMenuItem, copyNotify, ErrorBanner, errorOf, fileIconOf, Icon, useFileIconVersion, useRovingList } from '@kedalion/ui';
 import { gitApi as api } from '../client';
 import { t } from '../i18n';
 import { commitStatusOf } from './sides';
@@ -149,6 +149,27 @@ export function HistoryPanel({ root, tick, open, size, onToggle, onResize, selec
     setExpanded(next);
   };
 
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: ContextMenuItem[] }>();
+  const openMenu = (e: MouseEvent, items: ContextMenuItem[]) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ at: { x: e.clientX, y: e.clientY }, items });
+  };
+  const commitMenu = (e: MouseEvent, c: GitCommit) => {
+    const isOpen = expanded.has(c.hash);
+    openMenu(e, [
+      { id: 'toggle', label: t(isOpen ? 'git.collapse' : 'git.expand'), icon: 'chevron', run: () => toggle(c.hash) },
+      { id: 'hash', label: t('git.copyHash'), icon: 'copy', run: () => void copyNotify(c.hash) },
+      { id: 'short', label: t('git.copyShortHash'), icon: 'copy', run: () => void copyNotify(c.short) },
+      { id: 'msg', label: t('git.copyMessage'), icon: 'copy', run: () => void copyNotify(c.subject) },
+    ]);
+  };
+  const fileMenu = (e: MouseEvent, commit: GitCommit, file: GitCommitFile) =>
+    openMenu(e, [
+      { id: 'select', label: t('git.openFile'), icon: 'file', run: () => onSelect(commit, file) },
+      { id: 'path', label: t('git.copyPath'), icon: 'copy', run: () => void copyNotify(file.path) },
+    ]);
+
   const openKeys = (isOpen: boolean, act: () => void) => (e: KeyboardEvent) => {
     if ((e.key === 'ArrowRight' && !isOpen) || (e.key === 'ArrowLeft' && isOpen)) {
       e.preventDefault();
@@ -184,6 +205,7 @@ export function HistoryPanel({ root, tick, open, size, onToggle, onResize, selec
         style={{ paddingLeft: 4 + INDENT * 2 }}
         title={file.origPath ? `${file.origPath} → ${file.path}` : file.path}
         onClick={() => onSelect(commit, file)}
+        onContextMenu={(e) => fileMenu(e, commit, file)}
         onFocus={() => onSelect(commit, file)}
         onDoubleClick={() => onOpen(file)}
         onKeyDown={(e) => {
@@ -225,6 +247,7 @@ export function HistoryPanel({ root, tick, open, size, onToggle, onResize, selec
                   title={`${c.short} · ${c.author} · ${new Date(c.date).toLocaleString()}${c.refs ? ` · ${c.refs}` : ''}\n${c.subject}`}
                   aria-expanded={isOpen}
                   onClick={() => toggle(c.hash)}
+                  onContextMenu={(e) => commitMenu(e, c)}
                   onKeyDown={openKeys(isOpen, () => toggle(c.hash))}
                 >
                   <span className={`tree-chevron${isOpen ? ' open' : ''}`}><Icon name="chevron" size={12} /></span>
@@ -252,6 +275,7 @@ export function HistoryPanel({ root, tick, open, size, onToggle, onResize, selec
           )}
         </div>
       )}
+      {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(undefined)} />}
     </div>
   );
 }

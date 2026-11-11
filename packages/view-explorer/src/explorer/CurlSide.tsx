@@ -1,7 +1,7 @@
 import { type ReactNode, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { CodeEditor, type CurlCommand, type CurlItem, curlAt, curlBodyRange, curlNotes, curlOutline, curlVariables, DEFAULT_FORMAT_OPTIONS, exportCurl, type CurlExportFormat, formatSql, formatXml, type ImportedRequest, parseCurl, quoteCurlBody, variableClass, variableHighlight, variableInfo } from '@kedalion/editor';
 import { restVarRefs, type RestEnvVar } from '@kedalion/server-core/protocol';
-import { Button, copyNotify, Icon, IconButton, Tabs } from '@kedalion/ui';
+import { Button, ContextMenu, copyNotify, Icon, IconButton, Tabs } from '@kedalion/ui';
 import { t } from '../i18n';
 
 type SideTab = 'requests' | 'request' | 'vars';
@@ -62,7 +62,8 @@ function buildTree(items: CurlItem[]): Folder {
   return root;
 }
 
-function Requests({ items, cursor, onJump }: { items: CurlItem[]; cursor: number; onJump: CurlSideProps['onJump'] }) {
+function Requests({ items, text, cursor, onJump }: { items: CurlItem[]; text: string; cursor: number; onJump: CurlSideProps['onJump'] }) {
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; item: CurlItem } | null>(null);
   const [filter, setFilter] = useState('');
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const tree = useMemo(() => buildTree(items), [items]);
@@ -76,6 +77,11 @@ function Requests({ items, cursor, onJump }: { items: CurlItem[]; cursor: number
       style={{ paddingLeft: `calc(var(--space-8) + ${depth} * var(--space-12))` }}
       title={`${item.method} ${item.url}`}
       onClick={() => onJump(item.from, item.from)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenu({ at: { x: e.clientX, y: e.clientY }, item });
+      }}
     >
       <Method method={item.method} />
       <span className="xp-curl-name">{item.name}</span>
@@ -116,6 +122,30 @@ function Requests({ items, cursor, onJump }: { items: CurlItem[]; cursor: number
       <div className="xp-curl-list">
         {items.length === 0 ? <p className="muted xp-curl-empty">{t('explorer.curl.noRequests')}</p> : needle ? (matches.length ? matches.map((i) => row(i, 0, true)) : <p className="muted xp-curl-empty">{t('explorer.curl.noMatch')}</p>) : folder(tree, 0)}
       </div>
+      {menu && (
+        <ContextMenu
+          at={menu.at}
+          onClose={() => setMenu(null)}
+          items={[
+            { id: 'go', label: t('explorer.curl.goTo'), icon: 'send', run: () => onJump(menu.item.from, menu.item.from) },
+            { id: 'url', label: t('explorer.curl.copyUrl'), icon: 'copy', run: () => void copyNotify(menu.item.url) },
+            ...COPY_AS.map(([format, label]) => ({
+              id: `as-${format}`,
+              label: `${t('explorer.curl.copyAs')} ${label}`,
+              icon: 'copy' as const,
+              run: () => {
+                const command = curlAt(text, menu.item.from);
+                if (!command) return;
+                try {
+                  void copyNotify(exportCurl(parseCurl(command.text), format));
+                } catch {
+                  // not parseable: nothing to export
+                }
+              },
+            })),
+          ]}
+        />
+      )}
     </>
   );
 }
@@ -319,7 +349,7 @@ export function CurlSide(props: CurlSideProps) {
         <span className="spacer" />
         <IconButton icon="close" onClick={props.onClose} label={t('explorer.curl.closePanel')} />
       </div>
-      {tab === 'requests' && <Requests items={items} cursor={props.cursor} onJump={props.onJump} />}
+      {tab === 'requests' && <Requests items={items} text={props.text} cursor={props.cursor} onJump={props.onJump} />}
       {tab === 'request' && <Card props={shared} command={command} />}
       {tab === 'vars' && <Variables text={text} vars={props.vars} envName={props.envName} onSetVar={props.onSetVar} />}
     </div>

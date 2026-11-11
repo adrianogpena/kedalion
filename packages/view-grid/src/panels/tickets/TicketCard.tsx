@@ -21,11 +21,15 @@ interface Props {
   onDragStart(e: DragEvent): void;
 }
 
+/** Jira statuses that get their own label on the card. */
+const DONE_LABELS = ['TSYS Validated', 'Merged'];
+
 export const jiraUrl = (base: string, key: string): string => (base.trim() ? `${base.trim().replace(/\/+$/, '')}/browse/${key}` : '');
 
 export function TicketCard({ ticket, selected, jiraBaseUrl, jiraStatus, drift, onMoveToExpected, onMuteDrift, onDelete, autoMoveDefault, onAutoMove, onDetails, onDragStart }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const url = jiraUrl(jiraBaseUrl, ticket.key);
+  const doneLabel = DONE_LABELS.find((s) => s.toLowerCase() === (jiraStatus ?? '').trim().toLowerCase());
   const driftItems: ComponentProps<typeof ContextMenu>['items'] = drift
     ? [
         'sep',
@@ -71,8 +75,13 @@ export function TicketCard({ ticket, selected, jiraBaseUrl, jiraStatus, drift, o
           </span>
         )}
       </div>
-      {(ticket.pcr || drift) && (
+      {(ticket.pcr || drift || doneLabel) && (
         <div className="tickets-tags">
+        {doneLabel && (
+          <span className="tickets-jira-done" title={tKey('dash.tickets.jiraDone.title', { status: doneLabel })}>
+            {doneLabel}
+          </span>
+        )}
         {ticket.pcr && (
           <span className="tickets-pcr" title={tKey('dash.tickets.detail.pcr')}>
             PCR#{ticket.pcr}

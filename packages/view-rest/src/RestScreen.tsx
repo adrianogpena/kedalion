@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { PanesLayout } from './layouts/PanesLayout';
 import { draftToSpec, hasAuthHeader, type HttpRequestDraft, type ImportedRequest, RequestEditor, ResponseView, toCurl } from '@kedalion/editor';
 import type { HttpResponseInfo, RestEnvVar } from '@kedalion/server-core/protocol';
-import { type ApiError, Button, dialogs, ErrorBanner, errorOf, IconButton, PageHead, SplitView, useAsync, useCommand, useViewLayout,useDebouncedSave, useDialogs, useShortcutTip, useViewCompact, useViewRequest } from '@kedalion/ui';
+import { type ApiError, Button, ContextMenu, copyNotify, dialogs, ErrorBanner, errorOf, IconButton, PageHead, SplitView, useAsync, useCommand, useViewLayout,useDebouncedSave, useDialogs, useShortcutTip, useViewCompact, useViewRequest } from '@kedalion/ui';
 import { restCommands } from './commands';
 import { restApi as api } from './client';
 import type { RestSettings, RestViewSettings, SavedRequest } from './settings';
@@ -58,6 +58,7 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
   }, [incoming]);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [itemMenu, setItemMenu] = useState<{ at: { x: number; y: number }; item: SavedRequest } | null>(null);
 
   const environments = useAsync(() => api.environments(), []);
   const [managing, setManaging] = useState(false);
@@ -255,6 +256,11 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
                 setDragId(null);
                 setDragOver(null);
               }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setItemMenu({ at: { x: e.clientX, y: e.clientY }, item });
+              }}
             >
               <button className="rest-item-main" onClick={() => { restTabs.openSaved(item); setExpanded(false); }} title={item.request.url}>
                 <span className="rest-method">{item.request.method}</span>
@@ -266,6 +272,19 @@ export function RestScreen({ settings, onSave }: { settings: RestViewSettings; o
               </span>
             </div>
           ))}
+          {itemMenu && (
+            <ContextMenu
+              at={itemMenu.at}
+              onClose={() => setItemMenu(null)}
+              items={[
+                { id: 'open', label: t('rest.menu.open'), icon: 'send', run: () => { restTabs.openSaved(itemMenu.item); setExpanded(false); } },
+                { id: 'rename', label: t('rest.rename'), icon: 'edit', run: () => void rename(itemMenu.item) },
+                { id: 'copy', label: t('rest.menu.copyUrl'), icon: 'copy', run: () => void copyNotify(itemMenu.item.request.url) },
+                'sep',
+                { id: 'delete', label: t('rest.delete'), icon: 'trash', danger: true, run: () => void remove(itemMenu.item) },
+              ]}
+            />
+          )}
         </aside>
   );
   const tabBar = (

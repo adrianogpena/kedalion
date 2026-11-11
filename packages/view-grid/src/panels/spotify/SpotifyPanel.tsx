@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Button, errorMessage, errorOf } from '@kedalion/ui';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { Button, ContextMenu, copyNotify, errorMessage, errorOf } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { Chip, ListRows, type ListRow } from '../../kit';
 import { runAction } from '../../source';
@@ -25,6 +25,7 @@ export function SpotifyPanel({ config, data, refresh, configure }: Props) {
   const [error, setError] = useState('');
   const [tab, setTab] = useState<'recent' | 'playlists'>('recent');
   const [, tick] = useState(0);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: ComponentProps<typeof ContextMenu>['items'] } | null>(null);
   const since = useMemo(() => Date.now(), [data, opt.progressMs]);
   useEffect(() => setOpt({}), [data]);
   const playing = !!data?.player?.playing && opt.playing !== false;
@@ -97,6 +98,14 @@ export function SpotifyPanel({ config, data, refresh, configure }: Props) {
       title: item.name,
       meta: [isTrack ? item.artists : item.owner],
       trailing: isTrack ? fmtClock(item.durationMs) : String(item.tracks),
+      menu: () => {
+        const [, kind, sid] = item.uri.split(':');
+        return [
+          { id: 'play', label: tKey('dash.spotify.play'), icon: 'play' as const, disabled: lock, run: () => playTrack(item.uri) },
+          ...(isTrack ? [{ id: 'queue', label: tKey('dash.spotify.queue'), icon: 'plus' as const, disabled: lock, run: () => void act('queue', { uri: item.uri }) }] : []),
+          ...(sid ? ['sep' as const, { id: 'copy-link', label: tKey('dash.spotify.copyLink'), icon: 'copy' as const, run: () => void copyNotify(`https://open.spotify.com/${kind}/${sid}`) }] : []),
+        ];
+      },
       status: (
         <span className="sp-row-actions">
           <Button size="xs" disabled={lock} title={tKey('dash.spotify.play')} onClick={() => playTrack(item.uri)}>{tKey('dash.spotify.play')}</Button>
@@ -108,6 +117,7 @@ export function SpotifyPanel({ config, data, refresh, configure }: Props) {
 
   return (
     <div className="sp">
+      {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(null)} />}
       <div className="sp-head">
         <Chip tone={premium ? 'ok' : 'neutral'}>{tKey(premium ? 'dash.spotify.premium' : 'dash.spotify.free')}</Chip>
         <span className="sp-user">{data.user}</span>
@@ -122,7 +132,14 @@ export function SpotifyPanel({ config, data, refresh, configure }: Props) {
           ) : (
             <ul className="sp-devices">
               {data.devices.map((d) => (
-                <li key={d.id}>
+                <li
+                  key={d.id}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setMenu({ at: { x: e.clientX, y: e.clientY }, items: [{ id: 'transfer', label: tKey('dash.spotify.transfer'), icon: 'play', disabled: lock, run: () => transfer(d) }] });
+                  }}
+                >
                   <span>{d.name} <span className="sp-sub">{d.type}</span></span>
                   <Button size="xs" disabled={lock} onClick={() => transfer(d)}>{tKey('dash.spotify.transfer')}</Button>
                 </li>

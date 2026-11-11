@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConsoleEntry, NetworkEntry } from '@kedalion/cdp';
-import { Button, IconButton, request } from '@kedalion/ui';
+import { Button, ContextMenu, copyNotify, IconButton, request } from '@kedalion/ui';
 import { t } from './i18n';
 import { errorsSinceMark, requestsBefore, type NetMark } from './netview';
 import type { BrowserSocket } from './web/useBrowserSocket';
@@ -159,6 +159,12 @@ export function ConsolePane({ tab, logs, onSource }: ConsolePaneProps) {
   const [local, setLocal] = useState<Local[]>([]);
   const [draft, setDraft] = useState('');
   const [linked, setLinked] = useState<number | null>(null);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; text: string } | null>(null);
+  const openMenu = (ev: React.MouseEvent, text: string) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    setMenu({ at: { x: ev.clientX, y: ev.clientY }, text });
+  };
   const history = useRef<string[]>([]);
   const cursor = useRef(-1);
   const nextLocal = useRef(1);
@@ -234,7 +240,7 @@ export function ConsolePane({ tab, logs, onSource }: ConsolePaneProps) {
         {rows.map((e) => {
           const near = e.level === 'error' ? requestsBefore(logs.networkEntries, e.ts) : [];
           return (
-          <div key={e.id} className={`console-row lvl-${e.level}`}>
+          <div key={e.id} className={`console-row lvl-${e.level}`} onContextMenu={(ev) => openMenu(ev, e.stack && !e.text.includes(e.stack) ? `${e.text}\n${e.stack}` : e.text)}>
             <div className="console-main">
               <pre className="console-text">{e.stack && !e.text.includes(e.stack) ? `${e.text}\n${e.stack}` : e.text}</pre>
               {near.length > 0 && (
@@ -272,6 +278,13 @@ export function ConsolePane({ tab, logs, onSource }: ConsolePaneProps) {
             )}
           </div>
         ))}
+        {menu && (
+          <ContextMenu
+            at={menu.at}
+            onClose={() => setMenu(null)}
+            items={[{ id: 'copy', label: t('browser.row.copyMessage'), icon: 'copy', run: () => void copyNotify(menu.text) }]}
+          />
+        )}
       </div>
       <textarea
         className="browser-prompt"

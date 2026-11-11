@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ErrorBanner, fileIconOf, Icon, IconButton, Spinner, useFileIconVersion, useStream } from '@kedalion/ui';
+import { ContextMenu, copyNotify, ErrorBanner, fileIconOf, Icon, IconButton, Spinner, useFileIconVersion, useStream } from '@kedalion/ui';
 import type { Project, SearchHit } from '../client';
 import { t } from '../i18n';
 
@@ -21,6 +21,7 @@ export function ProjectSearch({ project, exclude, onOpenFile, onClose, focusSign
   const [query, setQuery] = useState('');
   const [content, setContent] = useState(true);
   const [searched, setSearched] = useState(false);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; hit: SearchHit } | null>(null);
   useFileIconVersion();
   const search =useStream<SearchHit>({ maxItems: MAX_HITS });
 
@@ -95,6 +96,11 @@ export function ProjectSearch({ project, exclude, onOpenFile, onClose, focusSign
               className="xp-hit"
               disabled={hit.kind === 'dir'}
               onClick={() => onOpenFile(project.id, hit.path)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setMenu({ at: { x: e.clientX, y: e.clientY }, hit });
+              }}
               title={hit.path}
             >
               <span className={`tree-icon${fileIconOf(hit.path).tone ? ` tone-${fileIconOf(hit.path).tone}` : ''}`}>
@@ -110,6 +116,17 @@ export function ProjectSearch({ project, exclude, onOpenFile, onClose, focusSign
             </button>
           ))}
         </div>
+      )}
+      {menu && (
+        <ContextMenu
+          at={menu.at}
+          onClose={() => setMenu(null)}
+          items={[
+            { id: 'open', label: t('explorer.search.openFile'), icon: 'file-text', disabled: menu.hit.kind === 'dir', run: () => onOpenFile(project.id, menu.hit.path) },
+            { id: 'path', label: t('explorer.search.copyPath'), icon: 'copy', run: () => void copyNotify(menu.hit.path) },
+            ...(menu.hit.line ? [{ id: 'line', label: t('explorer.search.copyPathLine'), icon: 'copy' as const, run: () => void copyNotify(`${menu.hit.path}:${menu.hit.line}`) }] : []),
+          ]}
+        />
       )}
     </div>
   );

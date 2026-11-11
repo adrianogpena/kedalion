@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, copyNotify, IconButton } from '@kedalion/ui';
+import { Button, ContextMenu, copyNotify, IconButton } from '@kedalion/ui';
 import { browserApi, type BrowserCookie, type CookieScope } from './client';
 import { t } from './i18n';
 
@@ -63,6 +63,7 @@ export function CookiesPane({ tab, url }: CookiesPaneProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [invalidExpires, setInvalidExpires] = useState(false);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; cookie: BrowserCookie } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -180,6 +181,11 @@ export function CookiesPane({ tab, url }: CookiesPaneProps) {
                       aria-selected={k === selected}
                       className={`net-row${k === selected ? ' selected' : ''}`}
                       onClick={() => select(c)}
+                      onContextMenu={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        setMenu({ at: { x: ev.clientX, y: ev.clientY }, cookie: c });
+                      }}
                       onKeyDown={(ev) => {
                         if (ev.key === 'Enter' || ev.key === ' ') {
                           ev.preventDefault();
@@ -209,6 +215,19 @@ export function CookiesPane({ tab, url }: CookiesPaneProps) {
                 })}
               </tbody>
             </table>
+          )}
+          {menu && (
+            <ContextMenu
+              at={menu.at}
+              onClose={() => setMenu(null)}
+              items={[
+                { id: 'select', label: t('browser.row.select'), icon: 'file-text', run: () => select(menu.cookie) },
+                { id: 'copy-name', label: t('browser.row.copyName'), icon: 'copy', run: () => void copyNotify(menu.cookie.name) },
+                { id: 'copy-value', label: t('browser.row.copyValue'), icon: 'copy', run: () => void copyNotify(menu.cookie.value) },
+                'sep',
+                { id: 'delete', label: t('browser.cookies.delete'), icon: 'trash', danger: true, run: () => void remove(menu.cookie) },
+              ]}
+            />
           )}
         </div>
         {draft && (

@@ -28,6 +28,9 @@ export const en = {
   'panel.changes.group.conflict': 'Conflicts',
   'panel.changes.group.commits': 'Committed',
   'panel.changes.sessionClean': 'No changes from this session',
+  'panel.changes.openDiff': 'Open diff',
+  'panel.changes.copyPath': 'Copy path',
+  'panel.changes.copyHash': 'Copy hash',
 };
 
 export const ptBR: Messages<typeof en> = {
@@ -58,4 +61,7 @@ export const ptBR: Messages<typeof en> = {
   'panel.changes.group.conflict': 'Conflitos',
   'panel.changes.group.commits': 'Commitados',
   'panel.changes.sessionClean': 'Sem alterações desta sessão',
+  'panel.changes.openDiff': 'Abrir diff',
+  'panel.changes.copyPath': 'Copiar caminho',
+  'panel.changes.copyHash': 'Copiar hash',
 };

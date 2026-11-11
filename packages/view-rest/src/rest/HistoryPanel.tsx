@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { RestHistoryEntry } from '@kedalion/server-core/protocol';
-import { type ApiError, Button, ErrorBanner, errorOf, IconButton, useAsync, type useDialogs } from '@kedalion/ui';
+import { type ApiError, Button, ContextMenu, copyNotify, ErrorBanner, errorOf, IconButton, useAsync, type useDialogs } from '@kedalion/ui';
 import { restApi as api } from '../client';
 import { t } from '../i18n';
 import { openRestTab } from './tabs-store';
@@ -12,6 +12,7 @@ export function HistoryPanel({ refresh, confirm, onClose }: { refresh: number; c
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [actionError, setActionError] = useState<ApiError>();
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; entry: RestHistoryEntry } | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query.trim()), 200);
     return () => clearTimeout(timer);
@@ -56,7 +57,17 @@ export function HistoryPanel({ refresh, confirm, onClose }: { refresh: number; c
       {history.data?.length === 0 && <p className="muted">{t('rest.history.empty')}</p>}
       <div className="rest-history-list">
         {history.data?.map((entry) => (
-          <button key={entry.id} className="rest-history-item" onClick={() => open(entry)} title={entry.url}>
+          <button
+            key={entry.id}
+            className="rest-history-item"
+            onClick={() => open(entry)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({ at: { x: e.clientX, y: e.clientY }, entry });
+            }}
+            title={entry.url}
+          >
             <span className="rest-method">{entry.method}</span>
             <span className="rest-history-url">{entry.url}</span>
             <span className={`rest-history-status${entry.error || entry.status >= 400 ? ' err' : ''}`}>{entry.error ?? entry.status}</span>
@@ -64,6 +75,16 @@ export function HistoryPanel({ refresh, confirm, onClose }: { refresh: number; c
           </button>
         ))}
       </div>
+      {menu && (
+        <ContextMenu
+          at={menu.at}
+          onClose={() => setMenu(null)}
+          items={[
+            { id: 'open', label: t('rest.menu.open'), icon: 'send', run: () => open(menu.entry) },
+            { id: 'copy', label: t('rest.menu.copyUrl'), icon: 'copy', run: () => void copyNotify(menu.entry.url) },
+          ]}
+        />
+      )}
     </aside>
   );
 }

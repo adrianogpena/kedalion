@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Button, errorMessage, errorOf, IconButton } from '@kedalion/ui';
+import { Button, ContextMenu, copyNotify, errorMessage, errorOf, IconButton } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { Chip, type Tone } from '../../kit';
 import { runAction } from '../../source';
@@ -44,6 +44,7 @@ export function TrackedPrsPanel({ config, data, refresh }: { config: TrackedConf
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; pr: TrackedPr } | null>(null);
   const items = data?.items ?? [];
 
   const act = async (name: string, payload: unknown): Promise<boolean> => {
@@ -78,7 +79,15 @@ export function TrackedPrsPanel({ config, data, refresh }: { config: TrackedConf
       <div className="gh-list">
         {items.length === 0 && <div className="muted gh-head">{tKey('dash.github.tracked.empty')}</div>}
         {items.map((pr) => (
-          <div key={`${pr.owner}/${pr.repo}#${pr.number}`} className="kit-row gh-tracked-row">
+          <div
+            key={`${pr.owner}/${pr.repo}#${pr.number}`}
+            className="kit-row gh-tracked-row"
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({ at: { x: e.clientX, y: e.clientY }, pr });
+            }}
+          >
             <div className="kit-row-main">
               <a className="kit-row-title" href={pr.url} target="_blank" rel="noreferrer">
                 {pr.title}
@@ -102,6 +111,21 @@ export function TrackedPrsPanel({ config, data, refresh }: { config: TrackedConf
           </div>
         ))}
       </div>
+      {menu && (
+        <ContextMenu
+          at={menu.at}
+          onClose={() => setMenu(null)}
+          items={[
+            { id: 'open', label: tKey('dash.github.pr.open'), icon: 'link', run: () => window.open(menu.pr.url, '_blank', 'noreferrer') },
+            { id: 'refresh', label: tKey('dash.github.tracked.refresh'), icon: 'refresh', run: refresh },
+            'sep',
+            { id: 'copy-link', label: tKey('dash.github.pr.copyLink'), icon: 'copy', run: () => void copyNotify(menu.pr.url) },
+            { id: 'copy-number', label: tKey('dash.github.pr.copyNumber'), icon: 'copy', run: () => void copyNotify(`#${menu.pr.number}`) },
+            'sep',
+            { id: 'untrack', label: tKey('dash.github.tracked.untrack'), icon: 'trash', danger: true, disabled: busy, run: () => void act('untrack', { owner: menu.pr.owner, repo: menu.pr.repo, number: menu.pr.number }) },
+          ]}
+        />
+      )}
     </div>
   );
 }

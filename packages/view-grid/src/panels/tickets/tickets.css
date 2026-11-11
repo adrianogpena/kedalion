@@ -20,6 +20,7 @@ a.tickets-key:hover { text-decoration: underline; }
 .tickets-drift--behind { color: var(--text-dim); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .tickets-drift-count { flex: none; min-width: 20px; padding: 0 var(--space-6); border-radius: 999px; text-align: center; font-weight: 600; letter-spacing: 0; color: var(--warn); background: var(--warn-soft); }
 .tickets-pcr { flex: none; padding: 1px var(--space-6); border-radius: var(--radius-sm); font-size: var(--fs-xs); font-weight: 600; font-family: var(--font-mono, monospace); color: var(--info); background: var(--info-soft); }
+.tickets-jira-done { flex: none; padding: 1px var(--space-6); border-radius: var(--radius-sm); font-size: var(--fs-xs); font-weight: 600; color: var(--ok); background: var(--ok-soft, transparent); }
 .tickets-desc { cursor: pointer; font-size: var(--fs-sm); line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tickets-desc-empty { color: var(--text-dim); font-style: italic; }
 .tickets-edit { width: 100%; resize: vertical; font: inherit; font-size: var(--fs-sm); }

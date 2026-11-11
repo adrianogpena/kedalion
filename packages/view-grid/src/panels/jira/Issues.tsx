@@ -1,3 +1,4 @@
+import { copyNotify } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { Chip, ListRows, relTime, type ListRow } from '../../kit';
 import './jira.css';
@@ -34,6 +35,12 @@ const rowOf = (issue: JiraIssue, config: IssuesConfig): ListRow => ({
   href: issue.url,
   chip: <Chip tone={issue.tone}>{issue.status}</Chip>,
   meta: metaOf(issue, config),
+  menu: () => [
+    { id: 'open', label: tKey('dash.jira.open'), icon: 'link', run: () => window.open(issue.url, '_blank', 'noreferrer') },
+    'sep',
+    { id: 'copy-key', label: tKey('dash.jira.copyKey'), icon: 'copy', run: () => void copyNotify(issue.key) },
+    { id: 'copy-link', label: tKey('dash.jira.copyLink'), icon: 'copy', run: () => void copyNotify(issue.url) },
+  ],
 });
 
 function Board({ issues, config }: { issues: readonly JiraIssue[]; config: IssuesConfig }) {

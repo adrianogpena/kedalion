@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { Button } from '@kedalion/ui';
+import { useRef, useState, type ComponentProps } from 'react';
+import { Button, ContextMenu, copyNotify } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { runAction } from '../../source';
 import { applyAll, applyIssue, AUTO, MAX_TEXT, parseLanguages, type Issue, type SpellResult } from './model';
@@ -35,6 +35,7 @@ export function SpellcheckPanel({ config }: { config: Record<string, unknown> })
   const [result, setResult] = useState<SpellResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: ComponentProps<typeof ContextMenu>['items'] } | null>(null);
   const run = useRef(0);
 
   const check = async () => {
@@ -68,6 +69,7 @@ export function SpellcheckPanel({ config }: { config: Record<string, unknown> })
 
   return (
     <div className="spell">
+      {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(null)} />}
       <textarea
         className="spell-input"
         maxLength={MAX_TEXT}
@@ -90,7 +92,23 @@ export function SpellcheckPanel({ config }: { config: Record<string, unknown> })
       {result && result.issues.length === 0 && <p className="spell-note">{tKey('dash.spell.clean')}</p>}
       <ul className="spell-list">
         {result?.issues.map((issue) => (
-          <li key={`${issue.offset}-${issue.text}`} className="spell-issue">
+          <li
+            key={`${issue.offset}-${issue.text}`}
+            className="spell-issue"
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const fixes = [...new Set([...(issue.fix ? [issue.fix] : []), ...issue.alternatives])];
+              setMenu({
+                at: { x: e.clientX, y: e.clientY },
+                items: [
+                  ...fixes.map((fix) => ({ id: `fix-${fix}`, label: fix, icon: 'check' as const, run: () => apply(issue, fix) })),
+                  ...(fixes.length ? ['sep' as const] : []),
+                  { id: 'copy-word', label: tKey('dash.spell.copyWord'), icon: 'copy' as const, run: () => void copyNotify(issue.text) },
+                ],
+              });
+            }}
+          >
             <span className={`spell-kind ${issue.kind}`}>{tKey(`dash.spell.kind.${issue.kind}`)}</span>
             <span className="spell-fix">
               <s>{issue.text}</s>

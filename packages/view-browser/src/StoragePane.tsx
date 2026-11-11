@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, copyNotify, IconButton } from '@kedalion/ui';
+import { Button, ContextMenu, copyNotify, IconButton } from '@kedalion/ui';
 import { browserApi, type StorageSnapshot, type StoreKind } from './client';
 import { t } from './i18n';
 
@@ -21,6 +21,7 @@ export function StoragePane({ tab, url }: StoragePaneProps) {
   const [adding, setAdding] = useState(false);
   const [newKey, setNewKey] = useState('');
   const [cache, setCache] = useState(false);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; key: string; value: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -126,6 +127,11 @@ export function StoragePane({ tab, url }: StoragePaneProps) {
                         aria-selected={i.key === selected}
                         className={`net-row${i.key === selected ? ' selected' : ''}`}
                         onClick={() => edit && pick(i.key, i.value)}
+                        onContextMenu={(ev) => {
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          setMenu({ at: { x: ev.clientX, y: ev.clientY }, key: i.key, value: i.value });
+                        }}
                         onKeyDown={(ev) => {
                           if (edit && (ev.key === 'Enter' || ev.key === ' ')) {
                             ev.preventDefault();
@@ -151,6 +157,28 @@ export function StoragePane({ tab, url }: StoragePaneProps) {
                     ))}
                   </tbody>
                 </table>
+              )}
+              {menu && (
+                <ContextMenu
+                  at={menu.at}
+                  onClose={() => setMenu(null)}
+                  items={[
+                    ...(edit ? [{ id: 'select', label: t('browser.row.select'), icon: 'file-text' as const, run: () => pick(menu.key, menu.value) }] : []),
+                    { id: 'copy-key', label: t('browser.row.copyKey'), icon: 'copy' as const, run: () => void copyNotify(menu.key) },
+                    ...(edit ? [{ id: 'copy-value', label: t('browser.row.copyValue'), icon: 'copy' as const, run: () => void copyNotify(menu.value) }] : []),
+                    'sep',
+                    {
+                      id: 'delete',
+                      label: t('browser.storage.delete'),
+                      icon: 'trash',
+                      danger: true,
+                      run: () => {
+                        if (menu.key === selected) setSelected(null);
+                        void run(() => browserApi.removeStorageItem(tab, kind, menu.key));
+                      },
+                    },
+                  ]}
+                />
               )}
             </>
           )}

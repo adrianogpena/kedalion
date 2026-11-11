@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MarkdownView } from '@kedalion/editor';
-import { Button, errorOf, useDialogs } from '@kedalion/ui';
+import { Button, ContextMenu, type ContextMenuItem, errorOf, useDialogs } from '@kedalion/ui';
 import { t } from '../../../i18n';
 import type { AgentsCapWarn } from '../../../protocol';
 import { stopSession } from '../../api';
@@ -25,6 +25,7 @@ function TaskPanel({ project, api, visible }: PanelProps) {
   const [error, setError] = useState('');
   const [revising, setRevising] = useState(false);
   const [revision, setRevision] = useState('');
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: Array<ContextMenuItem | 'sep'> }>();
   const reviewed = useRef(new Set<string>());
   const latest = useRef(tasks);
   latest.current = tasks;
@@ -167,6 +168,7 @@ function TaskPanel({ project, api, visible }: PanelProps) {
 
   return (
     <div className="agents-panel-task">
+      {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(undefined)} />}
       <div className="agents-task-new">
         <textarea aria-label={t('panel.task.title')} placeholder={t('panel.task.placeholder')} value={text} onChange={(e) => setText(e.target.value)} />
         <div className="agents-task-row">
@@ -198,6 +200,18 @@ function TaskPanel({ project, api, visible }: PanelProps) {
               onClick={() => {
                 setSelected(task.id);
                 setRevising(false);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const live = task.state === 'planning' || task.state === 'planned';
+                const items: Array<ContextMenuItem | 'sep'> = [
+                  { id: 'open', label: t('panel.task.openSession'), icon: 'popout', run: () => api.open('agent', { sessionId: live ? task.planSession : (task.implSession ?? task.planSession) }) },
+                ];
+                if (task.state === 'planned') items.push({ id: 'approve', label: t('panel.task.approve'), icon: 'check', disabled: busy || !account, run: () => void approve(task) });
+                if (live) items.push('sep', { id: 'cancel', label: t('panel.task.cancel'), icon: 'square', danger: true, run: () => remove(task, true) });
+                else if (task.state === 'done') items.push('sep', { id: 'remove', label: t('panel.task.remove'), icon: 'trash', danger: true, run: () => remove(task, false) });
+                setMenu({ at: { x: e.clientX, y: e.clientY }, items });
               }}
             >
               <span className="agents-task-text" title={task.text}>

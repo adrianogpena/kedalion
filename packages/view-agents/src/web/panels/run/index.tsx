@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button } from '@kedalion/ui';
+import { Button, ContextMenu, type ContextMenuItem } from '@kedalion/ui';
 import { t } from '../../../i18n';
 import type { PanelModule, PanelProps, SectionProps } from '../../workspace/types';
 import { getLogs, getTargets, openRunUrl, startRun, stopRun, type RunState, type RunTarget } from './api';
@@ -43,6 +43,7 @@ function RunBody({ project }: { project: string | undefined }) {
     };
   }, [project, logOf]);
 
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: ContextMenuItem[] }>();
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const act = (fn: typeof startRun, target: string) => {
     if (!project || busy[target]) return;
@@ -56,13 +57,32 @@ function RunBody({ project }: { project: string | undefined }) {
   if (!targets) return <div className="agents-run" />;
   if (targets.length === 0) return <p className="agents-empty agents-placeholder">{t('panel.run.empty')}</p>;
   return (
+    <>
+    {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(undefined)} />}
     <ul className="agents-run">
       {targets.map((x) => {
         const run = runs[x.id];
         const status = run?.status ?? 'stopped';
         const running = status === 'running';
         return (
-          <li key={x.id} className="agents-run-item" data-status={status}>
+          <li
+            key={x.id}
+            className="agents-run-item"
+            data-status={status}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const off = busy[x.id];
+              const items: ContextMenuItem[] = running
+                ? [
+                    { id: 'stop', label: t('panel.run.stop'), icon: 'square', danger: true, disabled: off, run: () => act(stopRun, x.id) },
+                    { id: 'restart', label: t('panel.run.restart'), icon: 'rotate-ccw', disabled: off, run: () => act(startRun, x.id) },
+                  ]
+                : [{ id: 'start', label: t('panel.run.start'), icon: 'play', disabled: off, run: () => act(startRun, x.id) }];
+              items.push({ id: 'logs', label: logOf === x.id ? t('panel.run.hideLogs') : t('panel.run.logs'), icon: 'log', run: () => setLogOf(logOf === x.id ? undefined : x.id) });
+              setMenu({ at: { x: e.clientX, y: e.clientY }, items });
+            }}
+          >
             <div className="agents-run-row">
               <span className="agents-run-dot" aria-hidden="true" />
               <span className="agents-run-label" title={x.source}>{x.label}</span>
@@ -102,6 +122,7 @@ function RunBody({ project }: { project: string | undefined }) {
         );
       })}
     </ul>
+    </>
   );
 }
 

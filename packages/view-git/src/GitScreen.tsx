@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import type { DiffMode, DiffViewHandle } from '@kedalion/editor';
 import type { GitFile, GitRepoInfo, GitStatus } from '@kedalion/server-core/protocol';
-import { type ApiError, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLayout, useViewCompact, useViewLink, useViewRequest } from '@kedalion/ui';
+import { type ApiError, ContextMenu, type ContextMenuItem, copyNotify, copyText, useShortcutTip, Empty, ErrorBanner, errorMessage, errorOf, Explorer, fileIconOf, Icon, IconButton, ProjectPicker, statusOf, useCommand, useDebouncedSave, useFileIconVersion, useRovingList, useToast, useViewLayout, useViewCompact, useViewLink, useViewRequest } from '@kedalion/ui';
 import { type GitProject as Project, gitApi as api } from './client';
 import { gitCommands } from './commands';
 import { t } from './i18n';
@@ -245,6 +245,13 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
     }
   };
 
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: ContextMenuItem[] }>();
+  const openMenu = (e: ReactMouseEvent, items: ContextMenuItem[]) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ at: { x: e.clientX, y: e.clientY }, items });
+  };
+
   const fileRow = (file: GitFile, depth: number, inTree: boolean) => {
     const key = keyOf(file);
     const active = !!selected && selected.root === root && selected.commit === undefined && keyOf(selected.file) === key;
@@ -263,6 +270,13 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
         onClick={() => setSelected(sel)}
         onFocus={() => setSelected(sel)}
         onDoubleClick={() => toExplorer(sel, true)}
+        onContextMenu={(e) =>
+          openMenu(e, [
+            { id: 'select', label: t('git.select'), icon: 'file', run: () => setSelected(sel) },
+            { id: 'open', label: t('git.openFile'), icon: 'file', disabled: !sel || isDeleted(sel), run: () => toExplorer(sel, true) },
+            { id: 'path', label: t('git.copyPath'), icon: 'copy', run: () => void copyNotify(file.path) },
+          ])
+        }
         onKeyDown={(e) => {
           if (e.key !== 'Enter') return;
           e.preventDefault();
@@ -293,6 +307,12 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
           title={f.path}
           aria-expanded={open}
           onClick={() => toggleFolder(key)}
+          onContextMenu={(e) =>
+            openMenu(e, [
+              { id: 'toggle', label: t(open ? 'git.collapse' : 'git.expand'), icon: 'chevron', run: () => toggleFolder(key) },
+              { id: 'path', label: t('git.copyPath'), icon: 'copy', run: () => void copyNotify(f.path) },
+            ])
+          }
           onKeyDown={openKeys(open, () => toggleFolder(key))}
         >
           <span className={`tree-chevron${open ? ' open' : ''}`}><Icon name="chevron" size={12} /></span>
@@ -395,6 +415,7 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
             );
           })}
         </div>
+        {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(undefined)} />}
       </div>
   );
   /** The History panel. */

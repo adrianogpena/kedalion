@@ -356,6 +356,9 @@ function refreshPr(listed: PrRef, config: Record<string, unknown>, source: Extra
     .catch((e: unknown) => setLive(key, { busy: false, failed: e instanceof Error ? e.message : String(e) }));
 }
 
+/** Loads one listed PR again (Pull Requests panel), as the side panel's refresh button does. */
+export const refreshListedPr = (pr: PrRef, config: Record<string, unknown>) => refreshPr(pr, config, PRS_ONE);
+
 function RefreshButton({ pr, config, source }: { pr: PrRef; config: Record<string, unknown>; source: ExtraSource }) {
   const live = useLive(liveKey(pr));
   return <IconButton icon="refresh" label={tKey(live.busy ? 'dash.github.pr.refreshing' : 'dash.github.pr.refresh')} disabled={live.busy} onClick={() => refreshPr(pr, config, source)} />;

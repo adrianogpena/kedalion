@@ -1,9 +1,10 @@
+import { copyNotify } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { Chip, hasColumn, ListRows, relTime, type ListRow } from '../../kit';
 import type { PanelSide } from '../../panel';
 import './github.css';
 import { ciLabelKey, type PrItem, type SearchData } from './map';
-import { CI_TONE, prSideContent, REVIEW_TONE, useFreshPrs } from './PrSide';
+import { CI_TONE, prSideContent, refreshListedPr, REVIEW_TONE, useFreshPrs } from './PrSide';
 
 export interface PullRequestsConfig {
   columns: string[];
@@ -14,6 +15,19 @@ export interface PullRequestsConfig {
 export interface PrRowActions {
   isSelected(pr: PrItem): boolean;
   toggle(pr: PrItem): void;
+}
+
+/** The right-click menu of a PR row: what the side panel's header offers, without opening it. */
+function prMenu(pr: PrItem, config: PullRequestsConfig, actions?: PrRowActions): NonNullable<ListRow['menu']> {
+  return () => [
+    ...(actions ? [{ id: 'details', label: tKey(actions.isSelected(pr) ? 'dash.github.pr.hideDetails' : 'dash.github.pr.details'), icon: 'file-text' as const, run: () => actions.toggle(pr) }, 'sep' as const] : []),
+    { id: 'open', label: tKey('dash.github.pr.open'), icon: 'link', run: () => window.open(pr.url, '_blank', 'noreferrer') },
+    { id: 'refresh', label: tKey('dash.github.pr.refresh'), icon: 'refresh', run: () => refreshListedPr(pr, config) },
+    'sep',
+    { id: 'copy-link', label: tKey('dash.github.pr.copyLink'), icon: 'copy', run: () => void copyNotify(pr.url) },
+    { id: 'copy-branch', label: tKey('dash.github.pr.copyBranch'), icon: 'copy', run: () => void copyNotify(pr.branch) },
+    { id: 'copy-number', label: tKey('dash.github.pr.copyNumber'), icon: 'copy', run: () => void copyNotify(`#${pr.number}`) },
+  ];
 }
 
 export function prRows(config: PullRequestsConfig, items: readonly PrItem[], actions?: PrRowActions): ListRow[] {
@@ -55,6 +69,7 @@ export function prRows(config: PullRequestsConfig, items: readonly PrItem[], act
       id: pr.id,
       href: actions ? undefined : pr.url,
       status,
+      menu: prMenu(pr, config, actions),
       ...(actions ? { selected: actions.isSelected(pr), onClick: () => actions.toggle(pr) } : {}),
     };
     if (config.density === 'compact') return { ...base, title: `#${pr.number} ${pr.title}` };

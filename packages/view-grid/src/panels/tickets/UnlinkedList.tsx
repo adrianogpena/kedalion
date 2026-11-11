@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Button, Icon } from '@kedalion/ui';
+import { useState, type ComponentProps } from 'react';
+import { Button, ContextMenu, copyNotify, Icon } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { workloadName, type Ticket } from './model';
 import type { UnlinkedKey } from './types';
@@ -19,16 +19,34 @@ export function UnlinkedList({ unlinked, tickets, onAdd, onLink }: Props) {
   const [open, setOpen] = useState(true);
   const [linking, setLinking] = useState<string | null>(null);
   const [choice, setChoice] = useState('');
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: ComponentProps<typeof ContextMenu>['items'] } | null>(null);
   const list = visibleUnlinked(unlinked);
   if (!list.length) return null;
   return (
     <section className="tickets-unlinked">
+      {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(null)} />}
       <Button variant="ghost" size="xs" className="tickets-unlinked-head" icon={open ? 'chevron-down' : 'chevron'} aria-expanded={open} aria-label={tKey('dash.tickets.unlinked.toggle')} onClick={() => setOpen(!open)}>
         {tKey('dash.tickets.unlinked.title', { count: list.length })}
       </Button>
       {open &&
         list.map((u) => (
-          <div key={u.key} className="tickets-unlinked-row">
+          <div
+            key={u.key}
+            className="tickets-unlinked-row"
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({
+                at: { x: e.clientX, y: e.clientY },
+                items: [
+                  { id: 'add', label: tKey('dash.tickets.unlinked.add'), icon: 'plus', run: () => onAdd(u.key) },
+                  ...(tickets.length > 0 ? [{ id: 'link', label: tKey('dash.tickets.unlinked.link'), icon: 'link' as const, run: () => { setLinking(u.key); setChoice(''); } }] : []),
+                  'sep' as const,
+                  { id: 'copy', label: tKey('dash.tickets.copyKey'), icon: 'copy' as const, run: () => void copyNotify(u.key) },
+                ],
+              });
+            }}
+          >
             <strong>{u.key}</strong>
             <span className="tickets-unlinked-names">{[...u.prs.map((p) => p.title), ...new Set(u.pods.map((p) => workloadName(p.name)))].join(' · ')}</span>
             <Button onClick={() => onAdd(u.key)}>

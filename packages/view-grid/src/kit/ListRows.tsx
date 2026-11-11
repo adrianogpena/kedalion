@@ -1,5 +1,8 @@
-import type { KeyboardEvent, ReactNode } from 'react';
+import { useState, type ComponentProps, type KeyboardEvent, type ReactNode } from 'react';
+import { ContextMenu } from '@kedalion/ui';
 import './kit.css';
+
+type MenuItems = ComponentProps<typeof ContextMenu>['items'];
 
 export interface ListRow {
   id: string;
@@ -14,17 +17,30 @@ export interface ListRow {
   trailing?: string;
   selected?: boolean;
   onClick?(): void;
+  /** Right-click menu items; without them a row with an http `href` gets the app's link menu. */
+  menu?(): MenuItems;
 }
 
 /** Compact rows that scroll inside the panel; `empty` shows when there are none. */
 export function ListRows({ rows, empty }: { rows: readonly ListRow[]; empty: string }) {
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: MenuItems } | null>(null);
   if (rows.length === 0) return <p className="kit-empty">{empty}</p>;
   return (
     <ul className="kit-rows">
+      {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(null)} />}
       {rows.map((r) => (
         <li
           key={r.id}
           className={`kit-row${r.onClick ? ' kit-row--click' : ''}${r.selected ? ' kit-row--selected' : ''}`}
+          data-context-link={!r.menu && r.href && /^https?:/i.test(r.href) ? r.href : undefined}
+          onContextMenu={
+            r.menu &&
+            ((e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({ at: { x: e.clientX, y: e.clientY }, items: r.menu!() });
+            })
+          }
           {...(r.onClick
             ? {
                 tabIndex: 0,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { IconButton } from '@kedalion/ui';
+import { ContextMenu, copyNotify, IconButton } from '@kedalion/ui';
 import { normalizeAddress } from './address';
 import { t } from './i18n';
 
@@ -51,6 +51,7 @@ export function Favorites({ onOpen }: { onOpen: (url: string) => void }) {
     setDraft('');
   };
 
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; url: string } | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
   const drop = (to: number) => {
@@ -89,6 +90,11 @@ export function Favorites({ onOpen }: { onOpen: (url: string) => void }) {
             key={url}
             className={`browser-favorite${drag === i ? ' dragging' : ''}${over === i && drag !== null && drag !== i ? ' over' : ''}`}
             draggable
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenu({ at: { x: e.clientX, y: e.clientY }, url });
+            }}
             onDragStart={(e) => {
               e.dataTransfer.effectAllowed = 'move';
               setDrag(i);
@@ -115,6 +121,18 @@ export function Favorites({ onOpen }: { onOpen: (url: string) => void }) {
           </li>
         ))}
       </ul>
+      {menu && (
+        <ContextMenu
+          at={menu.at}
+          onClose={() => setMenu(null)}
+          items={[
+            { id: 'open', label: t('browser.row.open'), icon: 'link', run: () => onOpen(menu.url) },
+            { id: 'copy', label: t('browser.menu.copyUrl'), icon: 'copy', run: () => void copyNotify(menu.url) },
+            'sep',
+            { id: 'remove', label: t('browser.favorites.remove'), icon: 'trash', danger: true, run: () => update(list.filter((x) => x !== menu.url)) },
+          ]}
+        />
+      )}
     </div>
   );
 }

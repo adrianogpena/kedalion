@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import type { GitFile } from '@kedalion/server-core/protocol';
-import { Button, IconButton, ToolbarSep, errorOf, ErrorBanner, PanelLoading, useAsync, useDialogs, useToast, useViewLink } from '@kedalion/ui';
+import { Button, ContextMenu, type ContextMenuItem, copyNotify, IconButton, ToolbarSep, errorOf, ErrorBanner, PanelLoading, useAsync, useDialogs, useToast, useViewLink } from '@kedalion/ui';
 import { t } from '../../../i18n';
 import type { PanelModule, PanelProps, SectionProps, WorkspaceApi } from '../../workspace/types';
 import { codeOf, gitClient } from '../diff/git-client';
@@ -39,6 +39,12 @@ function ChangesView({ project, api, visible, sessionId, sectionMode }: ChangesV
   const [message, setMessage] = useState('');
   const [amend, setAmend] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: Array<ContextMenuItem | 'sep'> }>();
+  const openMenu = (e: MouseEvent, items: Array<ContextMenuItem | 'sep'>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ at: { x: e.clientX, y: e.clientY }, items });
+  };
   const status = useAsync(() => gitClient.gitStatus(project), [project], visible ? POLL_MS : 0);
   const refresh = status.reload;
   const branches = useAsync(() => listBranches(project), [project, status.data?.branch]);
@@ -102,6 +108,7 @@ function ChangesView({ project, api, visible, sessionId, sectionMode }: ChangesV
   return (
     <div className="agents-chg">
       {dialogs.element}
+      {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(undefined)} />}
       <div className="agents-chg-bar">
         <select
           className="agents-chg-branch"
@@ -175,7 +182,16 @@ function ChangesView({ project, api, visible, sessionId, sectionMode }: ChangesV
               </header>
               <ul className="agents-chg-list">
                 {commits.map((c) => (
-                  <li key={c.hash} className="agents-chg-file">
+                  <li
+                    key={c.hash}
+                    className="agents-chg-file"
+                    onContextMenu={(e) =>
+                      openMenu(e, [
+                        ...(openInGit ? [{ id: 'git', label: t('agents.changes.openGit'), icon: 'git-branch' as const, run: () => openInGit({ project, commit: c.hash }) }] : []),
+                        { id: 'hash', label: t('panel.changes.copyHash'), icon: 'copy', run: () => void copyNotify(c.hash) },
+                      ])
+                    }
+                  >
                     <span className="agents-chg-path" title={c.files.join('\n')}>
                       {c.hash.slice(0, 7)} {c.subject}
                     </span>
@@ -211,7 +227,20 @@ function ChangesView({ project, api, visible, sessionId, sectionMode }: ChangesV
                 </header>
                 <ul className="agents-chg-list">
                   {list.map((f) => (
-                    <li key={`${f.group}:${f.path}`} className="agents-chg-file">
+                    <li
+                      key={`${f.group}:${f.path}`}
+                      className="agents-chg-file"
+                      onContextMenu={(e) =>
+                        openMenu(e, [
+                          { id: 'diff', label: t('panel.changes.openDiff'), icon: 'file', run: () => openDiff(api, f) },
+                          group === 'staged'
+                            ? { id: 'unstage', label: t('panel.changes.unstage'), icon: 'chevron-down', disabled: busy, run: () => void run('unstage', { paths: [f.path] }) }
+                            : { id: 'stage', label: t('panel.changes.stage'), icon: 'plus', disabled: busy, run: () => void run('stage', { paths: [f.path] }) },
+                          { id: 'path', label: t('panel.changes.copyPath'), icon: 'copy', run: () => void copyNotify(f.path) },
+                          ...(group === 'staged' ? [] : (['sep', { id: 'discard', label: t('panel.changes.discard'), icon: 'trash' as const, danger: true, disabled: busy, run: () => void discard([f]) }] as const)),
+                        ])
+                      }
+                    >
                       <button
                         type="button"
                         className="agents-chg-open"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, errorMessage, errorOf, IconButton, Spinner, useToast } from '@kedalion/ui';
+import { Button, ContextMenu, copyNotify, errorMessage, errorOf, IconButton, Spinner, useToast } from '@kedalion/ui';
 import type { SqlHistoryEntry } from '@kedalion/server-core/protocol';
 import type { WorkbenchClient } from '../client';
 import { t } from '../i18n';
@@ -30,6 +30,7 @@ export function HistoryPanel({ client, connection, refresh, connectionName, onIn
   const [entries, setEntries] = useState<SqlHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [reloads, setReloads] = useState(0);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; entry: SqlHistoryEntry } | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQ(search.trim()), SEARCH_DELAY);
@@ -84,7 +85,15 @@ export function HistoryPanel({ client, connection, refresh, connectionName, onIn
       <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('workbench.history.search')} aria-label={t('workbench.history.search')} />
       <ul className="wb-history-list">
         {entries.map((e) => (
-          <li key={e.id} className="wb-history-entry">
+          <li
+            key={e.id}
+            className="wb-history-entry"
+            onContextMenu={(ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              setMenu({ at: { x: ev.clientX, y: ev.clientY }, entry: e });
+            }}
+          >
             <button
               className="wb-history-pick"
               onClick={(ev) => (ev.altKey ? onOpen(e.sql) : onInsert(e.sql))}
@@ -106,6 +115,19 @@ export function HistoryPanel({ client, connection, refresh, connectionName, onIn
         ))}
       </ul>
       {!loading && entries.length === 0 && <span className="muted wb-schema-more">{t('workbench.history.none')}</span>}
+      {menu && (
+        <ContextMenu
+          at={menu.at}
+          onClose={() => setMenu(null)}
+          items={[
+            { id: 'insert', label: t('workbench.history.menu.insert'), icon: 'plus', run: () => onInsert(menu.entry.sql) },
+            { id: 'open', label: t('workbench.history.menu.open'), icon: 'file-text', run: () => onOpen(menu.entry.sql) },
+            { id: 'copy', label: t('workbench.history.menu.copy'), icon: 'copy', run: () => void copyNotify(menu.entry.sql) },
+            'sep',
+            { id: 'delete', label: t('workbench.history.delete'), icon: 'trash', danger: true, run: () => void remove(menu.entry.id) },
+          ]}
+        />
+      )}
     </aside>
   );
 }

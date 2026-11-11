@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { NetworkEntry } from '@kedalion/cdp';
-import { Button, IconButton, request, useToast } from '@kedalion/ui';
+import { Button, ContextMenu, copyNotify, IconButton, request, useToast } from '@kedalion/ui';
 import { countSinceMark, DEFAULT_PENDING_SECS, filterRows, isStuck, pendingAge } from './netview';
 import { browserApi } from './client';
 import type { BrowserLogs } from './ConsolePane';
@@ -97,6 +97,7 @@ export function NetworkPane({ tab, logs }: NetworkPaneProps) {
   const afterMark = countSinceMark(entries, logs.mark);
   const entry = selected === null ? undefined : entries.find((e) => e.id === selected);
 
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; entry: NetworkEntry } | null>(null);
   const row = (e: NetworkEntry) => {
     const failed = !!e.failed || (e.status !== undefined && e.status >= 400);
     const age = pendingAge(e, now);
@@ -109,6 +110,11 @@ export function NetworkPane({ tab, logs }: NetworkPaneProps) {
         aria-selected={e.id === selected}
         className={`net-row${failed ? ' failed' : ''}${stuck ? ' stuck' : ''}${e.id === selected ? ' selected' : ''}`}
         onClick={select}
+        onContextMenu={(ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          setMenu({ at: { x: ev.clientX, y: ev.clientY }, entry: e });
+        }}
         onKeyDown={(ev) => {
           if (ev.key === 'Enter' || ev.key === ' ') {
             ev.preventDefault();
@@ -189,6 +195,16 @@ export function NetworkPane({ tab, logs }: NetworkPaneProps) {
               </thead>
               <tbody>{rows.map(row)}</tbody>
             </table>
+          )}
+          {menu && (
+            <ContextMenu
+              at={menu.at}
+              onClose={() => setMenu(null)}
+              items={[
+                { id: 'details', label: t('browser.row.details'), icon: 'file-text', run: () => setSelected(menu.entry.id) },
+                { id: 'copy', label: t('browser.menu.copyUrl'), icon: 'copy', run: () => void copyNotify(menu.entry.url) },
+              ]}
+            />
           )}
         </div>
         {entry && <NetworkDetail tab={tab} entry={entry} search={needle} onClose={() => setSelected(null)} />}

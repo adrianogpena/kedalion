@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react';
-import { Button, Icon, IconButton, type PanelConfig } from '@kedalion/ui';
+import { useState, type ComponentProps, type CSSProperties } from 'react';
+import { Button, ContextMenu, copyNotify, Icon, IconButton, type PanelConfig } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { Chip } from '../../kit';
 import type { PanelSide } from '../../panel';
@@ -63,6 +63,7 @@ export function TimesheetPanel({ id, config, data, refresh, side }: { id: string
     if (side.isOpen(c.id)) side.close();
     else side.open(c);
   };
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: ComponentProps<typeof ContextMenu>['items'] } | null>(null);
   const days = Object.keys(data?.days ?? {}).sort();
   const table = tableOf(days, data?.days ?? {});
   const today = data?.today ?? '';
@@ -73,6 +74,7 @@ export function TimesheetPanel({ id, config, data, refresh, side }: { id: string
 
   return (
     <div className="ts">
+      {menu && <ContextMenu at={menu.at} items={menu.items} onClose={() => setMenu(null)} />}
       <div className="ts-head">
         <span className="ts-range">{range}</span>
         {table.rows.length > 0 && (
@@ -101,7 +103,25 @@ export function TimesheetPanel({ id, config, data, refresh, side }: { id: string
             </thead>
             <tbody>
               {table.rows.map((r) => (
-                <tr key={r.ticket}>
+                <tr
+                  key={r.ticket}
+                  onContextMenu={
+                    r.ticket === NO_TICKET
+                      ? undefined
+                      : (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const bt = side ? boardTicket(r.ticket) : undefined;
+                          setMenu({
+                            at: { x: e.clientX, y: e.clientY },
+                            items: [
+                              ...(bt ? [{ id: 'open', label: tKey('dash.timesheet.openTicket', { key: r.ticket }), icon: 'link' as const, run: () => toggleTicket(bt) }, 'sep' as const] : []),
+                              { id: 'copy-key', label: tKey('dash.timesheet.copyKey'), icon: 'copy' as const, run: () => void copyNotify(r.ticket) },
+                            ],
+                          });
+                        }
+                  }
+                >
                   <td>
                     <span className={r.ticket === NO_TICKET ? 'ts-ticket ts-ticket--none' : 'ts-ticket'}>
                       {r.ticket === NO_TICKET ? (
