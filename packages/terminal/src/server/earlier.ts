@@ -1,6 +1,7 @@
 import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { IMarker, Terminal } from '@xterm/headless';
+import { RE2JS } from 're2js';
 import type { EarlierHit } from '../protocol.ts';
 
 export interface EarlierSearch {
@@ -34,42 +35,22 @@ const MAX_SCAN_LINES = 100_000;
 const SCAN_BUDGET_MS = 1000;
 const MAX_REGEX_LENGTH = 200;
 const MAX_REGEX_LINE = 300;
-/** A quantified group that holds a quantifier or an alternation, or a backreference: the shapes that backtrack without bound. */
-const NESTED_QUANTIFIER = /\((?:[^()\\]|\\.)*(?:[+*]|\{\d*,\d*\}|\|)(?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d+,?\d*\})|\\[1-9]/;
 
-const REGEX_WORKER = `
-self.onmessage = (e) => {
-  const { lines, query, caseSensitive, maxLine } = e.data;
-  const re = new RegExp(query, caseSensitive ? '' : 'i');
-  const at = [];
-  for (let i = 0; i < lines.length; i++) if (lines[i].length <= maxLine && re.test(lines[i])) at.push(i);
-  self.postMessage(at);
-};
-`;
-
-/** Indexes of the lines matching the regex, or undefined when the scan fails or runs past the budget; it runs in a Worker that is terminated, so a backtracking regex cannot freeze the server. */
-function regexScan(lines: string[], query: string, caseSensitive: boolean): Promise<number[] | undefined> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(new Blob([REGEX_WORKER], { type: 'text/javascript' }));
-    let worker: Worker;
-    try {
-      worker = new Worker(url);
-    } catch {
-      URL.revokeObjectURL(url);
-      resolve(undefined);
-      return;
-    }
-    const done = (r: number[] | undefined) => {
-      clearTimeout(timer);
-      worker.terminate();
-      URL.revokeObjectURL(url);
-      resolve(r);
-    };
-    const timer = setTimeout(() => done(undefined), SCAN_BUDGET_MS);
-    worker.addEventListener('message', (e: MessageEvent<number[]>) => done(e.data));
-    worker.addEventListener('error', () => done(undefined));
-    worker.postMessage({ lines, query, caseSensitive, maxLine: MAX_REGEX_LINE });
-  });
+/** Indexes of the lines matching the regex, or undefined when it does not compile (RE2 has no backreferences or lookaround) or the scan runs past the budget; RE2 matches in linear time, so no pattern can freeze the server. */
+async function regexScan(lines: string[], query: string, caseSensitive: boolean): Promise<number[] | undefined> {
+  let re: RE2JS;
+  try {
+    re = RE2JS.compile(query, caseSensitive ? 0 : RE2JS.CASE_INSENSITIVE);
+  } catch {
+    return undefined;
+  }
+  const at: number[] = [];
+  const deadline = Date.now() + SCAN_BUDGET_MS;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].length <= MAX_REGEX_LINE && re.test(lines[i])) at.push(i);
+    if ((i & 255) === 255 && Date.now() > deadline) return undefined;
+  }
+  return at;
 }
 
 /** The last MAX_SCAN_BYTES of the file as text, starting at a line start. */
@@ -194,12 +175,7 @@ export function createEarlier(term: Terminal, file: string, maxBytes = 20 * 1024
     if (!query || !existsSync(file)) return { hits: [], count: 0 };
     let test: (line: string) => boolean = () => false;
     if (o.regex) {
-      if (query.length > MAX_REGEX_LENGTH || NESTED_QUANTIFIER.test(query)) return { hits: [], count: 0 };
-      try {
-        new RegExp(query);
-      } catch {
-        return { hits: [], count: 0 };
-      }
+      if (query.length > MAX_REGEX_LENGTH) return { hits: [], count: 0 };
     } else {
       const q = o.caseSensitive ? query : query.toLowerCase();
       test = o.caseSensitive ? (line) => line.includes(q) : (line) => line.toLowerCase().includes(q);

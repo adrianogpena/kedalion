@@ -17,6 +17,7 @@
     "@kedalion/ui": "workspace:*",
     "@xterm/addon-clipboard": "0.3.0-beta.313",
     "@xterm/addon-fit": "0.12.0-beta.311",
+    "@xterm/addon-ligatures": "0.11.0-beta.310",
     "@xterm/addon-search": "0.17.0-beta.310",
     "@xterm/addon-serialize": "0.15.0-beta.310",
     "@xterm/addon-unicode11": "0.10.0-beta.310",
@@ -24,7 +25,7 @@
     "@xterm/addon-webgl": "0.20.0-beta.309",
     "@xterm/headless": "6.1.0-beta.313",
     "@xterm/xterm": "6.1.0-beta.315",
-    "@xterm/addon-ligatures": "0.11.0-beta.310"
+    "re2js": "^2.10.0"
   },
   "peerDependencies": {
     "react": "^18.3.1",
