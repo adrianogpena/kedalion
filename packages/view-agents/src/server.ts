@@ -279,12 +279,15 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
     if (seen) return seen;
     try {
       seen = JSON.parse(readFileSync(seenFile, 'utf8')) as Record<string, number>;
-    } catch {
+    } catch (e) {
       seen = {};
+      if ((e as NodeJS.ErrnoException)?.code !== 'ENOENT') seenUnreadable = true;
     }
     return seen;
   };
+  let seenUnreadable = false;
   const saveSeen = () => {
+    if (seenUnreadable) return;
     try {
       mkdirSync(join(seenFile, '..'), { recursive: true });
       writeFileSync(seenFile, JSON.stringify(seen ?? {}));

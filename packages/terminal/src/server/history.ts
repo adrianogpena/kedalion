@@ -23,22 +23,36 @@ const isEntry = (x: unknown): x is HistoryEntry => {
 export function historyStore(file: string | undefined, max = 2000): HistoryStore {
   let entries: HistoryEntry[] | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let unreadable = false;
   const load = (): HistoryEntry[] => {
     if (entries) return entries;
     entries = [];
     if (!file) return entries;
+    let text: string;
     try {
-      const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
+      text = readFileSync(file, 'utf8');
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException)?.code !== 'ENOENT') unreadable = true;
+      return entries;
+    }
+    try {
+      const raw: unknown = JSON.parse(text);
       if (Array.isArray(raw)) entries = raw.filter(isEntry).slice(-max);
     } catch {
-      // none yet, or unreadable: start empty
+      const aside = `${file}.corrupt-${Date.now()}`;
+      console.error(`terminal history: unreadable file moved aside: ${file} -> ${aside}`);
+      try {
+        renameSync(file, aside);
+      } catch {
+        unreadable = true;
+      }
     }
     return entries;
   };
   const flush = () => {
     clearTimeout(timer);
     timer = undefined;
-    if (!file || !entries) return;
+    if (!file || !entries || unreadable) return;
     try {
       mkdirSync(dirname(file), { recursive: true });
       writeFileSync(`${file}.tmp`, JSON.stringify(entries));

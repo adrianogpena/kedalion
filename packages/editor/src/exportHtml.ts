@@ -1,4 +1,4 @@
-import { renderMarkdown } from './markdown';
+import { renderMarkdown, sanitizeHtml } from './markdown';
 
 export interface ExportImage {
   mime: string;
@@ -114,9 +114,17 @@ a[href^="http"]::after{content:" (" attr(href) ")";font-size:.85em}
 }
 `;
 
+/** Sanitizes with DOMPurify when a DOM exists (same config as the editor preview); without one only `stripActive` runs, so `render` must return sanitized HTML. */
+function sanitizeBody(body: string): string {
+  if (typeof document === 'undefined') return stripActive(body);
+  const box = document.createElement('div');
+  box.append(sanitizeHtml(body));
+  return stripActive(box.innerHTML);
+}
+
 /** Wraps rendered body HTML in a standalone page (UTF-8, inline CSS, print rules, no scripts). */
 export function buildPage(body: string, title = ''): string {
-  return `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>${escapeHtml(title)}</title>\n<style>${CSS}</style>\n</head>\n<body>\n${stripActive(body)}\n</body>\n</html>\n`;
+  return `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>${escapeHtml(title)}</title>\n<style>${CSS}</style>\n</head>\n<body>\n${sanitizeBody(body)}\n</body>\n</html>\n`;
 }
 
 // The editor's resolver hands out a placeholder data URI first and the blob URL once the bytes are in; poll the same resolver.

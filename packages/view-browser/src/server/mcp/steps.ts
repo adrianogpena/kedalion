@@ -36,8 +36,16 @@ const oneLine = (s: string, cap: number) => {
   return t.length > cap ? `${t.slice(0, cap - 3)}...` : t;
 };
 
-export const summarizeArgs = (args: Record<string, unknown>): string => {
+const SECRET_ARGS: Record<string, readonly string[]> = {
+  browser_type: ['text'],
+  browser_fill: ['text', 'value'],
+  browser_storage_set: ['value'],
+  browser_cookie_set: ['value'],
+};
+
+export const summarizeArgs = (args: Record<string, unknown>, tool = ''): string => {
   const { tab: _tab, ...rest } = args;
+  for (const k of SECRET_ARGS[tool] ?? []) if (typeof rest[k] === 'string') rest[k] = `[${(rest[k] as string).length} chars]`;
   return Object.keys(rest).length ? oneLine(JSON.stringify(rest), SUMMARY_CAP) : '';
 };
 

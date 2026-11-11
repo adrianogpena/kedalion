@@ -1,5 +1,5 @@
 /// <reference path="./integration/scripts.d.ts" />
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_PROMPT_STYLE, type PromptStyle, promptSpec } from '../prompt.ts';
 import type { ShellId } from '../protocol.ts';
@@ -29,9 +29,18 @@ export function integrationFiles(): Record<string, string> {
 
 const written = new Set<string>();
 
+/** Creates `dir` (mode 0o700) and throws unless it is a real directory, not a link, owned by the current user. */
+function privateDir(dir: string): void {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const st = lstatSync(dir);
+  if (!st.isDirectory() || st.isSymbolicLink()) throw new Error(`Shell integration folder is not a plain directory: ${dir}`);
+  if (typeof process.getuid === 'function' && st.uid !== process.getuid()) throw new Error(`Shell integration folder is owned by another user: ${dir}`);
+}
+
 /** Writes the scripts to `dir` once per process (rewriting any that differ). */
 export function ensureIntegrationFiles(dir: string): void {
   if (written.has(dir)) return;
+  privateDir(dir);
   for (const [rel, content] of Object.entries(integrationFiles())) {
     const path = join(dir, rel);
     let current: string | null = null;
@@ -39,8 +48,8 @@ export function ensureIntegrationFiles(dir: string): void {
       current = readFileSync(path, 'utf8');
     } catch {}
     if (current === content) continue;
-    mkdirSync(join(path, '..'), { recursive: true });
-    writeFileSync(path, content);
+    if (rel.includes('/')) privateDir(join(path, '..'));
+    writeFileSync(path, content, { mode: 0o600 });
   }
   written.add(dir);
 }

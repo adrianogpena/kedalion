@@ -88,6 +88,9 @@ export function parseTrackedPrRef(input: string): PrRef | null {
 
 const ORDER: Record<CheckState, number> = { failure: 0, pending: 1, neutral: 2, success: 3 };
 
+/** The url when it is http(s), else '' (third-party links must never be javascript: or similar). */
+export const safeHttpUrl = (url: string | null | undefined): string => (url && /^https?:\/\//i.test(url) ? url : '');
+
 /** Latest run per check name, commit statuses merged in, sorted failures first. */
 export function summarizeChecks(nodes: readonly ContextNode[] | undefined): TrackedChecks {
   const latest = new Map<string, { node: ContextNode; at: string }>();

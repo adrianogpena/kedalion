@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { num, str } from './page-util.ts';
 import { diffRuns, renderStepLine, renderSteps, runSteps, startRun, stepLogFor } from './steps.ts';
 import { failResult, type McpTool, textResult, type ToolSchema } from './types.ts';
@@ -41,10 +41,10 @@ export const stepTools: McpTool[] = [
   },
   {
     name: 'browser_steps_export',
-    description: 'Save the step log as json or md in the Downloads folder (or to path); returns the path.',
+    description: 'Save the step log as json or md in the Downloads folder (or to path inside Downloads, .json or .md, never overwriting); returns the path.',
     inputSchema: schema({
       format: { type: 'string', enum: ['json', 'md'] },
-      path: { type: 'string', description: 'Target file; default a new file in Downloads.' },
+      path: { type: 'string', description: 'Target file inside Downloads (.json or .md, must not exist); default a new file there.' },
       run: { type: 'string', description: 'Only the steps of this named run.' },
     }),
     async run(a, ctx) {
@@ -54,9 +54,17 @@ export const stepTools: McpTool[] = [
       const steps = run ? runSteps(log, run) : log.steps;
       if (!steps) return failResult(`No run named ${run}.`);
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const path = str(a, 'path') ?? join(homedir(), 'Downloads', `kedalion-steps-${stamp}.${format}`);
+      const downloads = resolve(homedir(), 'Downloads');
+      const path = resolve(downloads, str(a, 'path') ?? `kedalion-steps-${stamp}.${format}`);
+      if (!path.startsWith(downloads + sep)) return failResult('path must be inside the Downloads folder.');
+      if (!/\.(json|md)$/i.test(path)) return failResult('path must end in .json or .md.');
       await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, renderSteps(steps, format));
+      try {
+        await writeFile(path, renderSteps(steps, format), { flag: 'wx' });
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === 'EEXIST') return failResult(`${path} already exists.`);
+        throw e;
+      }
       return textResult(`Saved ${steps.length} steps to ${path}`);
     },
   },

@@ -50,6 +50,18 @@ export const routes: PanelRoutes = (ctx: PanelCtx) => {
   const runs = new Map<string, Run>();
   const keyOf = (root: string, target: string) => `${root}\n${target}`;
 
+  process.on('exit', () => {
+    for (const run of runs.values()) {
+      if (run.state.status !== 'running' || !run.proc) continue;
+      try {
+        if (process.platform === 'win32') Bun.spawnSync(['taskkill', '/PID', String(run.proc.pid), '/T', '/F'], { stdout: 'ignore', stderr: 'ignore', windowsHide: true });
+        else run.proc.kill();
+      } catch {
+        // already gone
+      }
+    }
+  });
+
   const rootOf = (project: string | null) => {
     const root = project ? ctx.projectRoot(project) : undefined;
     if (!root) throw notFound('project', 'Unknown project.');

@@ -12,7 +12,7 @@ export interface RunTarget {
   /** The program and its arguments; never sent by the client. */
   cmd: string[];
 }
-
+const SAFE_NAME = /^[\w.:@/-]+$/;
 
 /** Package manager of a Node project by its lockfile (npm without one). */
 export function managerOf(files: string[]): 'bun' | 'pnpm' | 'yarn' | 'npm' {
@@ -33,7 +33,7 @@ export async function detectTargets(dir: string): Promise<RunTarget[]> {
       const pkg = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as { scripts?: Record<string, unknown> };
       const manager = managerOf(files);
       for (const name of Object.keys(pkg.scripts ?? {})) {
-        if (typeof pkg.scripts![name] !== 'string') continue;
+        if (typeof pkg.scripts![name] !== 'string' || !SAFE_NAME.test(name) || name.startsWith('-')) continue;
         out.push({ id: `script:${name}`, label: name, source: 'package.json', cmd: [manager, 'run', name] });
       }
     } catch {
@@ -42,7 +42,7 @@ export async function detectTargets(dir: string): Promise<RunTarget[]> {
   }
   if (has('go.mod')) out.push({ id: 'go', label: 'go run .', source: 'go.mod', cmd: ['go', 'run', '.'] });
   if (has('Cargo.toml')) out.push({ id: 'cargo', label: 'cargo run', source: 'Cargo.toml', cmd: ['cargo', 'run'] });
-  for (const f of files.filter((f) => f.toLowerCase().endsWith('.csproj')).sort()) {
+  for (const f of files.filter((f) => f.toLowerCase().endsWith('.csproj') && SAFE_NAME.test(f) && !f.startsWith('-')).sort()) {
     out.push({ id: `dotnet:${f}`, label: `dotnet run (${f})`, source: f, cmd: ['dotnet', 'run', '--project', f] });
   }
   if (has('manage.py')) out.push({ id: 'django', label: 'manage.py runserver', source: 'manage.py', cmd: ['python', 'manage.py', 'runserver'] });

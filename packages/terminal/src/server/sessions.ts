@@ -90,7 +90,7 @@ export interface TerminalSessions {
   captures(id: string): CaptureRecord[];
   alerts(id: string): TerminalAlerts;
   setAlerts(id: string, patch: Partial<TerminalAlerts>): TerminalAlerts;
-  earlier(id: string, query: string, o?: EarlierSearch): { hits: EarlierHit[]; count: number };
+  earlier(id: string, query: string, o?: EarlierSearch): Promise<{ hits: EarlierHit[]; count: number }>;
   history: HistoryStore;
   configure(config: SessionsConfig): void;
 }
@@ -500,7 +500,7 @@ export function terminalSessions({ spawn = spawnPty, max = 20, now = Date.now, n
       alertsChanged(e);
       return publicAlerts(e.alerts);
     },
-    earlier: (id, query, o) => must(id).earlier?.search(query, o) ?? { hits: [], count: 0 },
+    earlier: (id, query, o) => must(id).earlier?.search(query, o) ?? Promise.resolve({ hits: [], count: 0 }),
     history,
     configure(config) {
       triggers = compileTriggers(config.triggers);

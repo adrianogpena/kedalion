@@ -85,6 +85,7 @@ async function insideRoots(p: string, ctx: SourceContext): Promise<boolean> {
 
 /** Refuses a notes file that is a symlink pointing outside every Explorer project (or dangling). */
 async function assertNotesFile(file: string, ctx: SourceContext): Promise<void> {
+  if (!(await insideRoots(dirname(file), ctx))) throw invalid('ticket-notes-link', 'The notes file links outside the Explorer projects.', { file });
   let link = false;
   try {
     link = (await lstat(file)).isSymbolicLink();

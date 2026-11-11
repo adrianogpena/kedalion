@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { readJsonFile, writeJsonAtomic } from '@kedalion/platform';
 import { invalid, notFound } from '@kedalion/server-core';
 import { detectAccounts } from '../accounts.ts';
@@ -120,6 +120,12 @@ export function createTaskStore(dir: string): TaskStore {
   };
 }
 
+const isUnder = (path: string, roots: string[]): boolean =>
+  roots.some((root) => {
+    const rel = relative(resolve(root), resolve(path));
+    return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+  });
+
 const readText = (path: string) => {
   try {
     return readFileSync(path, 'utf8');
@@ -150,7 +156,8 @@ export const routes: PanelRoutes = (ctx: PanelCtx) => {
         const file = findSessionFile(a.dir, id);
         if (!file) continue;
         const text = readText(file);
-        const found = text === undefined ? null : capturePlan(text, readText);
+        const roots = [...detectAccounts(homedir()).map((x) => join(x.dir, 'plans')), ...ctx.projects().map((p) => p.path)];
+        const found = text === undefined ? null : capturePlan(text, (p) => (isUnder(p, roots) ? readText(p) : undefined));
         return { plan: found?.plan ?? null, answered: found?.answered ?? false };
       }
       return { plan: null, answered: false };

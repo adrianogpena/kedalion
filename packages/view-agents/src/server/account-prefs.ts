@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { ACCOUNT_STATUS_ICONS, ACCOUNT_STATUS_KEYS, ACCOUNT_USAGE_BOOL_KEYS, type AccountPrefs, type AccountPrefsMap, type AccountUsagePrefs } from '../protocol.ts';
+import { quarantine } from './session-state.ts';
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const only = (o: Record<string, unknown>, keys: readonly string[]) => Object.keys(o).every((k) => keys.includes(k));
@@ -68,16 +69,27 @@ export interface AccountPrefsStore {
 /** Per-account prefs (usage overrides, status icons) kept in `file` as `{[accountId]: AccountPrefs}`; an unreadable or invalid file reads as empty. */
 export function createAccountPrefsStore(file: string): AccountPrefsStore {
   let cur: AccountPrefsMap | undefined;
+  let unreadable = false;
   const load = (): AccountPrefsMap => {
     if (cur) return cur;
+    let text: string;
     try {
-      cur = validateAccountPrefs(JSON.parse(readFileSync(file, 'utf8'))) ?? {};
+      text = readFileSync(file, 'utf8');
+    } catch (e) {
+      cur = {};
+      if ((e as NodeJS.ErrnoException)?.code !== 'ENOENT') unreadable = true;
+      return cur;
+    }
+    try {
+      cur = validateAccountPrefs(JSON.parse(text)) ?? {};
     } catch {
       cur = {};
+      quarantine(file);
     }
     return cur;
   };
   const save = () => {
+    if (unreadable) return;
     try {
       mkdirSync(dirname(file), { recursive: true });
       writeFileSync(file, JSON.stringify(cur ?? {}));

@@ -29,7 +29,7 @@ export async function runGit(cwd: string, args: string[], timeoutMs = GIT_TIMEOU
     stdout: 'pipe',
     stderr: 'pipe',
     windowsHide: true,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_EDITOR: 'true', LC_ALL: 'C' },
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_EDITOR: 'true', GIT_LITERAL_PATHSPECS: '1', LC_ALL: 'C' },
   });
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -52,6 +52,7 @@ const failed = (r: GitResult) => {
 /** A path inside the project: relative, no `..`, not absolute. */
 export function safePath(p: unknown): string {
   if (typeof p !== 'string' || p === '' || p.includes('\0') || isAbsolute(p) || /^[a-z]:/i.test(p)) throw invalid('badPath', 'Invalid path.');
+  if (p.startsWith(':')) throw invalid('badPath', 'Invalid path.');
   const norm = p.replaceAll('\\', '/');
   if (norm.split('/').some((s) => s === '..')) throw invalid('badPath', 'Invalid path.');
   return norm;

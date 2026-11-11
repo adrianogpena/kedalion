@@ -184,7 +184,7 @@ export const stateTools: McpTool[] = [
   },
   {
     name: 'browser_export_har',
-    description: 'Save the network log of the tab as a HAR file in the Downloads folder; returns the path.',
+    description: 'Save the network log of the tab as a HAR file in the Downloads folder; returns the path. The HAR contains cookies and Authorization headers in plain text (not redacted).',
     inputSchema: schema({}),
     async run(a, ctx) {
       const tab = await resolveTab(ctx, a);

@@ -70,6 +70,16 @@ export function createStatuslineInstaller(opts: StatuslineInstallerOptions) {
       return {};
     }
   };
+  /** State for a write: `{}` only when the file is missing; null when it exists but cannot be read, so other accounts' `previous` is not dropped. */
+  const loadStateForWrite = (): State | null => {
+    if (!existsSync(stateFile)) return {};
+    try {
+      const s: unknown = JSON.parse(readFileSync(stateFile, 'utf8'));
+      return isObject(s) ? (s as State) : null;
+    } catch {
+      return null;
+    }
+  };
   const saveState = (s: State) => {
     mkdirSync(agentsDir, { recursive: true });
     writeFileSync(`${stateFile}.tmp`, JSON.stringify(s, null, 2));
@@ -135,7 +145,8 @@ export function createStatuslineInstaller(opts: StatuslineInstallerOptions) {
       } catch {
         return { ok: false, error: 'writeFailed' };
       }
-      const state = loadState();
+      const state = loadStateForWrite();
+      if (!state) return { ok: false, error: 'writeFailed' };
       const current = statusLineOf(settings.json);
       if (current?.command === command && state[account.id]) return { ok: true, status: status(account, state) };
       // A statusLine that is not ours is kept for chaining; one of ours left without state has nothing to chain.
@@ -158,7 +169,8 @@ export function createStatuslineInstaller(opts: StatuslineInstallerOptions) {
       return { ok: true, status: status(account) };
     },
     uninstall(account: AgentAccount): StatuslineResult {
-      const state = loadState();
+      const state = loadStateForWrite();
+      if (!state) return { ok: false, error: 'writeFailed' };
       const entry = state[account.id];
       if (!entry) return { ok: true, status: status(account, state) };
       const settings = readSettings(join(account.dir, 'settings.json'));

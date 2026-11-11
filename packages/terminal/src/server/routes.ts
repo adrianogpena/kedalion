@@ -1,7 +1,8 @@
 import { AppError, invalid, isRecord, notFound, socketTickets, type Routes, type SocketData, type SocketRoutes } from '@kedalion/server-core';
 import type { ServerWebSocket } from 'bun';
 import { existsSync, statSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { homedir } from 'node:os';
+import { appHome } from '@kedalion/platform';
 import { isAbsolute, join, posix, resolve, win32 } from 'node:path';
 import { decodeClientMessage, MAX_COLS, MAX_ROWS, TERMINAL_SOCKET_PATH, type TerminalProfile, type TerminalProfileInfo } from '../protocol.ts';
 import type { PromptStyle } from '../prompt.ts';
@@ -34,7 +35,7 @@ export interface TerminalRoutesOptions {
   prompt?: () => Promise<TerminalPrompt>;
   /** The `terminal.promptStyle` setting (already validated); the default style when undefined. */
   promptStyle?: () => Promise<PromptStyle | undefined>;
-  /** Where the integration scripts are written (default: a folder in the temp dir). */
+  /** Where the integration scripts are written (default: `shell-integration` in the app data dir). */
   integrationDir?: string;
   /** Where shells are looked up; tests replace it. */
   lookup?: ShellLookup;
@@ -98,7 +99,7 @@ export function terminalRoutes(opts: TerminalRoutesOptions): { routes: Routes; s
     }
   });
   const abs = lookup.platform === 'win32' ? win32.isAbsolute : posix.isAbsolute;
-  const integrationDir = opts.integrationDir ?? join(tmpdir(), 'kedalion-shell-integration');
+  const integrationDir = opts.integrationDir ?? join(appHome('kedalion'), 'shell-integration');
 
   async function pickShell(): Promise<{ id: ShellId; argv: string[] }> {
     const configured = await opts.shell();

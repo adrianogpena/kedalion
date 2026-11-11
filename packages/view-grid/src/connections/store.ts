@@ -65,7 +65,7 @@ export function createConnectionStore(dataDir: string) {
   const file = join(dir, 'connections.json');
   let queue: Promise<unknown> = Promise.resolve();
 
-  const read = async (): Promise<Connection[]> => {
+  const read = async (): Promise<unknown[]> => {
     let text: string;
     try {
       text = await readFile(file, 'utf8');
@@ -75,9 +75,10 @@ export function createConnectionStore(dataDir: string) {
       throw err;
     }
     const raw = JSON.parse(text);
-    return Array.isArray(raw) ? raw.filter((c): c is Connection => !!c && ID_RE.test(c.id) && isConnectionType(c.type)) : [];
+    return Array.isArray(raw) ? raw : [];
   };
-  const write = async (all: Connection[]) => {
+  const valid = (c: unknown): c is Connection => !!c && ID_RE.test((c as Connection).id) && isConnectionType((c as Connection).type);
+  const write = async (all: unknown[]) => {
     await mkdir(dir, { recursive: true });
     const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
     await writeFile(tmp, JSON.stringify(all, null, 2));
@@ -91,15 +92,16 @@ export function createConnectionStore(dataDir: string) {
 
   return {
     async list(): Promise<PublicConnection[]> {
-      return (await read()).map(publicOf);
+      return (await read()).filter(valid).map(publicOf);
     },
     /** With the token, for server use only. */
     async get(id: string): Promise<Connection | undefined> {
-      return (await read()).find((c) => c.id === id);
+      return (await read()).filter(valid).find((c) => c.id === id);
     },
     save(input: ConnectionInput): Promise<PublicConnection> {
       return locked(async () => {
-        const all = await read();
+        const stored = await read();
+        const all = stored.filter(valid);
         const prev = input.id === undefined ? undefined : all.find((c) => c.id === input.id);
         if (input.id !== undefined && !prev) throw notFound('connection-missing', 'This connection no longer exists.');
         const type = prev?.type ?? input.type;
@@ -118,14 +120,14 @@ export function createConnectionStore(dataDir: string) {
           ...(user ? { user } : {}),
           ...((token || prev?.token) ? { token: token || prev!.token } : {}),
         };
-        await write(prev ? all.map((c) => (c.id === prev.id ? next : c)) : [...all, next]);
+        await write(prev ? stored.map((c) => (valid(c) && c.id === prev.id ? next : c)) : [...stored, next]);
         return publicOf(next);
       });
     },
     remove(id: string): Promise<void> {
       return locked(async () => {
-        const all = await read();
-        if (all.some((c) => c.id === id)) await write(all.filter((c) => c.id !== id));
+        const stored = await read();
+        if (stored.some((c) => valid(c) && c.id === id)) await write(stored.filter((c) => !(valid(c) && c.id === id)));
       });
     },
   };

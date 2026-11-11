@@ -19,6 +19,7 @@ const combine = (signal: AbortSignal, timeoutMs: number): AbortSignal => AbortSi
 /** GET `url` with a timeout; ok is a 2xx/3xx status. Never throws for network errors. */
 export async function checkUrl(label: string, url: string, timeoutMs: number, signal: AbortSignal): Promise<HealthResult> {
   const started = performance.now();
+  if (!isHttpUrl(url)) return { label, url, status: 0, latencyMs: 0, ok: false, error: 'invalid' };
   try {
     const res = await fetch(url, { signal: combine(signal, timeoutMs), redirect: 'manual' });
     await res.body?.cancel();

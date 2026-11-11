@@ -24,13 +24,15 @@ export const projectKey = slash;
 export function createProjectsStore(file: string): ProjectsStore {
   let items: AgentProject[] | undefined;
   let hid: string[] = [];
+  let unreadable = false;
   const load = () => {
     if (items) return items;
     let text: string;
     try {
       text = readFileSync(file, 'utf8');
-    } catch {
+    } catch (e) {
       items = [];
+      if ((e as NodeJS.ErrnoException)?.code !== 'ENOENT') unreadable = true;
       return items;
     }
     try {
@@ -47,7 +49,9 @@ export function createProjectsStore(file: string): ProjectsStore {
     }
     return items;
   };
-  const save = () => writeJsonSync(file, { projects: items ?? [], hidden: hid });
+  const save = () => {
+    if (!unreadable) writeJsonSync(file, { projects: items ?? [], hidden: hid });
+  };
   return {
     list: () => load().filter((x) => !hid.includes(slash(x.path))),
     hidden: () => (load(), [...hid]),

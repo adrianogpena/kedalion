@@ -7,7 +7,7 @@ import { latestRc, RC_STEPS, type RcBuild, type RcInfo, type RcStepState } from 
 import type { BotEntry } from './bot';
 import { POLICY_BOT, type Approvals, type PrItem } from './map';
 import type { PullRequestsConfig } from './PullRequests';
-import type { CheckDetail, CheckState, TrackedPr } from './tracked';
+import { safeHttpUrl, type CheckDetail, type CheckState, type TrackedPr } from './tracked';
 import './github.css';
 
 export const REVIEW_TONE: Record<string, Tone> = { approved: 'ok', changes: 'danger', required: 'warn' };
@@ -91,7 +91,7 @@ function CheckRow({ check, approvals }: { check: CheckDetail; approvals?: Approv
         </span>
         <span className="gh-check-num">{took}</span>
         <span className="gh-check-num muted" title={finishedAbs ? tKey('dash.github.pr.check.finished', { when: finishedAbs }) : undefined}>{finished}</span>
-        {check.url ? <IconButton icon="link" label={tKey('dash.github.pr.check.open')} onClick={() => window.open(check.url, '_blank', 'noreferrer')} /> : <span />}
+        {safeHttpUrl(check.url) ? <IconButton icon="link" label={tKey('dash.github.pr.check.open')} onClick={() => window.open(safeHttpUrl(check.url),'_blank', 'noreferrer')} /> : <span />}
       </div>
       {note && (
         <div className="gh-check-note muted" title={note}>
@@ -188,7 +188,7 @@ function BotCard({ entries }: { entries: readonly BotEntry[] }) {
               <div className="gh-pr-line">
                 <strong>{e.source}</strong>
                 {!Number.isNaN(t) && <span className="muted" title={new Date(t).toLocaleString()}>{relTime(t)}</span>}
-                {e.url && <IconButton icon="link" label={tKey('dash.github.bot.open')} onClick={() => window.open(e.url, '_blank', 'noreferrer')} />}
+                {safeHttpUrl(e.url) && <IconButton icon="link" label={tKey('dash.github.bot.open')} onClick={() => window.open(safeHttpUrl(e.url),'_blank', 'noreferrer')} />}
               </div>
               <ul className="gh-bot-lines">{e.lines.map((l, j) => <li key={j}>{l}</li>)}</ul>
             </div>
@@ -222,7 +222,7 @@ function RcCard({ state }: { state: { data: PrExtra | undefined; error?: { messa
               </>
             )}
             <BuildDate date={latest.date} />
-            {latest.npmUrl && <IconButton icon="link" label={tKey('dash.github.rc.npm')} onClick={() => window.open(latest.npmUrl, '_blank', 'noreferrer')} />}
+            {safeHttpUrl(latest.npmUrl) && <IconButton icon="link" label={tKey('dash.github.rc.npm')} onClick={() => window.open(safeHttpUrl(latest.npmUrl),'_blank', 'noreferrer')} />}
           </div>
           <Steps build={latest} />
           {latest.failed && lastGood && <div className="gh-pr-line">{tKey('dash.github.rc.lastGood', { version: lastGood })}</div>}

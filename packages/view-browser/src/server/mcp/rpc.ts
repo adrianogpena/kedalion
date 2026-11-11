@@ -62,7 +62,7 @@ function beginStep(tool: string, args: ToolArgs, ctx: ToolContext): (result: Too
       const text = result.content.map((c) => (c.type === 'text' ? c.text : '[image]')).join(' ');
       addStep(stepLogFor(ctx.service), {
         tool,
-        args: summarizeArgs(args),
+        args: summarizeArgs(args, tool),
         ok: !result.isError,
         ms: Date.now() - started,
         at: new Date(started).toISOString(),

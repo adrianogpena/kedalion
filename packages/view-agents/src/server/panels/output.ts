@@ -1,5 +1,6 @@
 import { closeSync, existsSync, fstatSync, openSync, readdirSync, readSync, statSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ndjson, notFound } from '@kedalion/server-core';
 import { findSessionFile } from '../chat/normalize.ts';
@@ -212,6 +213,13 @@ function readTail(file: string, max: number): { text: string; size: number } {
 /** The file the PreToolUse hook (`scripts/live-output-hook.ts`) tees a session's foreground output to. */
 export const liveLogPath = (agentsDir: string, sessionId: string): string => join(agentsDir, 'live', `${sessionId.replace(/[^\w-]/g, '_')}.log`);
 
+/** A background output file must lie in a `tasks` folder under the system temp dir (where Claude writes it). */
+export function isTaskOutputFile(file: string): boolean {
+  const rel = relative(resolve(tmpdir()), resolve(file));
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return false;
+  return rel.split(/[\\/]/).slice(0, -1).includes('tasks');
+}
+
 export interface StateOptions {
   /** Live log file of the session; only the latest run uses it. */
   live?: string;
@@ -230,7 +238,7 @@ export function stateOf(run: BashRun, offset: number, now = Date.now(), opts: St
     let text = '';
     let source: OutputState['source'] = 'poll';
     let idle = Infinity;
-    if (run.outputFile && existsSync(run.outputFile)) {
+    if (run.outputFile && isTaskOutputFile(run.outputFile) && existsSync(run.outputFile)) {
       try {
         text = readTail(run.outputFile, MAX_OUTPUT * 2).text;
         idle = now - statSync(run.outputFile).mtimeMs;
@@ -346,7 +354,7 @@ export function buildPayload(q: OutputQuery, now = Date.now()): { payload: Outpu
   let at = q.toolUseId ? runs.findIndex((r) => r.toolUseId === q.toolUseId) : -1;
   if (at < 0) at = last;
   const run = runs[at]!;
-  if (run.outputFile) files.push(run.outputFile);
+  if (run.outputFile && isTaskOutputFile(run.outputFile)) files.push(run.outputFile);
   const state = stateOf(run, size, now, { live, latest: at === last });
   const summaries = runs.map((r, i) => ({ toolUseId: r.toolUseId, command: r.command, background: r.background, status: i === at ? state.status : summaryStatus(r, i === last), startedAt: r.startedAt })).reverse();
   return { payload: { run: state, runs: summaries, live: hasLive, hook }, files };

@@ -311,55 +311,62 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     }
     launched = browser;
     client = cdp;
-    const saved = await readSaved();
-    const t = await createTabs(cdp, { onAttach: attachTab });
-    tabs = t;
-    const preexisting = t.list().map((x) => x.id);
-    offs.push(
-      t.on('tab', () => {
-        emit(snapshotMsg());
-        scheduleSave();
-      }),
-      t.on('closed', (id) => {
-        dropTab(id);
-        emit(snapshotMsg());
-        scheduleSave();
-      }),
-      t.on('activated', (id) => {
-        emit(snapshotMsg());
-        restartFrames();
-        scheduleSave();
-        const url = t.list().find((x) => x.id === id)?.url;
-        if (url) void certPolicy(url);
-      }),
-      await watchDownloads(cdp, { downloadPath: downloadsDir }, (e) => {
-        void (async () => {
-          const name = e.suggestedFilename || e.guid;
-          if (e.state === 'started') emit({ type: 'download', name, path: e.path, done: false });
-          else if (e.state === 'completed') {
-            const target = await uniquePath(downloadsDir, name, (p) => Bun.file(p).exists());
-            await rename(e.path, target).catch(() => undefined);
-            emit({ type: 'download', name, path: target, done: true });
-          }
-        })();
-      }),
-    );
-    void browser.exited.then(() => {
-      if (launched !== browser) return;
-      if (!stopping) void saveNow().finally(reset);
-      else reset();
-    });
-    if (saved.urls.length) {
-      await certPolicy(saved.urls[saved.active] ?? '');
-      const ids: string[] = [];
-      for (const url of saved.urls) ids.push((await t.open(url, { activate: false })).id);
-      for (const id of preexisting) await t.close(id).catch(() => undefined);
-      if (ids[saved.active]) await t.activate(ids[saved.active]!);
-    } else if (t.list().length === 0) {
-      await t.open(s.home, { activate: true });
+    try {
+      const saved = await readSaved();
+      const t = await createTabs(cdp, { onAttach: attachTab });
+      tabs = t;
+      const preexisting = t.list().map((x) => x.id);
+      offs.push(
+        t.on('tab', () => {
+          emit(snapshotMsg());
+          scheduleSave();
+        }),
+        t.on('closed', (id) => {
+          dropTab(id);
+          emit(snapshotMsg());
+          scheduleSave();
+        }),
+        t.on('activated', (id) => {
+          emit(snapshotMsg());
+          restartFrames();
+          scheduleSave();
+          const url = t.list().find((x) => x.id === id)?.url;
+          if (url) void certPolicy(url);
+        }),
+        await watchDownloads(cdp, { downloadPath: downloadsDir }, (e) => {
+          void (async () => {
+            const name = e.suggestedFilename || e.guid;
+            if (e.state === 'started') emit({ type: 'download', name, path: e.path, done: false });
+            else if (e.state === 'completed') {
+              const target = await uniquePath(downloadsDir, name, (p) => Bun.file(p).exists());
+              await rename(e.path, target).catch(() => undefined);
+              emit({ type: 'download', name, path: target, done: true });
+            }
+          })();
+        }),
+      );
+      void browser.exited.then(() => {
+        if (launched !== browser) return;
+        if (!stopping) void saveNow().finally(reset);
+        else reset();
+      });
+      if (saved.urls.length) {
+        await certPolicy(saved.urls[saved.active] ?? '');
+        const ids: string[] = [];
+        for (const url of saved.urls) ids.push((await t.open(url, { activate: false })).id);
+        for (const id of preexisting) await t.close(id).catch(() => undefined);
+        if (ids[saved.active]) await t.activate(ids[saved.active]!);
+      } else if (t.list().length === 0) {
+        await t.open(s.home, { activate: true });
+      }
+      emit(snapshotMsg());
+      restartFrames();
+    } catch (e) {
+      reset();
+      cdp.close();
+      browser.kill();
+      throw e;
     }
-    emit(snapshotMsg());
-    restartFrames();
   }
 
   const service: BrowserService = {
@@ -485,7 +492,7 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
       for (const e of entries) details.set(e.id, await logs.network.detail(e.id).catch(() => undefined));
       const host = (() => {
         try {
-          return new URL(requireTabs().list().find((x) => x.id === id)?.url ?? '').hostname || 'page';
+          return (new URL(requireTabs().list().find((x) => x.id === id)?.url ?? '').hostname || 'page').replace(/[^\w.-]/g, '_');
         } catch {
           return 'page';
         }

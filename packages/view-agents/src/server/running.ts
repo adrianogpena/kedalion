@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { AgentRunning } from '../protocol.ts';
 import type { AgentsRestore } from '../settings-types.ts';
+import { quarantine } from './session-state.ts';
 
 export type RunningRecord = Pick<AgentRunning, 'id' | 'account' | 'project'>;
 
@@ -42,14 +43,23 @@ export function createRunningStore(file: string, opts: RunningOptions = {}): Run
   const alive = opts.alive ?? pidAlive;
   let previous: RunningRecord[] = [];
   let otherPid: number | undefined;
+  let unreadable = false;
+  let text: string | undefined;
   try {
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as unknown;
-    const list = Array.isArray(raw) ? raw : (raw as { sessions?: unknown } | null)?.sessions;
-    if (Array.isArray(list)) previous = list.filter(valid);
-    const pid = (raw as { pid?: unknown } | null)?.pid;
-    if (typeof pid === 'number' && pid !== ownPid) otherPid = pid;
-  } catch {
-    /* no previous run */
+    text = readFileSync(file, 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException)?.code !== 'ENOENT') unreadable = true;
+  }
+  if (text !== undefined) {
+    try {
+      const raw = JSON.parse(text) as unknown;
+      const list = Array.isArray(raw) ? raw : (raw as { sessions?: unknown } | null)?.sessions;
+      if (Array.isArray(list)) previous = list.filter(valid);
+      const pid = (raw as { pid?: unknown } | null)?.pid;
+      if (typeof pid === 'number' && pid !== ownPid) otherPid = pid;
+    } catch {
+      quarantine(file);
+    }
   }
   let written = JSON.stringify(previous);
   let queued: RunningRecord[] = [];
@@ -61,7 +71,7 @@ export function createRunningStore(file: string, opts: RunningOptions = {}): Run
   };
   return {
     sync(live) {
-      if (quitting || !decided) return;
+      if (quitting || !decided || unreadable) return;
       const ids = new Set(live.map((r) => r.id));
       const sessions = [...live, ...queued.filter((r) => !ids.has(r.id))];
       const text = JSON.stringify({ pid: ownPid, sessions });

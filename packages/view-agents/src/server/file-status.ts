@@ -1,15 +1,17 @@
 import { statSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import type { AgentFileGit, AgentTraceStep } from '../protocol.ts';
 
 const GIT_TIMEOUT_MS = 8000;
 const MAX_FILES = 400;
+const NO_HOOKS = join(tmpdir(), 'kedalion-no-git-hooks');
 
 export type GitExec = (cwd: string, args: string[]) => Promise<string | null>;
 
 export const execGit: GitExec = async (cwd, args) => {
   try {
-    const proc = Bun.spawn(['git', '--no-optional-locks', ...args], { cwd, stdin: 'ignore', stdout: 'pipe', stderr: 'ignore', windowsHide: true });
+    const proc = Bun.spawn(['git', '--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${NO_HOOKS}`, ...args], { cwd, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, stdin: 'ignore', stdout: 'pipe', stderr: 'ignore', windowsHide: true });
     const timer = setTimeout(() => proc.kill(), GIT_TIMEOUT_MS);
     try {
       const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);

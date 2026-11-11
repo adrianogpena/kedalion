@@ -54,7 +54,12 @@ export function createTrashStore(dir: string) {
     chain = run.catch(() => {});
     return run;
   };
-  const read = async (): Promise<TrashEntry[]> => cleanEntries(await readJsonFile(manifest).catch(() => undefined));
+  const read = async (): Promise<TrashEntry[]> => cleanEntries(
+    await readJsonFile(manifest).catch((err) => {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw err;
+    }),
+  );
   const write = (entries: TrashEntry[]) => writeJsonAtomic(manifest, entries);
 
   return {

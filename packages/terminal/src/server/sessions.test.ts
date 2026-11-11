@@ -358,11 +358,11 @@ describe('session model', () => {
     for (let i = 0; i < 7000; i++) out += `line number ${i}\r\n`;
     ptys[0]!.emit(out);
     await settle();
-    const found = reg.earlier(s.id, 'line number 12');
+    const found = await reg.earlier(s.id, 'line number 12');
     expect(found.hits.some((h) => h.line === 'line number 12')).toBe(true);
     ptys[0]!.emit('wiped secret\r\n\x1b[2J\x1b[3J');
     await settle();
-    expect(reg.earlier(s.id, 'wiped secret').count).toBe(1);
+    expect((await reg.earlier(s.id, 'wiped secret')).count).toBe(1);
     reg.closeAll();
     expect(require('node:fs').existsSync(dir + `/${s.id}.txt`)).toBe(false);
   });

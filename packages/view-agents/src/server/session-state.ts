@@ -89,13 +89,15 @@ export function writeJsonSync(file: string, value: unknown): void {
 /** Per-session pin / rename / archive state kept in `file` (`{[sessionId]: {pin?, name?, archived?}}`). */
 export function createSessionStateStore(file: string): SessionStateStore {
   let items: Record<string, AgentSessionState> | undefined;
+  let unreadable = false;
   const load = () => {
     if (items) return items;
     items = Object.create(null) as Record<string, AgentSessionState>;
     let text: string;
     try {
       text = readFileSync(file, 'utf8');
-    } catch {
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException)?.code !== 'ENOENT') unreadable = true;
       return items; // no state yet
     }
     let raw: unknown;
@@ -109,7 +111,9 @@ export function createSessionStateStore(file: string): SessionStateStore {
     } else quarantine(file);
     return items;
   };
-  const save = () => writeJsonSync(file, items ?? {});
+  const save = () => {
+    if (!unreadable) writeJsonSync(file, items ?? {});
+  };
   return {
     get: (id) => load()[id],
     set(id, patch) {

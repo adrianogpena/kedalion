@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { IMarker, Terminal } from '@xterm/headless';
 import type { EarlierHit } from '../protocol.ts';
@@ -14,7 +14,7 @@ export interface Earlier {
   check(): void;
   /** Saves the unsaved rows an erase is about to lose: the scrollback's, and the screen's too unless `scrollback`. */
   flush(kind: 'screen' | 'scrollback'): void;
-  search(query: string, o?: EarlierSearch): { hits: EarlierHit[]; count: number };
+  search(query: string, o?: EarlierSearch): Promise<{ hits: EarlierHit[]; count: number }>;
   dispose(): void;
 }
 
@@ -28,6 +28,64 @@ const RECENT = 5000;
 /** A run of this many lines already kept is a redraw, not output. */
 const REPEAT_RUN = 3;
 const MIN_COMPARED = 12;
+
+const MAX_SCAN_BYTES = 8 * 1024 * 1024;
+const MAX_SCAN_LINES = 100_000;
+const SCAN_BUDGET_MS = 1000;
+const MAX_REGEX_LENGTH = 200;
+const MAX_REGEX_LINE = 300;
+/** A quantified group that holds a quantifier or an alternation, or a backreference: the shapes that backtrack without bound. */
+const NESTED_QUANTIFIER = /\((?:[^()\\]|\\.)*(?:[+*]|\{\d*,\d*\}|\|)(?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d+,?\d*\})|\\[1-9]/;
+
+const REGEX_WORKER = `
+self.onmessage = (e) => {
+  const { lines, query, caseSensitive, maxLine } = e.data;
+  const re = new RegExp(query, caseSensitive ? '' : 'i');
+  const at = [];
+  for (let i = 0; i < lines.length; i++) if (lines[i].length <= maxLine && re.test(lines[i])) at.push(i);
+  self.postMessage(at);
+};
+`;
+
+/** Indexes of the lines matching the regex, or undefined when the scan fails or runs past the budget; it runs in a Worker that is terminated, so a backtracking regex cannot freeze the server. */
+function regexScan(lines: string[], query: string, caseSensitive: boolean): Promise<number[] | undefined> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(new Blob([REGEX_WORKER], { type: 'text/javascript' }));
+    let worker: Worker;
+    try {
+      worker = new Worker(url);
+    } catch {
+      URL.revokeObjectURL(url);
+      resolve(undefined);
+      return;
+    }
+    const done = (r: number[] | undefined) => {
+      clearTimeout(timer);
+      worker.terminate();
+      URL.revokeObjectURL(url);
+      resolve(r);
+    };
+    const timer = setTimeout(() => done(undefined), SCAN_BUDGET_MS);
+    worker.addEventListener('message', (e: MessageEvent<number[]>) => done(e.data));
+    worker.addEventListener('error', () => done(undefined));
+    worker.postMessage({ lines, query, caseSensitive, maxLine: MAX_REGEX_LINE });
+  });
+}
+
+/** The last MAX_SCAN_BYTES of the file as text, starting at a line start. */
+function readTail(file: string): string {
+  const fd = openSync(file, 'r');
+  try {
+    const size = fstatSync(fd).size;
+    const start = Math.max(0, size - MAX_SCAN_BYTES);
+    const buf = Buffer.alloc(size - start);
+    readSync(fd, buf, 0, buf.length, start);
+    const text = buf.toString('utf8');
+    return start ? text.slice(text.indexOf('\n') + 1) : text;
+  } finally {
+    closeSync(fd);
+  }
+}
 
 export function createEarlier(term: Terminal, file: string, maxBytes = 20 * 1024 * 1024): Earlier {
   let marker: IMarker | undefined;
@@ -132,24 +190,30 @@ export function createEarlier(term: Terminal, file: string, maxBytes = 20 * 1024
     anchorAtScreen = true;
   };
 
-  const search = (query: string, o: EarlierSearch = {}) => {
+  const search = async (query: string, o: EarlierSearch = {}) => {
     if (!query || !existsSync(file)) return { hits: [], count: 0 };
-    let test: (line: string) => boolean;
+    let test: (line: string) => boolean = () => false;
     if (o.regex) {
-      let re: RegExp;
+      if (query.length > MAX_REGEX_LENGTH || NESTED_QUANTIFIER.test(query)) return { hits: [], count: 0 };
       try {
-        re = new RegExp(query, o.caseSensitive ? '' : 'i');
+        new RegExp(query);
       } catch {
         return { hits: [], count: 0 };
       }
-      test = (line) => re.test(line);
     } else {
       const q = o.caseSensitive ? query : query.toLowerCase();
       test = o.caseSensitive ? (line) => line.includes(q) : (line) => line.toLowerCase().includes(q);
     }
-    const lines = readFileSync(file, 'utf8').split('\n');
-    const at: number[] = [];
-    for (let i = 0; i < lines.length; i++) if (test(lines[i])) at.push(i);
+    const lines = readTail(file).split('\n');
+    if (lines.length > MAX_SCAN_LINES) lines.splice(0, lines.length - MAX_SCAN_LINES);
+    let at: number[] = [];
+    if (o.regex) {
+      const found = await regexScan(lines, query, !!o.caseSensitive);
+      if (!found) return { hits: [], count: 0 };
+      at = found;
+    } else {
+      for (let i = 0; i < lines.length; i++) if (test(lines[i])) at.push(i);
+    }
     const hits = at
       .slice(-MAX_HITS)
       .reverse()

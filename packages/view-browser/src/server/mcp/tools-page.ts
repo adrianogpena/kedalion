@@ -1,4 +1,4 @@
-import { normalizeAddress } from '../../address.ts';
+import { normalizeWebAddress } from '../../address.ts';
 import { compactUrl, decodeOperations, prettyBody, STATIC_TYPES, summarizeRequest } from '../../ops.ts';
 import { stepLogFor } from './steps.ts';
 import { bool, num, pageSession, resolveTab, runtimeEval, str, withTimeout } from './page-util.ts';
@@ -64,7 +64,12 @@ export const pageTools: McpTool[] = [
     inputSchema: schema({ url: { type: 'string', description: 'Address; a bare host gets https://.' }, newTab: { type: 'boolean', description: 'Open in a new tab.' } }, ['url']),
     async run(a, ctx) {
       await ctx.ready();
-      const url = normalizeAddress(str(a, 'url') ?? '');
+      let url: string;
+      try {
+        url = normalizeWebAddress(str(a, 'url') ?? '');
+      } catch (e) {
+        return failResult((e as Error).message);
+      }
       const wanted = str(a, 'tab');
       const target = wanted ?? ctx.service.activeTab();
       if (bool(a, 'newTab') || !target) {

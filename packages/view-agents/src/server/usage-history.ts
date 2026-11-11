@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import type { AgentAccountUsage, AgentSevenDayHistory } from '../protocol.ts';
+import { quarantine } from './session-state.ts';
 
 /** Days of history kept (older ones are dropped on each write). */
 export const HISTORY_DAYS = 9;
@@ -41,10 +42,17 @@ export function pruneHistory(h: SevenDayHistoryFile, now: number): void {
   }
 }
 
-function load(file: string): SevenDayHistoryFile {
+/** `unreadable` is set when the file could not be read (not just missing); the store then never overwrites it. */
+function load(file: string): { data: SevenDayHistoryFile; unreadable: boolean } {
+  let text: string;
   try {
-    const v: unknown = JSON.parse(readFileSync(file, 'utf8'));
-    if (!v || typeof v !== 'object') return {};
+    text = readFileSync(file, 'utf8');
+  } catch (e) {
+    return { data: {}, unreadable: (e as NodeJS.ErrnoException)?.code !== 'ENOENT' };
+  }
+  try {
+    const v: unknown = JSON.parse(text);
+    if (!v || typeof v !== 'object') return { data: {}, unreadable: false };
     const out: SevenDayHistoryFile = {};
     for (const [k, e] of Object.entries(v as Record<string, { last?: unknown; days?: unknown }>)) {
       if (!e || typeof e !== 'object') continue;
@@ -52,19 +60,20 @@ function load(file: string): SevenDayHistoryFile {
       if (e.days && typeof e.days === 'object') for (const [d, n] of Object.entries(e.days)) if (typeof n === 'number' && Number.isFinite(n)) days[d] = n;
       out[k] = { ...(typeof e.last === 'number' ? { last: e.last } : {}), days };
     }
-    return out;
+    return { data: out, unreadable: false };
   } catch {
-    return {};
+    quarantine(file);
+    return { data: {}, unreadable: false };
   }
 }
 
 /** `seven-day-history.json` store: `observe` feeds each refresh's account usage; writes (atomically) only on a change. */
 export function createSevenDayHistory(file: () => string | undefined, now: () => number = Date.now) {
-  let cache: { file: string; data: SevenDayHistoryFile } | undefined;
+  let cache: { file: string; data: SevenDayHistoryFile; unreadable: boolean } | undefined;
   const data = (): SevenDayHistoryFile | undefined => {
     const f = file();
     if (!f) return undefined;
-    if (cache?.file !== f) cache = { file: f, data: load(f) };
+    if (cache?.file !== f) cache = { file: f, ...load(f) };
     return cache.data;
   };
   return {
@@ -79,6 +88,7 @@ export function createSevenDayHistory(file: () => string | undefined, now: () =>
       }
       if (!changed) return;
       pruneHistory(h, now());
+      if (cache?.unreadable) return;
       try {
         mkdirSync(dirname(f), { recursive: true });
         const tmp = `${f}.tmp`;

@@ -4,7 +4,7 @@ import { tKey } from '../../i18n';
 import { Chip, type Tone } from '../../kit';
 import { runAction } from '../../source';
 import './github.css';
-import type { CheckState, TrackedPr } from './tracked';
+import { safeHttpUrl, type CheckState, type TrackedPr } from './tracked';
 
 export interface TrackedConfig {
   readyLabel: string | string[];
@@ -26,8 +26,8 @@ function ChecksChip({ pr }: { pr: TrackedPr }) {
         {pr.checks.details.map((d) => (
           <span key={`${d.name}-${d.state}`} className="gh-card-row">
             <Chip tone={DETAIL_TONE[d.state]}>{tKey(`dash.github.tracked.check.${d.state}`)}</Chip>
-            {d.url ? (
-              <a href={d.url} target="_blank" rel="noreferrer">
+            {safeHttpUrl(d.url) ? (
+              <a href={safeHttpUrl(d.url)}target="_blank" rel="noreferrer">
                 {d.name}
               </a>
             ) : (
