@@ -6,7 +6,8 @@ export type CdpListener = (params: any, sessionId?: string) => void;
 
 export interface CdpSession {
   send(method: string, params?: object): Promise<any>;
-  on(event: string, cb: (params: any) => void): () => void;
+  /** `frame` names the child target (iframe, worker) an event came from; unset for the page itself. */
+  on(event: string, cb: (params: any, frame?: string) => void): () => void;
 }
 
 export interface CdpClient {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { CdpSession } from '@kedalion/cdp';
-import { breakpointCondition, createDebugState } from './debug-state.ts';
+import { breakpointCondition, createDebugState, filterScripts, resolveScriptUrl, summarizeTrace } from './debug-state.ts';
 import { pageSession } from './page-util.ts';
 import { debugTools } from './tools-debug.ts';
 import type { ToolContext } from './types.ts';
@@ -81,5 +81,35 @@ describe('debugger tools', () => {
     const { ctx, tool } = setup();
     const r = await tool('browser_debugger_eval').run({ frame: 0, expression: '1' }, ctx);
     expect(r.isError).toBe(true);
+  });
+});
+
+describe('script and trace helpers', () => {
+  const list = [
+    { scriptId: '1', url: 'http://x/app.js' },
+    { scriptId: '2', url: 'http://x/vendor.js', sourceMapURL: 'vendor.js.map' },
+    { scriptId: '3', url: 'http://x/app.min.js' },
+  ];
+  test('filterScripts matches url or source map', () => {
+    expect(filterScripts(list, 'VENDOR').map((s) => s.scriptId)).toEqual(['2']);
+    expect(filterScripts(list, '.map').map((s) => s.scriptId)).toEqual(['2']);
+    expect(filterScripts(list)).toHaveLength(3);
+  });
+  test('resolveScriptUrl prefers exact, then a single partial match', () => {
+    expect(resolveScriptUrl(list, 'http://x/app.js')).toEqual({ url: 'http://x/app.js' });
+    expect(resolveScriptUrl(list, 'vendor')).toEqual({ url: 'http://x/vendor.js' });
+    expect('error' in resolveScriptUrl(list, 'app')).toBe(true);
+    expect(resolveScriptUrl(list, 'nope.js')).toEqual({ url: 'nope.js' });
+  });
+  test('summarizeTrace lists the longest tasks and the LCP', () => {
+    const s = summarizeTrace([
+      { name: 'navigationStart', ts: 1_000_000 },
+      { name: 'RunTask', ph: 'X', ts: 1_100_000, dur: 80_000 },
+      { name: 'RunTask', ph: 'X', ts: 1_300_000, dur: 120_000 },
+      { name: 'RunTask', ph: 'X', ts: 1_400_000, dur: 10_000 },
+      { name: 'largestContentfulPaint::Candidate', ts: 1_900_000 },
+    ]);
+    expect(s.longTasks).toEqual([{ durMs: 120, atMs: 300 }, { durMs: 80, atMs: 100 }]);
+    expect(s.lcpMs).toBe(900);
   });
 });

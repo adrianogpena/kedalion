@@ -1,5 +1,5 @@
 import { defineServerView, type ServerViewContext, socketTickets } from '@kedalion/server-core';
-import { createMcpConfigFile, loadMcpSecret } from './server/mcp/config.ts';
+import { createMcpConfigFile, loadMcpSecret, regenerateMcpSecret } from './server/mcp/config.ts';
 import { createDebugState } from './server/mcp/debug-state.ts';
 import { MCP_INSTRUCTIONS } from './server/mcp/instructions.ts';
 import { mcpRoutes } from './server/mcp/rpc.ts';
@@ -35,8 +35,9 @@ export function browserServerView(opts: BrowserServerViewOptions) {
   let load: (() => Promise<BrowserServerSettings>) | undefined;
   const service: BrowserService = createBrowserService({ ...opts, settings: () => current });
   const tickets = socketTickets<true>();
-  const secret = loadMcpSecret(opts.dataDir);
-  const mcpFile = createMcpConfigFile({ dataDir: opts.dataDir, secret, origin: opts.origin });
+  let secret = loadMcpSecret(opts.dataDir);
+  const currentSecret = () => secret;
+  const mcpFile = createMcpConfigFile({ dataDir: opts.dataDir, secret: currentSecret, origin: opts.origin });
   const debug = createDebugState();
   const tools = [...pageTools, ...actTools,...stateTools, ...debugTools, ...stepTools];
   const refresh = async () => {
@@ -57,12 +58,17 @@ export function browserServerView(opts: BrowserServerViewOptions) {
     icon: 'globe',
     routes: (ctx) => {
       bind(ctx);
-      return browserRoutes({ service, ready, issueTicket: () => tickets.issue(true), mcpConfig: () => mcpFile.config() });
+      return browserRoutes({ service, ready, issueTicket: () => tickets.issue(true), mcpConfig: () => mcpFile.config(),
+        regenerateSecret: () => {
+          secret = regenerateMcpSecret(opts.dataDir);
+          if (current.agentTools) mcpFile.write();
+        },
+      });
     },
     unauthenticated: (ctx) => {
       bind(ctx);
       return mcpRoutes({
-        secret,
+        secret: currentSecret,
         tools,
         instructions: MCP_INSTRUCTIONS,
         context: () => ({ service, ready, dataDir: opts.dataDir, debug }),

@@ -4,6 +4,7 @@ import type { Emulation, InterceptRule, StorageItem, StorageKind, TabInfo } from
 /** The server calls the Browser screen makes; the live state (frames, tabs, dialogs) comes over the socket. */
 export interface BrowserClient {
   socketTicket: () => Promise<{ ticket: string }>;
+  regenerateMcpSecret: () => Promise<unknown>;
   openTab: (url?: string) => Promise<{ tab: TabInfo }>;
   closeTab: (id: string) => Promise<unknown>;
   navigate: (id: string, input: { url: string } | { action: 'back' | 'forward' | 'reload' | 'stop' }) => Promise<unknown>;
@@ -61,6 +62,7 @@ export interface BrowserCookie {
 
 export const browserClient: BrowserClient = {
   socketTicket: () => request<{ ticket: string }>('POST', '/api/browser/socket-ticket'),
+  regenerateMcpSecret: () => request('POST', '/api/browser/mcp-secret/regenerate', {}, {}),
   openTab: (url) => request<{ tab: TabInfo }>('POST', '/api/browser/tabs', {}, url === undefined ? {} : { url }),
   closeTab: (id) => request('POST', '/api/browser/tabs/close', {}, { id }),
   navigate: (id, input) => request('POST', '/api/browser/navigate', {}, { id, ...input }),

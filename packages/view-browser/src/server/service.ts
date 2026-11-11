@@ -1,11 +1,12 @@
 import { mkdirSync } from 'node:fs';
-import { readFile, rename } from 'node:fs/promises';
+import { copyFile, link, readFile, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 import {
   answerDialog,
-  applyCertPolicy,
   applyEmulation,
+  isLocalHost,
+  watchCertificateErrors,
   type BrowserTabs,
   type CdpClient,
   type CdpSession,
@@ -115,7 +116,7 @@ export interface BrowserService {
   open(url?: string): Promise<TabInfo>;
   close(id: string): Promise<void>;
   activate(id: string): Promise<void>;
-  navigate(id: string, url: string): Promise<void>;
+  navigate(id: string, url: string): Promise<string | undefined>;
   action(id: string, action: 'back' | 'forward' | 'reload' | 'stop'): Promise<void>;
   evaluate(id: string, expression: string): Promise<EvalResult>;
   /** URL of the DevTools frontend of a tab (frameable). */
@@ -231,7 +232,8 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
       const urls = Array.isArray(raw.tabs) ? raw.tabs.filter((u): u is string => typeof u === 'string' && u.length > 0) : [];
       const active = Number(raw.active);
       return { urls, active: Number.isInteger(active) && active >= 0 && active < urls.length ? active : urls.length - 1 };
-    } catch {
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') await copyFile(tabsFile, `${tabsFile}.bak`).catch(() => undefined);
       return { urls: [], active: -1 };
     }
   }
@@ -249,7 +251,8 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     );
   }
 
-  function attachTab(id: string, session: CdpSession): void {
+  async function attachTab(id: string, session: CdpSession): Promise<void> {
+    const offCert = await watchCertificateErrors(session, () => opts.settings().ignoreLocalCertErrors);
     const consoleLog = createConsoleLog(session, {});
     const network = createNetworkLog(session, {});
     consoleLog.on('entry', (e) => emit({ type: 'console', tab: id, entries: [e] }));
@@ -262,7 +265,7 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
         emit({ type: 'fileChooser', tab: id, id: chooserId, multiple: f.multiple });
       },
     });
-    perTab.set(id, { console: consoleLog, network, offPage, interceptor: createInterceptor(session, rules) });
+    perTab.set(id, { console: consoleLog, network, offPage: () => { offCert(); offPage(); }, interceptor: createInterceptor(session, rules) });
   }
 
   function dropTab(id: string): void {
@@ -278,8 +281,12 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     for (const [k, v] of selects) if (v.tab === id) selects.delete(k);
   }
 
-  async function certPolicy(url: string): Promise<void> {
-    if (client) await applyCertPolicy(client, url, opts.settings().ignoreLocalCertErrors).catch(() => false);
+  /** Opens a tab; a local address loads after the tab's certificate handler is in place, so the first load is covered. */
+  async function openTab(t: BrowserTabs, url: string, activate: boolean) {
+    if (!isLocalHost(url)) return t.open(url, { activate });
+    const tab = await t.open('about:blank', { activate });
+    await t.navigate(tab.id, url);
+    return tab;
   }
 
   function reset(): void {
@@ -326,20 +333,36 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
           emit(snapshotMsg());
           scheduleSave();
         }),
-        t.on('activated', (id) => {
+        t.on('activated', () => {
           emit(snapshotMsg());
           restartFrames();
           scheduleSave();
-          const url = t.list().find((x) => x.id === id)?.url;
-          if (url) void certPolicy(url);
         }),
         await watchDownloads(cdp, { downloadPath: downloadsDir }, (e) => {
           void (async () => {
-            const name = e.suggestedFilename || e.guid;
+            let name = basename(e.suggestedFilename || '').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim();
+            if (!name || name === '.' || name === '..') name = e.guid;
             if (e.state === 'started') emit({ type: 'download', name, path: e.path, done: false });
             else if (e.state === 'completed') {
-              const target = await uniquePath(downloadsDir, name, (p) => Bun.file(p).exists());
-              await rename(e.path, target).catch(() => undefined);
+              let target = e.path;
+              try {
+                const taken = (p: string) => Bun.file(p).exists();
+                let moved = false;
+                for (let i = 0; i < 5 && !moved; i++) {
+                  const candidate = await uniquePath(downloadsDir, name, taken);
+                  if (!resolve(candidate).startsWith(resolve(downloadsDir) + sep)) throw new Error('download path escapes the folder');
+                  try {
+                    await link(e.path, candidate);
+                    await unlink(e.path).catch(() => undefined);
+                    target = candidate;
+                    moved = true;
+                  } catch (err) {
+                    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+                  }
+                }
+              } catch {
+                target = e.path;
+              }
               emit({ type: 'download', name, path: target, done: true });
             }
           })();
@@ -351,9 +374,8 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
         else reset();
       });
       if (saved.urls.length) {
-        await certPolicy(saved.urls[saved.active] ?? '');
         const ids: string[] = [];
-        for (const url of saved.urls) ids.push((await t.open(url, { activate: false })).id);
+        for (const url of saved.urls) ids.push((await openTab(t, url, false)).id);
         for (const id of preexisting) await t.close(id).catch(() => undefined);
         if (ids[saved.active]) await t.activate(ids[saved.active]!);
       } else if (t.list().length === 0) {
@@ -383,17 +405,13 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     activeTab: () => tabs?.active(),
     async open(url) {
       const target = url ?? opts.settings().home;
-      await certPolicy(target);
-      return requireTabs().open(target, { activate: true });
+      return openTab(requireTabs(), target, true);
     },
     close: (id) => requireTabs().close(id),
     async activate(id) {
       await requireTabs().activate(id);
     },
-    async navigate(id, url) {
-      await certPolicy(url);
-      await requireTabs().navigate(id, url);
-    },
+    navigate: (id, url) => requireTabs().navigate(id, url),
     async action(id, action) {
       await requireTabs()[action](id);
     },

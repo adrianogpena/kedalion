@@ -22,7 +22,8 @@ export interface BrowserTabs {
   open(url: string, opts?: { activate?: boolean }): Promise<TabInfo>;
   close(id: string): Promise<void>;
   activate(id: string): Promise<void>;
-  navigate(id: string, url: string): Promise<void>;
+  /** Resolves with the navigation errorText (e.g. net::ERR_NAME_NOT_RESOLVED) when the load failed to start. */
+  navigate(id: string, url: string): Promise<string | undefined>;
   back(id: string): Promise<void>;
   forward(id: string): Promise<void>;
   reload(id: string): Promise<void>;
@@ -36,9 +37,16 @@ export interface BrowserTabs {
 interface Tab {
   info: TabInfo;
   sessionId: string;
+  /** Listeners to drop when the tab closes. */
+  cleanup?: (() => void)[];
+  /** Child sessions (iframes, workers) by session id, with a display label. */
+  children?: Map<string, string>;
 }
 
 const ENABLE = ['Page.enable', 'Runtime.enable', 'Network.enable', 'Log.enable', 'DOM.enable'];
+const CHILD_ENABLE = ['Runtime.enable', 'Network.enable', 'Log.enable'];
+/** Events of child sessions that are fed to the tab's logs. */
+const CHILD_EVENT = /^(Network\.|Runtime\.(consoleAPICalled|exceptionThrown)$|Log\.entryAdded$)/;
 
 export async function createTabs(client: CdpClient, opts: TabsOptions = {}): Promise<BrowserTabs> {
   const tabs = new Map<string, Tab>();
@@ -95,8 +103,33 @@ export async function createTabs(client: CdpClient, opts: TabsOptions = {}): Pro
       };
       tabs.set(id, tab);
       bySession.set(sessionId, tab);
+      const children = new Map<string, string>();
+      const quiet = (m: string, params: object, sid: string) => client.send(m, params, sid).catch(() => undefined);
+      const autoAttach = (sid: string) => quiet('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, sid);
+      tab.cleanup = [
+        client.on('Target.attachedToTarget', (p, sid) => {
+          if (!sid || (sid !== sessionId && !children.has(sid))) return;
+          const child: string | undefined = p?.sessionId;
+          if (!child || children.has(child)) return;
+          children.set(child, `${p.targetInfo?.type ?? 'target'} ${p.targetInfo?.url ?? ''}`.trim());
+          void Promise.all([...CHILD_ENABLE.map((m) => quiet(m, {}, child)), autoAttach(child), p.waitingForDebugger ? quiet('Runtime.runIfWaitingForDebugger', {}, child) : undefined]);
+        }),
+        client.on('Target.detachedFromTarget', (p) => {
+          if (p?.sessionId) children.delete(p.sessionId);
+        }),
+      ];
+      tab.children = children;
       await Promise.all(ENABLE.map((m) => client.send(m, {}, sessionId).catch(() => undefined)));
-      await opts.onAttach?.(id, client.session(sessionId));
+      const pageSession: CdpSession = {
+        send: (m, params) => client.send(m, params, sessionId),
+        on: (event, cb) =>
+          client.on(event, (params, sid) => {
+            if (sid === sessionId) cb(params);
+            else if (sid && CHILD_EVENT.test(event) && children.has(sid)) cb(params, children.get(sid));
+          }),
+      };
+      await opts.onAttach?.(id, pageSession);
+      void autoAttach(sessionId);
       await refreshHistory(tab);
       emit('tab', snapshot(tab));
       if (!activeId || targetInfo.openerId) setActive(id);
@@ -115,6 +148,9 @@ export async function createTabs(client: CdpClient, opts: TabsOptions = {}): Pro
     if (!tab) return;
     tabs.delete(id);
     bySession.delete(tab.sessionId);
+    for (const off of tab.cleanup ?? []) off();
+    tab.cleanup = undefined;
+    tab.children?.clear();
     emit('closed', id);
     if (activeId === id) {
       activeId = undefined;
@@ -180,7 +216,8 @@ export async function createTabs(client: CdpClient, opts: TabsOptions = {}): Pro
       setActive(id);
     },
     async navigate(id, url) {
-      await client.send('Page.navigate', { url }, get(id).sessionId);
+      const r = await client.send('Page.navigate', { url }, get(id).sessionId);
+      return typeof r?.errorText === 'string' && r.errorText ? r.errorText : undefined;
     },
     back: (id) => step(id, -1),
     forward: (id) => step(id, 1),

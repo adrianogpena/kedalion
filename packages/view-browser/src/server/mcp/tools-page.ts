@@ -4,7 +4,9 @@ import { stepLogFor } from './steps.ts';
 import { bool, num, pageSession, resolveTab, runtimeEval, str, withTimeout } from './page-util.ts';
 import { PAGE_LIB } from './page-lib.ts';
 import { DEFAULT_SNAPSHOT_CHARS, type PageSnapshot, renderSnapshot, SNAPSHOT_SECTIONS, type SnapshotSection } from './snapshot.ts';
-import { failResult, type McpTool, textResult, type ToolSchema } from './types.ts';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve, sep } from 'node:path';
+import { failResult, type McpTool, textResult, type ToolContext, type ToolSchema } from './types.ts';
 
 const TAB = { type: 'string', description: 'Tab id from browser_tabs; default the active tab.' } as const;
 const schema = (properties: ToolSchema['properties'], required: string[] = []): ToolSchema => ({
@@ -44,7 +46,23 @@ function sliceBody(body: string, note: string, offset: number, limit: number, gr
   return `Response body${note}:\n${body.slice(start, end)}${tail}`;
 }
 
-const tabLine = (t: { id: string; title: string; url: string; loading: boolean }, active: boolean) => `${active ? '*' : ' '} ${t.id}  ${t.title || '(untitled)'}  ${t.url}${t.loading ? '  (loading)' : ''}`;
+/** Waits (up to `ms`) for the main-document request after `since` and returns its failure text, if it failed. */
+async function navFailure(ctx: ToolContext, tab: string, since: number, ms = 2000): Promise<string | undefined> {
+  const logs = ctx.service.logs(tab);
+  if (!logs) return undefined;
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const main = logs.network.entries({ since, filter: { type: 'document' } }).at(-1);
+    if (main?.failed && main.failed !== 'canceled') return main.failed;
+    if (main?.done) return undefined;
+    if (Date.now() >= deadline) return undefined;
+    await new Promise((res) => setTimeout(res, 100));
+  }
+}
+
+const lastNetworkId = (ctx: ToolContext, tab: string): number => ctx.service.logs(tab)?.network.entries({ limit: 1 }).at(-1)?.id ?? 0;
+
+const tabLine =(t: { id: string; title: string; url: string; loading: boolean }, active: boolean) => `${active ? '*' : ' '} ${t.id}  ${t.title || '(untitled)'}  ${t.url}${t.loading ? '  (loading)' : ''}`;
 
 export const pageTools: McpTool[] = [
   {
@@ -74,10 +92,14 @@ export const pageTools: McpTool[] = [
       const target = wanted ?? ctx.service.activeTab();
       if (bool(a, 'newTab') || !target) {
         const t = await ctx.service.open(url);
+        const failed = await navFailure(ctx, t.id, 0);
+        if (failed) return failResult(`Navigation failed: ${failed} (tab ${t.id}, ${url})`);
         return textResult(`Opened ${t.url} in tab ${t.id}`);
       }
       const tab = await resolveTab(ctx, { tab: target });
-      await ctx.service.navigate(tab, url);
+      const since = lastNetworkId(ctx, tab);
+      const navError = (await ctx.service.navigate(tab, url)) ?? (await navFailure(ctx, tab, since));
+      if (navError) return failResult(`Navigation failed: ${navError}`);
       return textResult(`Navigating tab ${tab} to ${url}`);
     },
   },
@@ -87,7 +109,12 @@ export const pageTools: McpTool[] = [
     inputSchema: schema({ action: { type: 'string', enum: ['back', 'forward', 'reload', 'stop'] } }, ['action']),
     async run(a, ctx) {
       const tab = await resolveTab(ctx, a);
+      const since = lastNetworkId(ctx, tab);
       await ctx.service.action(tab, a.action as 'back' | 'forward' | 'reload' | 'stop');
+      if (a.action !== 'stop') {
+        const failed = await navFailure(ctx, tab, since);
+        if (failed) return failResult(`Navigation failed: ${failed}`);
+      }
       return textResult(`${a.action} done on tab ${tab}`);
     },
   },
@@ -162,7 +189,7 @@ export const pageTools: McpTool[] = [
         filter: { ...(level ? { level } : {}), ...(text ? { text } : {}) },
       });
       if (!entries.length) return textResult('No console messages.');
-      const lines = entries.map((e) => `#${e.id} [${e.level}] ${e.text}${e.source ? `  (${e.source.url}:${e.source.line})` : ''}`);
+      const lines = entries.map((e) => `#${e.id} [${e.level}]${e.frame ? ` {${e.frame}}` : ''} ${e.text}${e.source ? `  (${e.source.url}:${e.source.line})` : ''}${e.stack ? `\n${e.stack.split('\n').map((l) => `    ${l}`).join('\n')}` : ''}`);
       return textResult(lines.join('\n'), 'Pass a smaller limit, or since=<last id> for newer messages.');
     },
   },
@@ -224,7 +251,7 @@ export const pageTools: McpTool[] = [
       const lines = page.map((e) => {
         const ops = summarizeRequest({ url: e.url, postData: rec(e.id)?.postData });
         const age = !e.done && e.startedAt !== undefined ? `  pending ${Math.round((now - e.startedAt) / 1000)}s` : '';
-        return `#${e.id} ${e.method} ${e.status ?? (e.failed ? 'FAILED' : '...')} ${e.type ?? ''} ${compact ? compactUrl(e.url) : e.url}${e.failed ? `  (${e.failed})` : ''}${e.timing !== undefined ? `  ${Math.round(e.timing)}ms` : ''}${age}${ops ? `  | ${ops}` : ''}`;
+        return `#${e.id} ${e.method} ${e.status ?? (e.failed ? 'FAILED' : '...')} ${e.type ?? ''} ${compact ? compactUrl(e.url) : e.url}${e.failed ? `  (${e.failed})` : ''}${e.fromCache ? '  (cache)' : ''}${e.frame ? `  {${e.frame}}` : ''}${e.timing !== undefined ? `  ${Math.round(e.timing)}ms` : ''}${age}${ops ? `  | ${ops}` : ''}`;
       });
       const more = offset + page.length < all.length ? `\n... ${all.length - offset - page.length} more; pass offset=${offset + page.length}` : '';
       const note = hidden ? `\n(${hidden} static requests hidden by compact)` : '';
@@ -241,6 +268,7 @@ export const pageTools: McpTool[] = [
         bodyOffset: { type: 'integer', description: 'Response body: first character to show, default 0.' },
         bodyLimit: { type: 'integer', description: `Response body: characters to show, default ${BODY_SLICE}, max ${BODY_SLICE_MAX}.` },
         grep: { type: 'string', description: 'Response body: only the lines containing this text (case-insensitive), with 2 lines of context.' },
+        saveBody: { type: 'boolean', description: 'Write the whole decoded response body to a file in the view data folder (bodies/<id>) and return its path.' },
       },
       ['id'],
     ),
@@ -248,8 +276,19 @@ export const pageTools: McpTool[] = [
       const tab = await resolveTab(ctx, a);
       const logs = ctx.service.logs(tab);
       if (!logs) return failResult(`Unknown tab: ${tab}`);
-      const d = await logs.network.detail(a.id as number);
+      const save = bool(a, 'saveBody');
+      const d = await logs.network.detail(a.id as number, { full: save });
       if (!d) return failResult(`No request with id ${a.id}`);
+      if (save) {
+        if (d.body === undefined) return failResult(`Request ${a.id} has no response body to save.`);
+        const dir = resolve(ctx.dataDir, 'bodies');
+        const file = resolve(dir, String(Math.trunc(Number(a.id))).replace(/[^0-9]/g, '') || '0');
+        if (!file.startsWith(dir + sep)) return failResult('Invalid id.');
+        await mkdir(dir, { recursive: true });
+        const data = d.base64 ? Buffer.from(d.body, 'base64') : d.body;
+        await writeFile(file, data);
+        return textResult(`Saved response body of #${a.id} (${d.mime ?? 'unknown type'}, ${typeof data === 'string' ? Buffer.byteLength(data) : data.length} bytes) to ${file}`);
+      }
       const headers = (h: Record<string, string>) => Object.entries(h).map(([k, v]) => `${k}: ${v}`).join('\n');
       const parts = [`Request headers:\n${headers(d.requestHeaders)}`, `Response headers:\n${headers(d.responseHeaders)}`];
       if (d.postData) {
@@ -264,8 +303,13 @@ export const pageTools: McpTool[] = [
         }
       }
       if (d.body !== undefined) {
-        if (d.base64) parts.push(`Response body: binary, ${d.body.length} base64 chars (not shown)`);
+        if (d.base64) parts.push(`Response body: binary ${d.mime ?? 'unknown type'}, ${d.bodyBytes ?? Math.floor((d.body.length * 3) / 4)} bytes${d.truncated ? ' (cut)' : ''}; not shown, pass saveBody=true to write it to a file`);
         else parts.push(sliceBody(d.body, d.truncated ? ' (truncated by the app)' : '', num(a, 'bodyOffset') ?? 0, num(a, 'bodyLimit') ?? BODY_SLICE, str(a, 'grep')));
+      }
+      if (d.blockedCookies?.length) parts.push(`Blocked cookies:\n${d.blockedCookies.join('\n')}`);
+      if (d.frames) {
+        const f = d.frames;
+        parts.push(`Frames (${f.length}, newest last; payload cut at 4 KB):\n${f.map((x, i) => `${i + 1}. ${x.dir === 'sent' ? '>>' : '<<'} ${x.opcode} ${x.payload.length > 300 ? `${x.payload.slice(0, 300)}...` : x.payload}`).join('\n')}`);
       }
       return textResult(parts.join('\n\n'), 'Output is cut; use bodyOffset/bodyLimit or grep to read the response body in parts.');
     },
@@ -318,7 +362,7 @@ export const pageTools: McpTool[] = [
       expression: { type: 'string' },
       awaitPromise: { type: 'boolean', description: 'Wait for a returned promise, default true.' },
       timeoutMs: { type: 'integer', description: 'Default 10000.' },
-    }),
+    }, ['expression']),
     async run(a, ctx) {
       const { session } = await pageSession(ctx, a);
       const r = await runtimeEval(session, a.expression as string, { awaitPromise: a.awaitPromise !== false, ...(num(a, 'timeoutMs') ? { timeoutMs: num(a, 'timeoutMs')! } : {}) });

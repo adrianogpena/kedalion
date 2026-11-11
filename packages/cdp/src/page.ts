@@ -138,9 +138,23 @@ export function isLocalHost(url: string): boolean {
   }
 }
 
-/** Certificate errors are ignored only for localhost / 127.0.0.1 pages and only when the setting is on. */
-export async function applyCertPolicy(client: CdpClient, url: string, ignoreLocalCertErrors: boolean): Promise<boolean> {
-  const ignore = ignoreLocalCertErrors && isLocalHost(url);
-  await client.send('Security.setIgnoreCertificateErrors', { ignore });
-  return ignore;
+/** A certificate error is continued only for a localhost / 127.0.0.1 / ::1 request and only when the setting is on. */
+export function certificateAction(url: string, ignoreLocalCertErrors: boolean): 'continue' | 'cancel' {
+  return ignoreLocalCertErrors && isLocalHost(url) ? 'continue' : 'cancel';
+}
+
+/** Takes over the certificate errors of one tab: each is decided per request URL by `certificateAction`. Returns the stop function. */
+export async function watchCertificateErrors(session: CdpSession, ignoreLocalCertErrors: () => boolean): Promise<() => void> {
+  const off = session.on('Security.certificateError', (p) => {
+    const action = certificateAction(String(p.requestURL ?? ''), ignoreLocalCertErrors());
+    void session.send('Security.handleCertificateError', { eventId: p.eventId, action }).catch(() => undefined);
+  });
+  await session
+    .send('Security.enable')
+    .then(() => session.send('Security.setOverrideCertificateErrors', { override: true }))
+    .catch(() => undefined);
+  return () => {
+    off();
+    void session.send('Security.setOverrideCertificateErrors', { override: false }).catch(() => undefined);
+  };
 }

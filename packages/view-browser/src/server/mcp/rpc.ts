@@ -132,7 +132,7 @@ export async function handleRpc(msg: unknown, tools: readonly McpTool[], ctx: ()
 }
 
 export interface McpRouteOptions {
-  secret: string;
+  secret: string | (() => string);
   tools: readonly McpTool[];
   context: () => ToolContext;
   /** Shown to the client in the `initialize` reply. */
@@ -144,10 +144,10 @@ export interface McpRouteOptions {
 const jsonResponse = (status: number, body?: unknown, headers: Record<string, string> = {}): Response =>
   new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers } });
 
-function bearerOk(req: Request, secret: string): boolean {
+function bearerOk(req: Request, secret: string | (() => string)): boolean {
   const header = req.headers.get('authorization') ?? '';
   const given = Buffer.from(header.startsWith('Bearer ') ? header.slice(7) : '');
-  const want = Buffer.from(secret);
+  const want = Buffer.from(typeof secret === 'function' ? secret() : secret);
   return given.length === want.length && timingSafeEqual(given, want);
 }
 

@@ -20,5 +20,6 @@ export const browserSettingDefs: SettingDef<BrowserViewSettings>[] = [
   groupField<BrowserViewSettings, 'browser'>('browser', 'executable', 10, str('')),
   groupField<BrowserViewSettings, 'browser'>('browser', 'ignoreLocalCertErrors', 20, bool(false)),
   groupField<BrowserViewSettings, 'browser'>('browser', 'agentTools', 30, bool(true)),
+  { id: 'browser.regenerateSecret', kind: 'custom', section: ['browser'], order: 35, label: 'settings.browser.regenerateSecret', description: 'settings.browser.regenerateSecret.hint', default: null },
   groupField<BrowserViewSettings, 'browser'>('browser', 'home', 40, str('about:blank')),
 ];

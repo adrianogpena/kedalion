@@ -132,7 +132,7 @@ test('detail fetches post data and the body, flagging base64', async () => {
   const log = createNetworkLog(session);
   emit(client, 'Network.requestWillBeSent', { requestId: 'r1', timestamp: 1, request: { url: 'http://x/', method: 'POST', headers: { h: 'v' }, hasPostData: true } });
   emit(client, 'Network.loadingFinished', { requestId: 'r1', timestamp: 2, encodedDataLength: 3 });
-  expect(await log.detail(1)).toEqual({ requestHeaders: { h: 'v' }, responseHeaders: {}, postData: 'a=1', body: 'AAEC', base64: true });
+  expect(await log.detail(1)).toEqual({ requestHeaders: { h: 'v' }, responseHeaders: {}, postData: 'a=1', body: 'AAEC', base64: true, bodyBytes: 3 });
   expect(await log.detail(99)).toBeUndefined();
 });
 
@@ -145,4 +145,24 @@ test('detail truncates text bodies over 1 MB', async () => {
   const d = await log.detail(1);
   expect(d!.truncated).toBe(true);
   expect(d!.body).toHaveLength(1024 * 1024);
+});
+
+test('network records websocket frames, cache hits and extra info', async () => {
+  const { client, session } = setup();
+  const net = createNetworkLog(session);
+  emit(client, 'Network.webSocketCreated', { requestId: 'w', url: 'ws://x/s' });
+  emit(client, 'Network.webSocketFrameSent', { requestId: 'w', timestamp: 1, response: { opcode: 1, payloadData: 'hi' } });
+  emit(client, 'Network.webSocketFrameReceived', { requestId: 'w', timestamp: 2, response: { opcode: 1, payloadData: 'yo' } });
+  const ws = net.entries()[0]!;
+  expect((await net.detail(ws.id))?.frames?.map((f) => `${f.dir}:${f.payload}`)).toEqual(['sent:hi', 'recv:yo']);
+  emit(client, 'Network.webSocketClosed', { requestId: 'w', timestamp: 3 });
+  expect(net.entries()[0]!.done).toBe(true);
+
+  emit(client, 'Network.responseReceivedExtraInfo', { requestId: 'r', headers: { 'set-cookie': 'a=1' }, blockedCookies: [{ blockedReasons: ['SameSiteLax'], cookie: { name: 'a' } }] });
+  emit(client, 'Network.requestWillBeSent', { requestId: 'r', timestamp: 1, request: { method: 'GET', url: 'http://x/a', headers: { A: '1' } } });
+  emit(client, 'Network.requestServedFromCache', { requestId: 'r' });
+  const d = await net.detail(net.entries()[1]!.id);
+  expect(net.entries()[1]!.fromCache).toBe(true);
+  expect(d?.responseHeaders['set-cookie']).toBe('a=1');
+  expect(d?.blockedCookies).toEqual(['response cookie a: SameSiteLax']);
 });

@@ -11,8 +11,9 @@ export interface ToolResult {
 }
 
 export interface ToolProp {
-  type: 'string' | 'number' | 'integer' | 'boolean';
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'object';
   description?: string;
+  additionalProperties?: { type: 'string' };
   enum?: readonly string[];
 }
 

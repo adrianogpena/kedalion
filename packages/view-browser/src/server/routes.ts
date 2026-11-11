@@ -22,9 +22,11 @@ export interface BrowserRouteOptions {
   issueTicket(): string;
   /** The `--mcp-config` content, or undefined while the app origin is not known. */
   mcpConfig(): unknown;
+  /** Replaces the MCP bearer secret and rewrites `mcp.json`; the old secret stops working. */
+  regenerateSecret(): void;
 }
 
-export function browserRoutes({ service, ready, issueTicket, mcpConfig }: BrowserRouteOptions): Routes {
+export function browserRoutes({ service, ready, issueTicket, mcpConfig, regenerateSecret }: BrowserRouteOptions): Routes {
   const tabList = () => ({ tabs: service.tabs().list(), active: service.activeTab() ?? null });
   const logsOf = (tab: string) => {
     const l = service.logs(tab);
@@ -213,8 +215,19 @@ export function browserRoutes({ service, ready, issueTicket, mcpConfig }: Browse
     'POST /api/browser/rules': async ({ json }) => {
       const b = await json<{ rules?: unknown }>();
       if (!Array.isArray(b.rules) || b.rules.length > MAX_RULES) throw bad();
+      await ready();
+      const existing = new Map(service.rules().map((x) => [x.id, x]));
       const rules: InterceptRule[] = b.rules.map((r: Record<string, unknown>) => {
-        if (!r || typeof r !== 'object' || typeof r.id !== 'string' || typeof r.pattern !== 'string' || (r.action !== 'block' && r.action !== 'mock')) throw bad();
+        const old = typeof r?.id === 'string' ? existing.get(r.id) : undefined;
+        if (!r || typeof r !== 'object' || typeof r.id !== 'string' || typeof r.pattern !== 'string' || (r.action !== 'block' && r.action !== 'mock' && r.action !== 'modify')) throw bad();
+        const delayRaw = 'delayMs' in r ? r.delayMs : old?.delayMs;
+        const delayMs = typeof delayRaw === 'number' && Number.isFinite(delayRaw) && delayRaw > 0 ? Math.min(Math.round(delayRaw), 60_000) : undefined;
+        const headersRaw = 'headers' in r ? r.headers : old?.headers;
+        const headers =
+          headersRaw && typeof headersRaw === 'object'
+            ? Object.fromEntries(Object.entries(headersRaw as Record<string, unknown>).filter(([k, v]) => k && typeof v === 'string') as [string, string][])
+            : undefined;
+        const hits = old?.hits ?? (typeof r.hits === 'number' ? r.hits : undefined);
         const status = typeof r.status === 'number' && Number.isInteger(r.status) && r.status >= 100 && r.status <= 599 ? r.status : undefined;
         return {
           id: r.id,
@@ -224,9 +237,11 @@ export function browserRoutes({ service, ready, issueTicket, mcpConfig }: Browse
           ...(status ? { status } : {}),
           ...(typeof r.contentType === 'string' && r.contentType ? { contentType: r.contentType } : {}),
           ...(typeof r.body === 'string' ? { body: r.body } : {}),
+          ...(delayMs ? { delayMs } : {}),
+          ...(headers && Object.keys(headers).length ? { headers } : {}),
+          ...(hits !== undefined ? { hits } : {}),
         };
       });
-      await ready();
       service.setRules(rules);
       return { rules };
     },
@@ -257,6 +272,11 @@ export function browserRoutes({ service, ready, issueTicket, mcpConfig }: Browse
         ...(timezone ? { timezone } : {}),
       };
       await ready();
+      const current = service.emulation(tab);
+      const cacheDisabled = 'cacheDisabled' in e ? e.cacheDisabled === true : current.cacheDisabled === true;
+      const network = 'network' in e ? e.network : current.network;
+      if (cacheDisabled) emulation.cacheDisabled = true;
+      if (network === 'offline' || network === 'slow3g' || network === 'fast3g') emulation.network = network;
       await service.setEmulation(tab, emulation);
       return { emulation };
     },
@@ -289,6 +309,10 @@ export function browserRoutes({ service, ready, issueTicket, mcpConfig }: Browse
       return { ok: true };
     },
     'POST /api/browser/socket-ticket': () => ({ ticket: issueTicket() }),
+    'POST /api/browser/mcp-secret/regenerate': () => {
+      regenerateSecret();
+      return { ok: true };
+    },
     'GET /api/browser/mcp-config': () => {
       const config = mcpConfig();
       if (!config) throw invalid('notFound', 'The app address is not known yet.');

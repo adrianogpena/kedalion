@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { createFakeClient } from './fake.ts';
-import { answerDialog, applyCertPolicy, chooseOption, isLocalHost, selectAt, setFiles, watchDownloads, watchPage } from './page.ts';
+import { answerDialog, certificateAction, chooseOption, isLocalHost, selectAt, setFiles, watchCertificateErrors, watchDownloads, watchPage } from './page.ts';
 
 test('selectAt returns the select node and its options', async () => {
   const options = [{ value: 'a', label: 'A', selected: true, disabled: false }];
@@ -83,13 +83,29 @@ test('watchDownloads sets allowAndName and reports lifecycle', async () => {
 });
 
 test('certificate errors are ignored only for local hosts when enabled', async () => {
-  const client = createFakeClient();
   expect(isLocalHost('https://localhost:5173/x')).toBe(true);
   expect(isLocalHost('https://127.0.0.1/')).toBe(true);
   expect(isLocalHost('https://example.com/')).toBe(false);
   expect(isLocalHost('not a url')).toBe(false);
-  expect(await applyCertPolicy(client, 'https://localhost/', true)).toBe(true);
-  expect(await applyCertPolicy(client, 'https://localhost/', false)).toBe(false);
-  expect(await applyCertPolicy(client, 'https://example.com/', true)).toBe(false);
-  expect(client.calls.map((c) => c.params.ignore)).toEqual([true, false, false]);
+  expect(certificateAction('https://localhost/', true)).toBe('continue');
+  expect(certificateAction('https://localhost/', false)).toBe('cancel');
+  expect(certificateAction('https://example.com/', true)).toBe('cancel');
+});
+
+test('watchCertificateErrors overrides the errors and answers each by request URL', async () => {
+  const client = createFakeClient();
+  let on = true;
+  const stop = await watchCertificateErrors(client.session('s'), () => on);
+  expect(client.calls.map((c) => c.method)).toContain('Security.setOverrideCertificateErrors');
+  client.emit('Security.certificateError', { eventId: 1, requestURL: 'https://localhost:5173/' }, 's');
+  client.emit('Security.certificateError', { eventId: 2, requestURL: 'https://example.com/' }, 's');
+  on = false;
+  client.emit('Security.certificateError', { eventId: 3, requestURL: 'https://localhost/' }, 's');
+  const handled = client.calls.filter((c) => c.method === 'Security.handleCertificateError').map((c) => c.params);
+  expect(handled).toEqual([
+    { eventId: 1, action: 'continue' },
+    { eventId: 2, action: 'cancel' },
+    { eventId: 3, action: 'cancel' },
+  ]);
+  stop();
 });

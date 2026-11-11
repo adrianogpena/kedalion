@@ -5,7 +5,11 @@ export const NETWORK_CAP = 1000;
 export const BODY_LIMIT = 1024 * 1024;
 /** Per-body size cap (characters) of the bodies recorded as requests finish, so they survive navigations. */
 export const RECORD_BODY_LIMIT = 512 * 1024;
-const SKIP_RECORD_TYPES = new Set(['image', 'font', 'media', 'stylesheet']);
+const SKIP_RECORD_TYPES = new Set(['image', 'font', 'media']);
+/** Responses with a larger encoded size are not fetched for recording. */
+export const RECORD_MAX_ENCODED = 5 * 1024 * 1024;
+export const FRAME_CAP = 200;
+export const FRAME_PAYLOAD_LIMIT = 4096;
 
 export interface QueryOptions<F> {
   since?: number;
@@ -61,6 +65,8 @@ export interface ConsoleEntry {
   source?: { url: string; line: number };
   args: string[];
   stack?: string;
+  /** Child target (iframe, worker) the message came from. */
+  frame?: string;
 }
 
 export interface ConsoleFilter {
@@ -78,10 +84,34 @@ export interface ConsoleLog {
 
 const LEVELS: Record<string, ConsoleLevel> = { log: 'log', info: 'info', warning: 'warn', warn: 'warn', error: 'error', assert: 'error', debug: 'debug', verbose: 'debug' };
 
+const previewProp = (p: any): string => (p?.type === 'string' ? JSON.stringify(p.value) : String(p?.value ?? p?.type ?? ''));
+
+/** `{a: 1, b: "x", ...}` / `[1, 2, ...]` / `Map(2) {"k" => 1}` from a CDP object preview; undefined when there is none. */
+export function renderPreview(pv: any): string | undefined {
+  if (!pv || typeof pv !== 'object') return undefined;
+  const props: any[] = pv.properties ?? [];
+  const entries: any[] = pv.entries ?? [];
+  const more = pv.overflow ? ', ...' : '';
+  const nested = previewProp;
+  const entryText = (v: any) => renderPreview(v) ?? (v?.type === 'string' ? JSON.stringify(v.description) : String(v?.description ?? v?.type ?? ''));
+  const head = pv.description && !/^(Object|Array)$/.test(String(pv.description).replace(/\(\d+\)$/, '')) ? `${pv.description} ` : '';
+  if (pv.subtype === 'map' || pv.subtype === 'set') {
+    const items = entries.map((e) => (pv.subtype === 'map' ? `${entryText(e.key)} => ${entryText(e.value)}` : entryText(e.value)));
+    return `${pv.description ?? pv.subtype} {${items.join(', ')}${more}}`;
+  }
+  if (pv.subtype === 'array') return `${head}[${props.map((p) => nested(p)).join(', ')}${more}]`;
+  if (!props.length && !entries.length) return undefined;
+  return `${head}{${props.map((p) => `${p.name}: ${nested(p)}`).join(', ')}${more}}`;
+}
+
 export function previewValue(o: any): string {
   if (!o) return '';
   if ('value' in o) return typeof o.value === 'string' ? o.value : JSON.stringify(o.value);
   if (o.unserializableValue) return o.unserializableValue;
+  if (o.type === 'object' && o.preview) {
+    const r = renderPreview(o.preview);
+    if (r) return r;
+  }
   return o.description ?? o.preview?.description ?? o.className ?? o.type ?? '';
 }
 
@@ -89,6 +119,9 @@ const stackText = (st: any): string | undefined =>
   st?.callFrames?.length
     ? st.callFrames.map((f: any) => `at ${f.functionName || '<anonymous>'} (${f.url}:${f.lineNumber + 1}:${f.columnNumber + 1})`).join('\n')
     : undefined;
+
+/** errorText, blockedReason and the CORS error of a Network.loadingFailed event, joined. */
+export const failureText = (p: any): string => [p?.errorText, p?.blockedReason, p?.corsErrorStatus?.corsError].filter(Boolean).join(' / ') || 'failed';
 
 const isMainNavigation = (p: any) => !p?.frame?.parentId;
 
@@ -110,18 +143,22 @@ export function createConsoleLog(session: CdpSession, opts: { cap?: number } = {
   };
   const add = (e: Omit<ConsoleEntry, 'id'>) => ring.push({ id: ring.nextId(), ...e });
   const offs = [
-    session.on('Runtime.consoleAPICalled', (p) => {
+    session.on('Runtime.consoleAPICalled', (p, frame) => {
       const args = (p.args ?? []).map(previewValue);
       const top = p.stackTrace?.callFrames?.[0];
+      const level = LEVELS[p.type] ?? 'log';
+      const stack = level === 'warn' || level === 'error' ? stackText(p.stackTrace) : undefined;
       add({
         ts: p.timestamp ?? Date.now(),
-        level: LEVELS[p.type] ?? 'log',
+        level,
         text: args.join(' '),
         args,
         ...(top ? { source: { url: top.url, line: top.lineNumber + 1 } } : {}),
+        ...(stack ? { stack } : {}),
+        ...(frame ? { frame } : {}),
       });
     }),
-    session.on('Runtime.exceptionThrown', (p) => {
+    session.on('Runtime.exceptionThrown', (p, frame) => {
       const d = p.exceptionDetails ?? {};
       const stack = stackText(d.stackTrace);
       add({
@@ -131,15 +168,17 @@ export function createConsoleLog(session: CdpSession, opts: { cap?: number } = {
         args: [],
         ...(d.url ? { source: { url: d.url, line: (d.lineNumber ?? 0) + 1 } } : {}),
         ...(stack ? { stack } : {}),
+        ...(frame ? { frame } : {}),
       });
     }),
-    session.on('Log.entryAdded', (p) => {
+    session.on('Log.entryAdded', (p, frame) => {
       const e = p.entry ?? {};
       add({
         ts: e.timestamp ?? Date.now(),
         level: LEVELS[e.level] ?? 'log',
         text: e.text ?? '',
         args: [],
+        ...(frame ? { frame } : {}),
         ...(e.url ? { source: { url: e.url, line: (e.lineNumber ?? 0) + 1 } } : {}),
       });
     }),
@@ -164,6 +203,23 @@ export interface NetworkEntry {
   done: boolean;
   /** Wall-clock ms when the request started. */
   startedAt?: number;
+  /** Network protocol of the response (`h2`, `http/1.1`). */
+  protocol?: string;
+  /** CDP ResourceTiming of the response (ms offsets from `requestTime`). */
+  resourceTiming?: Record<string, number>;
+  /** Served from the HTTP cache. */
+  fromCache?: boolean;
+  /** Child target (iframe, worker) the request came from. */
+  frame?: string;
+}
+
+/** One WebSocket frame or server-sent event. */
+export interface NetworkFrame {
+  dir: 'sent' | 'recv';
+  /** WebSocket opcode (1 text, 2 binary) or the SSE event name. */
+  opcode: number | string;
+  payload: string;
+  ts: number;
 }
 
 export interface NetworkFilter {
@@ -181,7 +237,16 @@ export interface NetworkDetail {
   body?: string;
   base64?: boolean;
   truncated?: boolean;
+  mime?: string;
+  /** Decoded size of the response body in bytes (binary bodies). */
+  bodyBytes?: number;
+  frames?: NetworkFrame[];
+  /** Cookies the browser did not send or accept, with the reasons. */
+  blockedCookies?: string[];
 }
+
+/** Bytes of a base64 string. */
+export const base64Bytes = (s: string): number => Math.floor((s.length * 3) / 4) - (s.endsWith('==') ? 2 : s.endsWith('=') ? 1 : 0);
 
 /** Failed, or answered with 4xx/5xx; a request the page canceled after a successful response (e.g. a video range) is not a failure. */
 function isFailed(e: NetworkEntry): boolean {
@@ -191,7 +256,8 @@ function isFailed(e: NetworkEntry): boolean {
 
 export interface NetworkLog {
   entries(o?: QueryOptions<NetworkFilter>): NetworkEntry[];
-  detail(id: number): Promise<NetworkDetail | undefined>;
+  /** `full` returns the whole body, without the BODY_LIMIT cut. */
+  detail(id: number, opts?: { full?: boolean }): Promise<NetworkDetail | undefined>;
   /** Request and response text recorded when the request finished (capped at RECORD_BODY_LIMIT); synchronous. */
   recorded(id: number): { postData?: string; body?: string } | undefined;
   clear(): void;
@@ -207,19 +273,51 @@ interface Extra {
   hasPostData: boolean;
   postData?: string;
   body?: string;
+  frames?: NetworkFrame[];
 }
+
+/** Headers and blocked cookies from the *ExtraInfo events, which can arrive before or after the main event. */
+interface ExtraInfo {
+  req?: Record<string, string>;
+  res?: Record<string, string>;
+  blocked: string[];
+}
+
+const blockedLines = (kind: string, list: any): string[] =>
+  (Array.isArray(list) ? list : [])
+    .filter((c) => c?.blockedReasons?.length)
+    .map((c) => `${kind} ${c.cookie?.name ?? '?'}: ${c.blockedReasons.join(', ')}`);
 
 export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {}): NetworkLog {
   const byRequest = new Map<string, NetworkEntry>();
   const extras = new Map<number, Extra>();
+  const info = new Map<string, ExtraInfo>();
+  const infoOf = (requestId: string): ExtraInfo => {
+    let i = info.get(requestId);
+    if (!i) info.set(requestId, (i = { blocked: [] }));
+    return i;
+  };
   const ring = new Ring<NetworkEntry>(opts.cap ?? NETWORK_CAP, (e) => {
     extras.delete(e.id);
-    if (byRequest.get(e.requestId) === e) byRequest.delete(e.requestId);
+    if (byRequest.get(e.requestId) === e) {
+      byRequest.delete(e.requestId);
+      info.delete(e.requestId);
+    }
   });
   const reset = () => {
     ring.clear();
     byRequest.clear();
     extras.clear();
+    info.clear();
+  };
+  const addFrame = (requestId: string, f: NetworkFrame) => {
+    const e = byRequest.get(requestId);
+    const x = e && extras.get(e.id);
+    if (!e || !x) return;
+    const frames = (x.frames ??= []);
+    frames.push({ ...f, payload: f.payload.length > FRAME_PAYLOAD_LIMIT ? f.payload.slice(0, FRAME_PAYLOAD_LIMIT) : f.payload });
+    if (frames.length > FRAME_CAP) frames.shift();
+    ring.emit(e);
   };
   const finish = (e: NetworkEntry, ts: number | undefined) => {
     e.done = true;
@@ -242,11 +340,15 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
         o,
       );
     },
-    async detail(id) {
+    async detail(id, o = {}) {
       const e = ring.items.find((x) => x.id === id);
       const x = extras.get(id);
       if (!e || !x) return undefined;
-      const d: NetworkDetail = { requestHeaders: x.requestHeaders, responseHeaders: x.responseHeaders };
+      const extra = info.get(e.requestId);
+      const d: NetworkDetail = { requestHeaders: { ...x.requestHeaders, ...extra?.req }, responseHeaders: { ...x.responseHeaders, ...extra?.res } };
+      if (e.mime) d.mime = e.mime;
+      if (x.frames?.length) d.frames = [...x.frames];
+      if (extra?.blocked.length) d.blockedCookies = [...extra.blocked];
       if (x.postData !== undefined) d.postData = x.postData;
       else if (x.hasPostData) {
         try {
@@ -255,13 +357,16 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
           // post data may be gone already
         }
       }
-      if (e.done && !e.failed) {
+      if (e.done && !e.failed && !e.frame && e.type !== 'websocket') {
         try {
           const r = await session.send('Network.getResponseBody', { requestId: e.requestId });
-          if (r.base64Encoded) d.base64 = true;
-          if (r.body.length > BODY_LIMIT) {
+          if (r.base64Encoded) {
+            d.base64 = true;
+            d.bodyBytes = base64Bytes(r.body);
+          }
+          if (r.body.length > BODY_LIMIT && !o.full) {
             d.truncated = true;
-            if (!r.base64Encoded) d.body = r.body.slice(0, BODY_LIMIT);
+            d.body = r.body.slice(0, BODY_LIMIT);
           } else d.body = r.body;
         } catch {
           // body not available (redirect, evicted, page navigated away)
@@ -282,7 +387,7 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
     },
   };
   const offs = [
-    session.on('Network.requestWillBeSent', (p) => {
+    session.on('Network.requestWillBeSent', (p, frame) => {
       const prev = byRequest.get(p.requestId);
       if (prev && p.redirectResponse) {
         prev.status = p.redirectResponse.status;
@@ -299,6 +404,7 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
         size: 0,
         done: false,
         startedAt: Date.now(),
+        ...(frame ? { frame } : {}),
       };
       extras.set(e.id, {
         start: p.timestamp ?? 0,
@@ -315,10 +421,55 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
       if (!e) return;
       e.status = p.response.status;
       e.mime = p.response.mimeType;
+      if (typeof p.response.protocol === 'string') e.protocol = p.response.protocol;
+      if (p.response.timing && typeof p.response.timing === 'object') e.resourceTiming = p.response.timing;
       if (p.type) e.type = String(p.type).toLowerCase();
+      if (p.response.fromDiskCache || p.response.fromPrefetchCache) e.fromCache = true;
       extras.get(e.id)!.responseHeaders = p.response.headers ?? {};
       ring.emit(e);
     }),
+    session.on('Network.requestServedFromCache', (p) => {
+      const e = byRequest.get(p.requestId);
+      if (!e) return;
+      e.fromCache = true;
+      ring.emit(e);
+    }),
+    session.on('Network.requestWillBeSentExtraInfo', (p) => {
+      const i = infoOf(p.requestId);
+      if (p.headers && typeof p.headers === 'object') i.req = p.headers;
+      i.blocked.push(...blockedLines('request cookie', p.associatedCookies));
+    }),
+    session.on('Network.responseReceivedExtraInfo', (p) => {
+      const i = infoOf(p.requestId);
+      if (p.headers && typeof p.headers === 'object') i.res = p.headers;
+      i.blocked.push(...blockedLines('response cookie', p.blockedCookies));
+    }),
+    session.on('Network.webSocketCreated', (p, frame) => {
+      const e: NetworkEntry = { id: ring.nextId(), requestId: p.requestId, method: 'GET', url: p.url, type: 'websocket', size: 0, done: false, startedAt: Date.now(), ...(frame ? { frame } : {}) };
+      extras.set(e.id, { start: 0, requestHeaders: {}, responseHeaders: {}, hasPostData: false, frames: [] });
+      byRequest.set(p.requestId, e);
+      ring.push(e);
+    }),
+    session.on('Network.webSocketHandshakeResponseReceived', (p) => {
+      const e = byRequest.get(p.requestId);
+      if (!e) return;
+      e.status = p.response?.status;
+      const x = extras.get(e.id)!;
+      x.responseHeaders = p.response?.headers ?? {};
+      if (p.response?.requestHeaders) x.requestHeaders = p.response.requestHeaders;
+      ring.emit(e);
+    }),
+    session.on('Network.webSocketFrameSent', (p) => addFrame(p.requestId, { dir: 'sent', opcode: p.response?.opcode ?? 1, payload: String(p.response?.payloadData ?? ''), ts: p.timestamp ?? 0 })),
+    session.on('Network.webSocketFrameReceived', (p) => addFrame(p.requestId, { dir: 'recv', opcode: p.response?.opcode ?? 1, payload: String(p.response?.payloadData ?? ''), ts: p.timestamp ?? 0 })),
+    session.on('Network.webSocketFrameError', (p) => {
+      const e = byRequest.get(p.requestId);
+      if (e) e.failed = String(p.errorMessage ?? 'frame error');
+    }),
+    session.on('Network.webSocketClosed', (p) => {
+      const e = byRequest.get(p.requestId);
+      if (e) finish(e, undefined);
+    }),
+    session.on('Network.eventSourceMessageReceived', (p) => addFrame(p.requestId, { dir: 'recv', opcode: p.eventName || 'message', payload: String(p.data ?? ''), ts: p.timestamp ?? 0 })),
     session.on('Network.dataReceived', (p) => {
       const e = byRequest.get(p.requestId);
       if (!e || e.done) return;
@@ -330,7 +481,7 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
       if (p.encodedDataLength !== undefined) e.size = p.encodedDataLength;
       finish(e, p.timestamp);
       const x = extras.get(e.id);
-      if (x && !SKIP_RECORD_TYPES.has(e.type ?? '')) {
+      if (x && !e.frame && !SKIP_RECORD_TYPES.has(e.type ?? '') && !((p.encodedDataLength ?? 0) > RECORD_MAX_ENCODED)) {
         void (async () => {
           try {
             const r = await session.send('Network.getResponseBody', { requestId: p.requestId });
@@ -344,14 +495,16 @@ export function createNetworkLog(session: CdpSession, opts: { cap?: number } = {
     session.on('Network.loadingFailed', (p) => {
       const e = byRequest.get(p.requestId);
       if (!e) return;
-      e.failed = p.canceled ? 'canceled' : (p.errorText ?? 'failed');
+      e.failed = p.canceled ? 'canceled' : failureText(p);
       finish(e, p.timestamp);
     }),
     session.on('Page.frameNavigated', (p) => {
       if (!isMainNavigation(p) || net.preserve) return;
       const keep = ring.items.filter((e) => e.requestId === p.frame.loaderId);
       const kept = keep.map((e) => [e, extras.get(e.id)!] as const);
+      const keptInfo = keep.map((e) => [e.requestId, info.get(e.requestId)] as const);
       reset();
+      for (const [rid, i] of keptInfo) if (i) info.set(rid, i);
       for (const [e, x] of kept) {
         ring.items.push(e);
         byRequest.set(e.requestId, e);

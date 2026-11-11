@@ -1,4 +1,4 @@
-import { type InterceptRule } from '@kedalion/cdp';
+import { type Emulation, type InterceptRule } from '@kedalion/cdp';
 import { DEVICE_PRESETS, presetEmulation } from '../../devices.ts';
 import { bool, num, resolveTab, str } from './page-util.ts';
 import { failResult, type McpTool, textResult, type ToolSchema } from './types.ts';
@@ -10,7 +10,8 @@ const schema = (properties: ToolSchema['properties'], required: string[] = []): 
   ...(required.length ? { required } : {}),
 });
 
-const ruleLine = (r: InterceptRule) => `${r.id}  ${r.enabled ? 'on ' : 'off'}  ${r.action}  ${r.pattern}${r.action === 'mock' ? `  -> ${r.status ?? 200} ${r.contentType ?? 'application/json'} ${(r.body ?? '').slice(0, 80)}` : ''}`;
+const ruleLine = (r: InterceptRule) =>
+  `${r.id}  ${r.enabled ? 'on ' : 'off'}  ${r.action}  ${r.pattern}${r.action === 'mock' ? `  -> ${r.status ?? 200} ${r.contentType ?? 'application/json'} ${(r.body ?? '').slice(0, 80)}` : ''}${r.delayMs ? `  delay ${r.delayMs}ms` : ''}${r.headers ? `  headers ${Object.entries(r.headers).map(([k, v]) => `${k}: ${v}`).join('; ')}` : ''}  hits ${r.hits ?? 0}`;
 const quote = (s: string) => (s.length > 200 ? `${s.slice(0, 200)}... (${s.length} chars)` : s);
 
 export const stateTools: McpTool[] = [
@@ -107,7 +108,9 @@ export const stateTools: McpTool[] = [
       {
         action: { type: 'string', enum: ['list', 'add', 'remove', 'clear'] },
         pattern: { type: 'string', description: 'For add.' },
-        mode: { type: 'string', enum: ['block', 'mock'], description: 'For add; default block.' },
+        mode: { type: 'string', enum: ['block', 'mock', 'modify'], description: 'For add; default block. modify lets the request continue with headers set as request headers.' },
+        delayMs: { type: 'integer', description: 'For add: wait this long (max 60000) before answering or continuing the request.' },
+        headers: { type: 'object', additionalProperties: { type: 'string' }, description: 'For add: mock response headers (override the defaults), or request headers to set with mode modify.' },
         status: { type: 'integer', description: 'Mock status, default 200.' },
         contentType: { type: 'string', description: 'Mock content type, default application/json.' },
         body: { type: 'string', description: 'Mock response body.' },
@@ -133,12 +136,21 @@ export const stateTools: McpTool[] = [
         default: {
           const pattern = str(a, 'pattern');
           if (!pattern) return failResult('Pass pattern.');
-          const mode = str(a, 'mode') === 'mock' ? 'mock' : 'block';
+          const m = str(a, 'mode');
+          const mode = m === 'mock' || m === 'modify' ? m : 'block';
           const id = `r${Date.now().toString(36)}${rules.length}`;
+          const delay = num(a, 'delayMs');
+          const headers = a.headers && typeof a.headers === 'object' ? Object.fromEntries(Object.entries(a.headers as Record<string, unknown>).filter(([, v]) => typeof v === 'string') as [string, string][]) : undefined;
+          const extra: Partial<InterceptRule> = {
+            ...(delay && delay > 0 ? { delayMs: Math.min(Math.round(delay), 60_000) } : {}),
+            ...(headers && Object.keys(headers).length ? { headers } : {}),
+          };
           const rule: InterceptRule =
             mode === 'block'
-              ? { id, enabled: true, pattern, action: 'block' }
-              : { id, enabled: true, pattern, action: 'mock', status: num(a, 'status') ?? 200, contentType: str(a, 'contentType') ?? 'application/json', body: typeof a.body === 'string' ? a.body : '' };
+              ? { id, enabled: true, pattern, action: 'block', ...(extra.delayMs ? { delayMs: extra.delayMs } : {}) }
+              : mode === 'modify'
+                ? { id, enabled: true, pattern, action: 'modify', ...extra }
+                : { id, enabled: true, pattern, action: 'mock', status: num(a, 'status') ?? 200, contentType: str(a, 'contentType') ?? 'application/json', body: typeof a.body === 'string' ? a.body : '', ...extra };
           ctx.service.setRules([...rules, rule]);
           return textResult(`Rule added: ${ruleLine(rule)}`);
         }
@@ -157,6 +169,8 @@ export const stateTools: McpTool[] = [
       userAgent: { type: 'string' },
       locale: { type: 'string' },
       timezone: { type: 'string' },
+      cacheDisabled: { type: 'boolean', description: 'Bypass the HTTP cache.' },
+      network: { type: 'string', enum: ['offline', 'slow3g', 'fast3g'], description: 'Throttle the network.' },
       reset: { type: 'boolean' },
     }),
     async run(a, ctx) {
@@ -171,12 +185,15 @@ export const stateTools: McpTool[] = [
       const userAgent = str(a, 'userAgent');
       const locale = str(a, 'locale');
       const timezone = str(a, 'timezone');
-      const e = {
+      const network = str(a, 'network');
+      const e: Emulation = {
         ...(preset ? presetEmulation(preset) : {}),
         ...(width && height ? { width, height, dpr: num(a, 'dpr') ?? 1, mobile: bool(a, 'mobile') } : {}),
         ...(userAgent ? { userAgent } : {}),
         ...(locale ? { locale } : {}),
         ...(timezone ? { timezone } : {}),
+        ...(bool(a, 'cacheDisabled') ? { cacheDisabled: true } : {}),
+        ...(network === 'offline' || network === 'slow3g' || network === 'fast3g' ? { network } : {}),
       };
       await ctx.service.setEmulation(tab, e);
       return textResult(`Emulation: ${JSON.stringify(e)}`);
