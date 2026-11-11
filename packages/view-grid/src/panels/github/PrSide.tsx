@@ -311,6 +311,7 @@ interface Live {
 const IDLE: Live = { busy: false, failed: '', tick: 0 };
 const lives = new Map<string, Live>();
 const listeners = new Set<() => void>();
+let livesVersion = 0;
 interface PrRef {
   repo: string;
   number: number;
@@ -318,6 +319,7 @@ interface PrRef {
 const liveKey = (pr: PrRef) => `${pr.repo}#${pr.number}`;
 const setLive = (key: string, patch: Partial<Live>) => {
   lives.set(key, { ...(lives.get(key) ?? IDLE), ...patch });
+  livesVersion++;
   listeners.forEach((l) => l());
 };
 
@@ -329,6 +331,21 @@ function useLive(key: string): Live {
     },
     () => lives.get(key) ?? IDLE,
   );
+}
+
+/** The listed PR replaced by its refreshed copy, when one is newer; re-renders the caller on every refresh. */
+export function useFreshPrs(items: readonly PrItem[]): PrItem[] {
+  useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => void listeners.delete(cb);
+    },
+    () => livesVersion,
+  );
+  return items.map((listed) => {
+    const fresh = lives.get(liveKey(listed))?.fresh;
+    return fresh && fresh.updatedAt >= listed.updatedAt ? { ...fresh, linked: listed.linked } : listed;
+  });
 }
 
 function refreshPr(listed: PrRef, config: Record<string, unknown>, source: ExtraSource) {

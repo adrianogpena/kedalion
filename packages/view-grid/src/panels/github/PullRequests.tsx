@@ -3,7 +3,7 @@ import { Chip, hasColumn, ListRows, relTime, type ListRow } from '../../kit';
 import type { PanelSide } from '../../panel';
 import './github.css';
 import { ciLabelKey, type PrItem, type SearchData } from './map';
-import { CI_TONE, prSideContent, REVIEW_TONE } from './PrSide';
+import { CI_TONE, prSideContent, REVIEW_TONE, useFreshPrs } from './PrSide';
 
 export interface PullRequestsConfig {
   columns: string[];
@@ -70,7 +70,7 @@ interface Props {
 }
 
 export function PullRequestsPanel({ id, config, data, side }: Props) {
-  const items = data?.items ?? [];
+  const items = useFreshPrs(data?.items ?? []);
   const content = (pr: PrItem) => prSideContent({ instanceId: id, pr, config });
   const actions: PrRowActions | undefined = side
     ? {
