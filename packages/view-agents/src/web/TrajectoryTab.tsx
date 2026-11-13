@@ -6,12 +6,11 @@ import { getAgentTrace, getTrace } from './api';
 import { FilesView } from './trajectory/FilesView';
 import { StatsView } from './trajectory/StatsView';
 import { AgentsView, CommandsView, fmtCost, PromptsView, TodosView, WebView } from './trajectory/TabViews';
-import { promptRows } from './trajectory/views';
+import { promptRows, unknownResults } from './trajectory/views';
 import { Timeline } from './trajectory/Timeline';
 import {
   applyFilters,
   entriesOf,
-  filesOf,
   filtersActive,
   foldEntries,
   findFrom,
@@ -76,10 +75,11 @@ export interface TrajectoryTabProps {
   backLabel?: string;
 }
 
-function StepMeta({ s, info, n, total }: { s: AgentTraceStep; info?: StepInfo; n: number; total: number }) {
+function StepMeta({ s, info, n, total, unknown }: { s: AgentTraceStep; info?: StepInfo; n: number; total: number; unknown: boolean }) {
   const cells: Array<[string, string]> = [[t('panel.trajectory.meta.step'), t('panel.trajectory.meta.stepValue', { n, total })]];
   if (s.ts) cells.push([t('panel.trajectory.meta.time'), fmtClock(s.ts)]);
-  if (s.pending) cells.push([t('panel.trajectory.meta.duration'), t('panel.trajectory.pending')]);
+  if (unknown) cells.push([t('panel.trajectory.meta.duration'), t('panel.trajectory.unknown.tip')]);
+  else if (s.pending) cells.push([t('panel.trajectory.meta.duration'), t('panel.trajectory.pending')]);
   else if (s.durationMs !== undefined) cells.push([t('panel.trajectory.meta.duration'), fmtDuration(s.durationMs)]);
   if (s.tokens) {
     cells.push([t('panel.trajectory.meta.tokens'), t('panel.trajectory.meta.tokensValue', { input: fmtTokens(s.tokens.input), output: fmtTokens(s.tokens.output), cache: fmtTokens(s.tokens.cacheRead + s.tokens.cacheWrite) })]);
@@ -112,6 +112,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
   const [picked, setPicked] = useState<number>();
   const [seen, setSeen] = useState(0);
   const [tab, setTab] = useState<Tab>('steps');
+  const [fileTurn, setFileTurn] = useState<number>();
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [fold, setFold] = useState(false);
   const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: Array<ContextMenuItem | 'sep'> }>();
@@ -127,16 +128,19 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
     setPicked(undefined);
     setFilters(NO_FILTERS);
     setTab('steps');
+    setFileTurn(undefined);
     setAgent(undefined);
   }, [sessionId]);
   const openAgent = (a: { agentId: string; runId?: string; label: string }) => {
     setAgent(a);
+    setFileTurn(undefined);
     setPicked(undefined);
     setFilters(NO_FILTERS);
     setTab('steps');
   };
   const closeAgent = () => {
     setAgent(undefined);
+    setFileTurn(undefined);
     setPicked(undefined);
     setFilters(NO_FILTERS);
     setTab('agents');
@@ -158,7 +162,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
     const top = rows.reduce((m, r) => Math.max(m, r.cost), 0);
     return new Map(rows.map((r) => [r.i, { cost: r.cost, top: top > 0 && r.cost === top }]));
   }, [steps]);
-  const files = useMemo(() => (tab === 'files' ? filesOf(steps ?? []) : []), [tab, steps]);
+  const unknown = useMemo(() => unknownResults(steps ?? [], running), [steps, running]);
   const visible = useMemo(() => {
     const kept = applyFilters(entries, filters);
     return fold ? foldEntries(kept) : kept;
@@ -172,7 +176,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
     return m;
   }, [steps, infos]);
   const last = entries.length - 1;
-  const live = running && !compact ? steps?.filter((s) => s.kind === 'tool' && s.pending).pop() : undefined;
+  const live = running && !compact ? steps?.filter((s, i) => s.kind === 'tool' && s.pending && !unknown.has(i)).pop() : undefined;
   useEffect(() => {
     if (!live) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -339,7 +343,8 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
         {!compact && infos[i]?.head !== undefined && (
           <span className="agents-traj-same" title={t('panel.trajectory.sameRequest', { n: infos[i]!.head! + 1 })}>{t('panel.trajectory.partOf', { n: infos[i]!.head! + 1 })}</span>
         )}
-        {!compact && s.pending && <span className="agents-traj-pending" aria-label={t('panel.trajectory.pending')} />}
+        {!compact && s.pending && !unknown.has(i) && <span className="agents-traj-pending" aria-label={t('panel.trajectory.pending')} />}
+        {unknown.has(i) && <span className="agents-traj-unknown" title={t('panel.trajectory.unknown.tip')}>{t('panel.trajectory.unknown')}</span>}
         {folded && <span className="agents-traj-fold" title={t('panel.trajectory.fold.more', { n: folded.members.length - 1 })}>+{folded.members.length - 1}</span>}
         {s.modelFrom && s.model && <span className="agents-traj-marker agents-traj-model-change" title={t('panel.trajectory.modelChange')}>◆ {shortModel(s.modelFrom)} → {shortModel(s.model)}</span>}
         {s.marker && <span className={`agents-traj-marker agents-traj-marker-${s.marker}`}>{t(`panel.trajectory.marker.${s.marker}`)}</span>}
@@ -380,7 +385,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
 
   const detail = (
     <div className="agents-traj-detailcol">
-      {step && <StepMeta s={step} info={infos[index]} n={index + 1} total={steps.length} />}
+      {step && <StepMeta s={step} info={infos[index]} n={index + 1} total={steps.length} unknown={unknown.has(index)} />}
       {step?.tool === 'Bash' && step.toolUseId && onOutput && (
         <div className="agents-traj-actions">
           <Button size="xs" icon="terminal" onClick={() => onOutput(step.toolUseId!)}>{t('panel.trajectory.menu.output')}</Button>
@@ -483,13 +488,22 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
             {detail}
           </div>
         ))}
-      {tab === 'files' && <FilesView files={files} cwd={state.data?.cwd} sessionId={sessionId} stamp={steps.length} onGoto={gotoStep} />}
+      {tab === 'files' && <FilesView steps={steps} unknown={unknown} cwd={state.data?.cwd} sessionId={sessionId} recover={!agent} stamp={steps.length} turn={fileTurn} onTurn={setFileTurn} onGoto={gotoStep} />}
       {tab === 'commands' && <CommandsView steps={steps} onGoto={gotoStep} />}
       {tab === 'todos' && <TodosView steps={steps} onGoto={gotoStep} />}
       {tab === 'agents' && <AgentsView steps={steps} infos={agent ? undefined : state.data?.subagents} onGoto={gotoStep} onOpenAgent={openAgent} />}
-      {tab === 'prompts' && <PromptsView steps={steps} onGoto={gotoStep} />}
+      {tab === 'prompts' && (
+        <PromptsView
+          steps={steps}
+          onGoto={gotoStep}
+          onFiles={(i) => {
+            setFileTurn(i);
+            setTab('files');
+          }}
+        />
+      )}
       {tab === 'web' && <WebView steps={steps} onGoto={gotoStep} />}
-      {tab === 'stats' && <StatsView steps={steps} sessionId={sessionId} onTool={openTool} onGoto={gotoStep} />}
+      {tab === 'stats' && <StatsView steps={steps} sessionId={sessionId} unknown={unknown} onTool={openTool} onGoto={gotoStep} />}
       {menuEl}
     </div>
   );

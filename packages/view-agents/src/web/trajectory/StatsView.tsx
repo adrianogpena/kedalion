@@ -1,10 +1,14 @@
 import { useMemo } from 'react';
-import { Empty } from '@kedalion/ui';
+import { Button, Empty } from '@kedalion/ui';
 import type { AgentTraceStep } from '../../protocol';
 import { t } from '../../i18n';
 import { fmtDuration, fmtTokens, toolStats, totalsOf } from './model';
 import { CompareSection } from './CompareSection';
 import { activityOf, contextSeries, costOfSteps, errorsOf, fileRollup, heaviestResults, modelsOf, promptsOf, subagentOf, timeOf, toolDetails } from './stats';
+import { failedCalls, promptRows } from './views';
+
+const TOP_PROMPTS = 5;
+const MAX_FAILED = 50;
 
 const fmtCost = (usd: number) => (usd === 0 ? '$0' : usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`);
 const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -67,7 +71,10 @@ function ContextChart({ points, onGoto }: { points: ReturnType<typeof contextSer
 const Title = ({ text }: { text: string }) => <h3 className="agents-traj-stats-title">{text}</h3>;
 
 /** Session statistics: totals, cost, models, time, context, heaviest results, prompts, subagents, errors, activity, files and tools. Clicking a tool filters the steps to it. */
-export function StatsView({ steps, sessionId, onTool, onGoto }: { steps: AgentTraceStep[]; sessionId?: string; onTool(tool: string): void; onGoto(i: number): void }) {
+export function StatsView({ steps, sessionId, unknown, onTool, onGoto }: { steps: AgentTraceStep[]; sessionId?: string; unknown: ReadonlySet<number>; onTool(tool: string): void; onGoto(i: number): void }) {
+  const failed = useMemo(() => failedCalls(steps), [steps]);
+  const costly = useMemo(() => promptRows(steps).filter((r) => r.cost > 0 || r.tokens > 0).sort((a, b) => b.cost - a.cost || b.tokens - a.tokens).slice(0, TOP_PROMPTS), [steps]);
+  const unknownList = useMemo(() => [...unknown].sort((a, b) => a - b), [unknown]);
   const stats = useMemo(() => toolStats(steps), [steps]);
   const totals = useMemo(() => totalsOf(steps), [steps]);
   const models = useMemo(() => modelsOf(steps), [steps]);
@@ -241,6 +248,80 @@ export function StatsView({ steps, sessionId, onTool, onGoto }: { steps: AgentTr
             ))}
           </div>
           <p className="agents-empty">{t('panel.trajectory.stats.activityNote', { bucket: fmtDuration(activity.bucketMs), pauses: activity.pauses, longest: fmtDuration(activity.longestPauseMs) || '–' })}</p>
+        </section>
+      )}
+      {costly.length > 1 && (
+        <section>
+          <Title text={t('panel.trajectory.stats.costlyTitle')} />
+          <table className="agents-traj-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>{t('panel.trajectory.prompts.prompt')}</th>
+                <th>{t('panel.trajectory.stats.costTotal')}</th>
+                <th>{t('panel.trajectory.stats.tokens')}</th>
+                <th>{t('panel.trajectory.commands.duration')}</th>
+                <th>{t('panel.trajectory.stats.calls')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {costly.map((r) => (
+                <tr key={r.i}>
+                  <td><Button variant="ghost" size="xs" onClick={() => onGoto(r.i)}>{r.i + 1}</Button></td>
+                  <td className="agents-traj-cmd" title={r.label}>{r.label}</td>
+                  <td>{fmtCost(r.cost)}</td>
+                  <td>{fmtTokens(r.tokens)}</td>
+                  <td>{fmtDuration(r.durationMs) || '–'}</td>
+                  <td>{r.calls || ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+      {failed.length > 0 && (
+        <section>
+          <Title text={t('panel.trajectory.stats.failedTitle', { fixed: failed.filter((f) => f.fixedAt !== undefined).length, total: failed.length })} />
+          <table className="agents-traj-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>{t('panel.trajectory.stats.tool')}</th>
+                <th>{t('panel.trajectory.stats.call')}</th>
+                <th>{t('panel.trajectory.stats.outcome')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {failed.slice(0, MAX_FAILED).map((f) => (
+                <tr key={f.i}>
+                  <td><Button variant="ghost" size="xs" onClick={() => onGoto(f.i)}>{f.i + 1}</Button></td>
+                  <td>{f.tool}</td>
+                  <td className="agents-traj-cmd" title={f.label}>{f.label}</td>
+                  <td>
+                    {f.fixedAt !== undefined ? (
+                      <Button variant="ghost" size="xs" className="agents-traj-fixed" onClick={() => onGoto(f.fixedAt!)}>{t('panel.trajectory.stats.fixedAt', { n: f.fixedAt + 1 })}</Button>
+                    ) : (
+                      <span className="agents-traj-error">{t('panel.trajectory.stats.notFixed')}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {failed.length > MAX_FAILED && <p className="agents-empty">{t('panel.trajectory.stats.moreFailed', { n: failed.length - MAX_FAILED })}</p>}
+        </section>
+      )}
+      {unknownList.length > 0 && (
+        <section>
+          <Title text={t('panel.trajectory.stats.unknownTitle', { n: unknownList.length })} />
+          <p className="agents-empty">{t('panel.trajectory.unknown.tip')}</p>
+          <ul className="agents-traj-shelllist">
+            {unknownList.map((i) => (
+              <li key={i}>
+                <Button variant="ghost" size="xs" onClick={() => onGoto(i)}>#{i + 1}</Button> <span>{steps[i]?.label}</span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       <section>

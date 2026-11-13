@@ -186,25 +186,87 @@ export interface PromptRow {
   answerMs?: number;
   /** Prompt to the last step of its turn. */
   durationMs?: number;
+  /** Tokens of the turn's requests (input, output and cache). */
+  tokens: number;
   files: number;
   interrupted: boolean;
 }
 
-/** One row per prompt you typed, with what the turn that followed it did and cost. */
-export function promptRows(steps: AgentTraceStep[]): PromptRow[] {
+/** Step positions of the prompts you typed. */
+export function promptHeads(steps: AgentTraceStep[]): number[] {
   const heads: number[] = [];
   steps.forEach((s, i) => {
     if (s.kind === 'user' && !s.sidechain && !s.source) heads.push(i);
   });
+  return heads;
+}
+
+/** For each step, the position of the prompt whose turn it belongs to (-1 before the first prompt). */
+export function turnOf(steps: AgentTraceStep[]): number[] {
+  const out: number[] = [];
+  let head = -1;
+  steps.forEach((s, i) => {
+    if (s.kind === 'user' && !s.sidechain && !s.source) head = i;
+    out.push(head);
+  });
+  return out;
+}
+
+/** Tool calls that never got a result and never will: the session moved on past them, or it is not running. */
+export function unknownResults(steps: AgentTraceStep[], running: boolean): Set<number> {
+  const out = new Set<number>();
+  let later = false;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i]!;
+    if (s.kind === 'tool' && s.pending && (!running || later)) out.add(i);
+    if (s.kind === 'user' || s.kind === 'assistant') later = true;
+  }
+  return out;
+}
+
+export interface FailedCall {
+  i: number;
+  tool: string;
+  label: string;
+  /** The first later successful call of the same tool on the same target in the same turn. */
+  fixedAt?: number;
+}
+
+const targetOf = (s: AgentTraceStep) => (s.file ? s.file.replace(/\\/g, '/').toLowerCase() : s.command ? (s.command.trim().split(/\s+/)[0] ?? '') : '');
+
+/** Every failed tool call, paired with the call that later did the same thing successfully, if any. */
+export function failedCalls(steps: AgentTraceStep[]): FailedCall[] {
+  const turns = turnOf(steps);
+  const out: FailedCall[] = [];
+  steps.forEach((s, i) => {
+    if (s.kind !== 'tool' || !s.error || s.sidechain) return;
+    const target = targetOf(s);
+    let fixedAt: number | undefined;
+    for (let j = i + 1; j < steps.length && turns[j] === turns[i]; j++) {
+      const n = steps[j]!;
+      if (n.kind === 'tool' && !n.sidechain && n.tool === s.tool && !n.error && !n.pending && targetOf(n) === target) {
+        fixedAt = j;
+        break;
+      }
+    }
+    out.push({ i, tool: s.tool ?? 'tool', label: s.label, ...(fixedAt !== undefined ? { fixedAt } : {}) });
+  });
+  return out;
+}
+
+/** One row per prompt you typed, with what the turn that followed it did and cost. */
+export function promptRows(steps: AgentTraceStep[]): PromptRow[] {
+  const heads = promptHeads(steps);
   return heads.map((i, k) => {
     const end = heads[k + 1] ?? steps.length;
     const head = steps[i]!;
-    const row: PromptRow = { i, label: head.label, steps: end - i - 1, calls: 0, errors: 0, cost: 0, files: 0, interrupted: false, ...(head.ts !== undefined ? { ts: head.ts } : {}) };
+    const row: PromptRow = { i, label: head.label, steps: end - i - 1, calls: 0, errors: 0, cost: 0, tokens: 0, files: 0, interrupted: false, ...(head.ts !== undefined ? { ts: head.ts } : {}) };
     const files = new Set<string>();
     let lastTs = head.ts;
     for (let j = i + 1; j < end; j++) {
       const s = steps[j]!;
       row.cost += stepCost(s);
+      if (s.tokens) row.tokens += s.tokens.input + s.tokens.output + s.tokens.cacheRead + s.tokens.cacheWrite;
       if (s.ts !== undefined) lastTs = s.ts;
       if (row.answerMs === undefined && s.ts !== undefined && head.ts !== undefined && (s.kind === 'assistant' || s.kind === 'thinking' || s.kind === 'tool')) row.answerMs = s.ts - head.ts;
       if (s.marker === 'interrupt') row.interrupted = true;

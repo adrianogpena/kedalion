@@ -221,12 +221,28 @@ export function AgentsView({ steps, infos, onGoto, onOpenAgent }: AgentsViewProp
 }
 
 /** One row per prompt you typed: what the turn did, how long it took and what it cost. */
-export function PromptsView({ steps, onGoto }: ViewProps) {
-  const rows = useMemo(() => promptRows(steps), [steps]);
+type PromptSort = 'order' | 'cost' | 'tokens' | 'duration';
+
+export function PromptsView({ steps, onGoto, onFiles }: ViewProps & { onFiles(prompt: number): void }) {
+  const [sort, setSort] = useState<PromptSort>('order');
+  const all = useMemo(() => promptRows(steps), [steps]);
+  const rows = useMemo(() => {
+    if (sort === 'order') return all;
+    const key = (r: (typeof all)[number]) => (sort === 'cost' ? r.cost : sort === 'tokens' ? r.tokens : (r.durationMs ?? 0));
+    return [...all].sort((a, b) => key(b) - key(a));
+  }, [all, sort]);
   if (rows.length === 0) return <Empty title={t('panel.trajectory.prompts.empty')} />;
   const top = rows.reduce((m, r) => (r.cost > m ? r.cost : m), 0);
   return (
     <div className="agents-traj-pane">
+      <div className="agents-traj-kinds" role="group" aria-label={t('panel.trajectory.prompts.sort')}>
+        <span className="agents-traj-meta">{t('panel.trajectory.prompts.sort')}</span>
+        {(['order', 'cost', 'tokens', 'duration'] as const).map((k) => (
+          <Button key={k} variant="ghost" size="xs" pressed={sort === k} onClick={() => setSort(k)}>
+            {t(`panel.trajectory.prompts.sort.${k}`)}
+          </Button>
+        ))}
+      </div>
       <table className="agents-traj-table agents-traj-cmds">
         <thead>
           <tr>
@@ -238,6 +254,7 @@ export function PromptsView({ steps, onGoto }: ViewProps) {
             <th>{t('panel.trajectory.stats.calls')}</th>
             <th>{t('panel.trajectory.stats.errors')}</th>
             <th>{t('panel.trajectory.prompts.files')}</th>
+            <th>{t('panel.trajectory.stats.tokens')}</th>
             <th>{t('panel.trajectory.stats.costTotal')}</th>
             <th />
           </tr>
@@ -252,7 +269,8 @@ export function PromptsView({ steps, onGoto }: ViewProps) {
               <td>{fmtDuration(r.durationMs) || '–'}</td>
               <td>{r.calls || ''}</td>
               <td className={r.errors ? 'agents-traj-error' : undefined}>{r.errors || ''}</td>
-              <td>{r.files || ''}</td>
+              <td>{r.files ? <Button variant="ghost" size="xs" title={t('panel.trajectory.prompts.showFiles')} onClick={() => onFiles(r.i)}>{r.files}</Button> : ''}</td>
+              <td>{r.tokens ? fmtTokens(r.tokens) : ''}</td>
               <td className={top > 0 && r.cost === top ? 'agents-traj-topcost' : undefined} title={top > 0 && r.cost === top ? t('panel.trajectory.prompts.top') : undefined}>{fmtCost(r.cost)}</td>
               <td className="agents-traj-rowact"><Button variant="ghost" size="xs" onClick={() => onGoto(r.i)}>{t('panel.trajectory.files.goto')}</Button></td>
             </tr>

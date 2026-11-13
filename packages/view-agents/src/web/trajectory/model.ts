@@ -202,7 +202,8 @@ export type FileShellOp = NonNullable<AgentTraceStep['shellFiles']>[number]['op'
 export interface FileEntry {
   file: string;
   reads: number;
-  edits: Array<{ i: number; old: string; new: string; error: boolean; ts?: number }>;
+  /** `turn` = position of the prompt whose turn made the change (-1 before the first prompt); `unknown` = the call never got a result. */
+  edits: Array<{ i: number; old: string; new: string; error: boolean; ts?: number; turn: number; unknown?: boolean }>;
   kind: FileKind;
   /** Lines added / removed over all edits. */
   added: number;
@@ -218,7 +219,11 @@ export interface FileEntry {
   /** Times a Grep / Glob result listed the file. */
   hits: number;
   /** Changes made through Bash. */
-  shell: Array<{ i: number; op: FileShellOp }>;
+  shell: Array<{ i: number; op: FileShellOp; turn: number }>;
+  /** Found only through git: changed on disk during the session with no tool call naming it. */
+  recovered?: { i?: number; turn: number; diff: string };
+  /** Prompts (step positions) whose turns changed the file. */
+  turns: number[];
   /** Characters the Reads returned; about a quarter of it is the tokens they added to the context. */
   readChars: number;
 }
@@ -244,14 +249,34 @@ export function changeSize(old: string, next: string): { added: number; removed:
   return { added, removed };
 }
 
-/** Files the session read, changed or searched, most changed first. */
-export function filesOf(steps: AgentTraceStep[]): FileEntry[] {
+/** Lines added and removed by a unified diff (`git diff` output). */
+export function unifiedSize(diff: string): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const l of diff.split('\n')) {
+    if (l.startsWith('+++') || l.startsWith('---')) continue;
+    if (l.startsWith('+')) added++;
+    else if (l.startsWith('-')) removed++;
+  }
+  return { added, removed };
+}
+
+/** Files the session read, changed or searched, most changed first; `recovered` adds files only git saw change. */
+export function filesOf(steps: AgentTraceStep[], unknown: ReadonlySet<number> = new Set(), recovered: ReadonlyArray<{ file: string; i?: number; diff: string; mtimeMs: number }> = []): FileEntry[] {
   const m = new Map<string, FileEntry>();
+  let head = -1;
+  const turns = steps.map((s, i) => {
+    if (s.kind === 'user' && !s.sidechain && !s.source) head = i;
+    return head;
+  });
+  const addTurn = (x: FileEntry, turn: number) => {
+    if (!x.turns.includes(turn)) x.turns.push(turn);
+  };
   const get = (file: string, i: number, ts?: number): FileEntry => {
     const k = fileKey(file);
     let x = m.get(k);
     if (!x) {
-      x = { file, reads: 0, edits: [], kind: 'read', added: 0, removed: 0, failed: 0, firstI: i, lastI: i, ranges: [], hits: 0, shell: [], readChars: 0, ...(ts !== undefined ? { firstTs: ts, lastTs: ts } : {}) };
+      x = { file, reads: 0, edits: [], kind: 'read', added: 0, removed: 0, failed: 0, firstI: i, lastI: i, ranges: [], hits: 0, shell: [], readChars: 0, turns: [], ...(ts !== undefined ? { firstTs: ts, lastTs: ts } : {}) };
       m.set(k, x);
     }
     x.lastI = i;
@@ -267,7 +292,8 @@ export function filesOf(steps: AgentTraceStep[]): FileEntry[] {
       const x = get(s.file, i, s.ts);
       if (s.edits) {
         for (const e of s.edits) {
-          x.edits.push({ i, old: e.old, new: e.new, error: s.error === true, ...(s.ts !== undefined ? { ts: s.ts } : {}) });
+          x.edits.push({ i, old: e.old, new: e.new, error: s.error === true, turn: turns[i]!, ...(unknown.has(i) ? { unknown: true } : {}), ...(s.ts !== undefined ? { ts: s.ts } : {}) });
+          addTurn(x, turns[i]!);
           if (s.error === true) x.failed++;
           else {
             const size = changeSize(e.old, e.new);
@@ -282,18 +308,30 @@ export function filesOf(steps: AgentTraceStep[]): FileEntry[] {
         if (!x.ranges.includes(r)) x.ranges.push(r);
       }
     }
-    for (const f of s.shellFiles ?? []) get(f.path, i, s.ts).shell.push({ i, op: f.op });
+    for (const f of s.shellFiles ?? []) {
+      const x = get(f.path, i, s.ts);
+      x.shell.push({ i, op: f.op, turn: turns[i]! });
+      if (f.op !== 'restore') addTurn(x, turns[i]!);
+    }
     for (const h of s.hits ?? []) {
       const x = m.get(fileKey(h));
       if (x) x.hits++;
     }
   });
+  for (const r of recovered) {
+    if (m.has(fileKey(r.file))) continue;
+    const turn = r.i !== undefined ? turns[r.i]! : -1;
+    const { added, removed } = unifiedSize(r.diff);
+    m.set(fileKey(r.file), { file: r.file, reads: 0, edits: [], kind: 'modified', added, removed, failed: 0, firstI: r.i ?? steps.length - 1, lastI: r.i ?? steps.length - 1, firstTs: r.mtimeMs, lastTs: r.mtimeMs, ranges: [], hits: 0, shell: [], readChars: 0, turns: [turn], recovered: { ...(r.i !== undefined ? { i: r.i } : {}), turn, diff: r.diff } });
+  }
   for (const x of m.values()) {
+    if (x.recovered) continue;
     const last = x.shell[x.shell.length - 1];
     if (last && (last.op === 'delete' || last.op === 'move-from')) x.kind = 'deleted';
     else if (x.edits.length > 0 || x.shell.some((s) => SHELL_WRITES.has(s.op))) x.kind = x.edits.length > 0 && x.edits[0]!.old === '' ? 'created' : 'modified';
   }
-  return [...m.values()].sort((a, b) => b.edits.length + b.shell.length - (a.edits.length + a.shell.length) || b.reads - a.reads || a.file.localeCompare(b.file));
+  const weight = (x: FileEntry) => x.edits.length + x.shell.length + (x.recovered ? 1 : 0);
+  return [...m.values()].sort((a, b) => weight(b) - weight(a) || b.reads - a.reads || a.file.localeCompare(b.file));
 }
 
 export interface DiffLine {

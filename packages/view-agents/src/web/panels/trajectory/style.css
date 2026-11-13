@@ -59,6 +59,12 @@
 .agents-traj-diff-add { display: block; color: var(--ok, #3fb950); background: color-mix(in srgb, var(--ok, #3fb950) 12%, transparent); }
 .agents-traj-diff-del { display: block; color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
 .agents-traj-diff-same { display: block; color: var(--text-2); }
+.agents-traj-diff-hunk { display: block; color: var(--info); }
+.agents-traj-turnchip { margin-left: auto; margin-right: var(--space-6); font-size: var(--fs-sm); }
+.agents-traj-note { margin: var(--space-3) 0; color: var(--text-3); font-size: var(--fs-sm); }
+.agents-traj-fturn { width: 100%; box-sizing: border-box; padding: var(--space-3) var(--space-6); background: var(--bg-2, transparent); border: 1px solid var(--border); border-radius: var(--radius-xs); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.agents-traj-unknown { flex-shrink: 0; color: var(--warn); font-size: var(--fs-sm); }
+.agents-traj-fixed { color: var(--ok); }
 .agents-traj-stats { display: flex; flex: 1; flex-direction: column; gap: var(--space-8); min-height: 0; overflow: auto; }
 .agents-traj-stats-title { margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--text-3); font-weight: 600; }
 .agents-traj-totals { display: flex; flex-wrap: wrap; gap: var(--space-4) 24px; margin: 0; }

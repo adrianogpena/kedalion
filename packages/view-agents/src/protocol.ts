@@ -538,6 +538,18 @@ export interface AgentFileStatusResponse {
   status: Record<string, AgentFileGit>;
   /** Files whose disk state differs from the session's last change: edited by something else afterwards, or gone. */
   disk: Record<string, 'changed' | 'missing'>;
+  /** Files only git saw change during the session (no tool call names them), credited to a shell step. */
+  recovered?: AgentRecoveredFile[];
+}
+
+export interface AgentRecoveredFile {
+  /** Absolute path. */
+  file: string;
+  /** The shell step that most likely made the change. */
+  i?: number;
+  mtimeMs: number;
+  /** Unified diff against the commit HEAD was on at the session start (all added lines for a new file). */
+  diff: string;
 }
 
 /** Headline numbers of a session, for comparing two sessions. */

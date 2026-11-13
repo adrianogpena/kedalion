@@ -27,6 +27,7 @@ import { lastResponse } from './server/last-response.ts';
 import { diskCheck, fileStatus } from './server/file-status.ts';
 import { averageOf, siblingFiles, siblingList, summaryOf, summaryOfFile } from './server/trace-summary.ts';
 import { readTraceFull } from './server/trace.ts';
+import { recoverShellChanges } from './server/git-recover.ts';
 import { subagentFile, subagentsOf } from './server/subagents.ts';
 import { listScoped } from './server/skills.ts';
 import { capPerProject, createSessionScanner, matchProject } from './server/discovery.ts';
@@ -768,7 +769,8 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
             const file = findSessionFile(a.dir, id);
             if (file) {
               const { steps, cwd } = readTraceFull(file);
-              return { status: await fileStatus(steps, cwd), disk: diskCheck(steps) };
+              const [status, recovered] = await Promise.all([fileStatus(steps, cwd), recoverShellChanges(steps, cwd)]);
+              return { status, disk: diskCheck(steps), ...(recovered.length > 0 ? { recovered } : {}) };
             }
           }
           return { status: {}, disk: {} };
