@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { browserArgs, parsePortFile } from './launch.ts';
+import { browserArgs, desktopUserAgent, parsePortFile } from './launch.ts';
 
 test('browserArgs builds the headless command line', () => {
   const args = browserArgs({ profileDir: '/p', allowOrigin: 'http://127.0.0.1:9' });
@@ -10,7 +10,18 @@ test('browserArgs builds the headless command line', () => {
     '--no-first-run',
     '--no-default-browser-check',
     '--remote-allow-origins=http://127.0.0.1:9',
+    '--disable-blink-features=AutomationControlled',
+    '--window-size=1920,1080',
+    '--screen-info={1920x1080}',
   ]);
+  expect(browserArgs({ profileDir: '/p', allowOrigin: 'x', userAgent: 'UA' }).at(-1)).toBe('--user-agent=UA');
+});
+
+test('desktopUserAgent drops the headless marker', () => {
+  expect(desktopUserAgent(157, true, 'win32')).toBe(
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 Edg/157.0.0.0',
+  );
+  expect(desktopUserAgent(157, false, 'linux')).not.toContain('Edg/');
 });
 
 test('parsePortFile reads port and ws path', () => {

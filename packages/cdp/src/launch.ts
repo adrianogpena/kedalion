@@ -1,11 +1,13 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { findAppBrowser } from '@kedalion/platform';
 import { invalid } from '@kedalion/server-core';
 
 export interface BrowserArgsOptions {
   profileDir: string;
   allowOrigin: string;
+  /** Replaces the headless user agent, which bot checks (Cloudflare Turnstile) reject. */
+  userAgent?: string;
 }
 
 export function browserArgs(opts: BrowserArgsOptions): string[] {
@@ -16,7 +18,33 @@ export function browserArgs(opts: BrowserArgsOptions): string[] {
     '--no-first-run',
     '--no-default-browser-check',
     `--remote-allow-origins=${opts.allowOrigin}`,
+    // Bot checks treat navigator.webdriver = true and the 800x600 headless screen as automation.
+    '--disable-blink-features=AutomationControlled',
+    '--window-size=1920,1080',
+    '--screen-info={1920x1080}',
+    ...(opts.userAgent ? [`--user-agent=${opts.userAgent}`] : []),
   ];
+}
+
+/** Desktop user agent of a regular (not headless) browser of the given major version, in Chrome's reduced format. */
+export function desktopUserAgent(major: number, edge: boolean, platform: NodeJS.Platform = process.platform): string {
+  const os =
+    platform === 'win32' ? 'Windows NT 10.0; Win64; x64' : platform === 'darwin' ? 'Macintosh; Intel Mac OS X 10_15_7' : 'X11; Linux x86_64';
+  const v = `${major}.0.0.0`;
+  return `Mozilla/5.0 (${os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${v} Safari/537.36${edge ? ` Edg/${v}` : ''}`;
+}
+
+/** Major version of an Edge/Chrome install, from the version-named folder next to the executable (Windows layout). */
+export function browserMajorVersion(executable: string): number | undefined {
+  try {
+    const majors = readdirSync(dirname(executable))
+      .map((name) => /^(\d+)\.\d+\.\d+\.\d+$/.exec(name)?.[1])
+      .filter((m): m is string => !!m)
+      .map(Number);
+    return majors.length ? Math.max(...majors) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function parsePortFile(text: string): { port: number; wsPath: string } | null {
@@ -94,7 +122,9 @@ export async function launchBrowser(opts: LaunchOptions): Promise<LaunchedBrowse
   await closeStaleBrowser(portFile);
   await killProfileProcesses(opts.profileDir);
   rmSync(portFile, { force: true });
-  const proc = Bun.spawn([executable, ...browserArgs(opts)], { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
+  const major = opts.userAgent ? undefined : browserMajorVersion(executable);
+  const userAgent = opts.userAgent ?? (major ? desktopUserAgent(major, /msedge/i.test(basename(executable))) : undefined);
+  const proc = Bun.spawn([executable, ...browserArgs({ ...opts, ...(userAgent ? { userAgent } : {}) })], { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
   const deadline = Date.now() + (opts.timeoutMs ?? 15000);
   while (Date.now() < deadline) {
     if (existsSync(portFile)) {
