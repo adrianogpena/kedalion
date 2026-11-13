@@ -5,6 +5,13 @@ Workflow
 - browser_open <url> (newTab to keep the current one) -> browser_snapshot (title, headings, form fields with selectors, links, text) -> browser_click / browser_type / browser_wait_for -> check the result with browser_snapshot or browser_screenshot.
 - Every tool takes an optional tab id (browser_tabs lists them); the default is the active tab. The user sees what you do, live.
 - Local dev servers with self-signed certificates on localhost work when the user's setting allows it.
+- browser_open waits for the load and reports the final URL, title, status and a bot check (Cloudflare, hCaptcha) covering the page; then ask the user to complete it in the Browser view.
+
+Reading sites (articles, wikis, guides)
+- browser_extract returns the main content as Markdown (tables kept, images as ![alt](real source)); offset pages it, saveTo writes it to a file. browser_snapshot main=true and section=images list images and sprite sheets with refs; loadLazy loads lazy images first.
+- browser_image {ref|selector|url} shows you an image (converted to PNG, small ones scaled up; sprite cells and CSS backgrounds captured from the page). browser_download {url|ref|images=true, png} saves files through the browser's session, which works where plain HTTP downloads are refused, with the extension of the real type.
+- browser_click newTab=true opens a link in a background tab; browser_crawl {url, pattern, maxPages, depth, images} follows a site's links and saves each page as Markdown with an index.md.
+- browser_eval saveTo=<file> writes a large result to a file instead of cutting it.
 
 Driving pages (also SmartGWT-style pages with id-less td/div buttons)
 - browser_snapshot lists Clickable elements with refs (e1..); scope (selector or container text), section, limit/offset narrow and page it. Refs stay valid until the next snapshot or navigation.

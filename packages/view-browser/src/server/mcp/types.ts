@@ -44,7 +44,7 @@ export interface McpTool {
 /** Text cut to `TEXT_CAP`; when cut, the text ends with `hint` (names the parameter that fetches more). */
 export function capText(text: string, hint: string): string {
   if (text.length <= TEXT_CAP) return text;
-  const tail = `\n... [cut] ${hint}`;
+  const tail = `\n... [cut: showing about ${TEXT_CAP} of ${text.length} chars] ${hint}`;
   return text.slice(0, TEXT_CAP - tail.length) + tail;
 }
 

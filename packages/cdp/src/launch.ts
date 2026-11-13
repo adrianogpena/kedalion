@@ -8,16 +8,22 @@ export interface BrowserArgsOptions {
   allowOrigin: string;
   /** Replaces the headless user agent, which bot checks (Cloudflare Turnstile) reject. */
   userAgent?: string;
+  /** Hide the automation signals bot checks look for; default true. */
+  hideAutomation?: boolean;
 }
 
 export function browserArgs(opts: BrowserArgsOptions): string[] {
-  return [
+  const base = [
     '--headless=new',
     '--remote-debugging-port=0',
     `--user-data-dir=${opts.profileDir}`,
     '--no-first-run',
     '--no-default-browser-check',
     `--remote-allow-origins=${opts.allowOrigin}`,
+  ];
+  if (opts.hideAutomation === false) return base;
+  return [
+    ...base,
     // Bot checks treat navigator.webdriver = true and the 800x600 headless screen as automation.
     '--disable-blink-features=AutomationControlled',
     '--window-size=1920,1080',
@@ -122,7 +128,7 @@ export async function launchBrowser(opts: LaunchOptions): Promise<LaunchedBrowse
   await closeStaleBrowser(portFile);
   await killProfileProcesses(opts.profileDir);
   rmSync(portFile, { force: true });
-  const major = opts.userAgent ? undefined : browserMajorVersion(executable);
+  const major = opts.userAgent || opts.hideAutomation === false ? undefined : browserMajorVersion(executable);
   const userAgent = opts.userAgent ?? (major ? desktopUserAgent(major, /msedge/i.test(basename(executable))) : undefined);
   const proc = Bun.spawn([executable, ...browserArgs({ ...opts, ...(userAgent ? { userAgent } : {}) })], { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
   const deadline = Date.now() + (opts.timeoutMs ?? 15000);

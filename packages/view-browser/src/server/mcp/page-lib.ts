@@ -4,8 +4,8 @@
  * navigation invalidate them. Text is never passed through querySelector.
  */
 export const PAGE_LIB = String.raw`(() => {
-if (window.__kd && window.__kd.v === 3) return window.__kd;
-const kd = { v: 3, els: [], map: new WeakMap(), last: [] };
+if (window.__kd && window.__kd.v === 4) return window.__kd;
+const kd = { v: 4, els: [], map: new WeakMap(), last: [] };
 window.__kd = kd;
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const vis = (el) => {
@@ -101,7 +101,7 @@ kd.scopeEl = (spec) => {
 };
 const rectOf = (el) => { const r = el.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; };
 kd.collect = (kind, scope, exclude) => {
-  const root = scope ? kd.scopeEl(scope) : document;
+  const root = scope && typeof scope === 'object' ? scope : scope ? kd.scopeEl(scope) : document;
   if (!root) return [];
   const ex = exclude ? kd.byRef(exclude) : null;
   const all = [...root.querySelectorAll(kind === 'text' ? '*' : 'td,div,span,li,a,button,input,select,textarea,summary,img,i,[role],[onclick],[contenteditable]')];
@@ -131,6 +131,10 @@ kd.cands = (kind, scope, exclude) => {
   });
 };
 kd.refs = (idx) => idx.map((i) => kd.ref(kd.last[i]));
+kd.sameLink = (idx) => {
+  const hrefs = idx.map((i) => { const el = kd.last[i]; const a = el && (el.closest('a[href]') || (el.matches('a[href]') ? el : null)); return a ? a.href : ''; });
+  return hrefs.length > 1 && hrefs[0] !== '' && hrefs.every((h) => h === hrefs[0]);
+};
 kd.findSelector = (sel) => {
   let el;
   try { el = document.querySelector(sel); } catch (e) { return { error: 'Invalid selector: ' + sel }; }
@@ -233,9 +237,171 @@ kd.opener = (ref) => {
   const o = row && [...row.querySelectorAll('[class*=opener i],[class*=expand i],[class*=toggle i],[class*=arrow i],[class*=twisty i]')].find(vis);
   return o ? { ref: kd.ref(o) } : null;
 };
-kd.snapshot = (scope, withClickable) => {
+kd.challenge = () => {
+  const t = document.title || '';
+  const has = (s) => { try { return !!document.querySelector(s); } catch (e) { return false; } };
+  if (has('iframe[src*="challenges.cloudflare.com"],#challenge-form,#challenge-stage,#cf-challenge-running,.cf-turnstile') || /^(just a moment|attention required)/i.test(t)) return 'Cloudflare';
+  if (has('iframe[src*="hcaptcha.com"]')) return 'hCaptcha';
+  if (/verify you are human|checking your browser|are you a robot/i.test(t + ' ' + (document.body?.innerText || '').slice(0, 400))) return 'bot check';
+  return null;
+};
+const MAIN = ['#mw-content-text', 'main', '[role=main]', 'article', '#content', '#main', '.entry-content', '.post-content'];
+kd.mainEl = () => {
+  for (const s of MAIN) {
+    const hits = [...document.querySelectorAll(s)].filter((e) => vis(e) && (e.innerText || '').length > 200);
+    if (hits.length) return hits.reduce((a, b) => ((b.innerText || '').length > (a.innerText || '').length ? b : a));
+  }
+  let best = document.body, score = 0;
+  for (const el of document.querySelectorAll('div,section')) {
+    let s = 0;
+    for (const c of el.children) if (c.tagName === 'P' || /^H[1-6]$/.test(c.tagName) || c.tagName === 'UL' || c.tagName === 'TABLE') s += (c.innerText || '').length;
+    if (s > score) { score = s; best = el; }
+  }
+  return best;
+};
+kd.rootOf = (scope, main) => (main ? kd.mainEl() : kd.scopeEl(scope));
+kd.srcOf = (img) => {
+  const cands = [img.currentSrc, img.getAttribute('data-src'), img.getAttribute('data-lazy-src'), img.getAttribute('data-original'), (img.getAttribute('srcset') || img.getAttribute('data-srcset') || '').split(',').pop().trim().split(' ')[0], img.src];
+  const good = cands.find((u) => u && !u.startsWith('data:'));
+  try { return good ? new URL(good, location.href).href : (img.src || ''); } catch (e) { return good || ''; }
+};
+const bgUrl = (el) => { const m = /url\(["']?([^"')]+)["']?\)/.exec(getComputedStyle(el).backgroundImage || ''); if (!m || m[1].startsWith('data:')) return null; try { return new URL(m[1], location.href).href; } catch (e) { return null; } };
+const nearHeading = (el) => {
+  const cap = el.closest('figure')?.querySelector('figcaption') || el.closest('.thumb,.image')?.querySelector('.thumbcaption,.caption');
+  if (cap) return clean(cap.textContent);
+  const hs = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')];
+  let h = null;
+  for (const x of hs) { if (x.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) h = x; else break; }
+  return h ? clean(h.textContent) : '';
+};
+const nameFromUrl = (u) => { try { const parts = new URL(u).pathname.split('/').filter(Boolean).map(decodeURIComponent); return parts.reverse().find((p) => /\.[a-z0-9]{2,5}$/i.test(p)) || parts[0] || u; } catch (e) { return u; } };
+kd.images = (scope, main) => {
+  const root = kd.rootOf(scope, main);
+  if (!root) return { error: 'No container matches scope: ' + scope };
+  const imgs = [...root.querySelectorAll('img')].slice(0, 400).map((img) => {
+    const src = kd.srcOf(img);
+    const placeholder = (img.currentSrc || img.src || '').startsWith('data:') || img.naturalWidth <= 1;
+    const loaded = img.complete && !placeholder;
+    const w = (!placeholder && img.naturalWidth) || Number(img.getAttribute('width')) || 0, h = (!placeholder && img.naturalHeight) || Number(img.getAttribute('height')) || 0;
+    const a = img.closest('a[href]');
+    return { ref: kd.ref(img), name: img.getAttribute('data-image-name') || nameFromUrl(src), alt: clean(img.alt), src, w, h, loaded, near: cut(nearHeading(img), 60), link: a ? a.href : undefined };
+  }).filter((i) => i.src);
+  const sheets = new Map();
+  const others = [];
+  let n = 0;
+  for (const el of root.querySelectorAll('*')) {
+    if (++n > 6000) break;
+    if (el.tagName === 'IMG') continue;
+    const u = bgUrl(el);
+    if (!u) continue;
+    const s = getComputedStyle(el);
+    const pos = s.backgroundPosition;
+    const entry = { ref: kd.ref(el), name: clean(el.closest('a[title]')?.getAttribute('title') || el.getAttribute('title') || el.getAttribute('aria-label') || el.closest('a')?.textContent || ''), pos, w: Math.round(el.getBoundingClientRect().width), h: Math.round(el.getBoundingClientRect().height) };
+    if (!sheets.has(u)) sheets.set(u, []);
+    sheets.get(u).push(entry);
+  }
+  const sprites = [];
+  for (const [u, list] of sheets) {
+    if (list.length > 1 && new Set(list.map((x) => x.pos)).size > 1) sprites.push({ sheet: u, name: nameFromUrl(u), count: list.length, cells: list.slice(0, 300) });
+    else for (const x of list) { const el = kd.byRef(x.ref); others.push({ ref: x.ref, name: nameFromUrl(u), alt: x.name, src: u, w: x.w, h: x.h, loaded: true, near: el ? cut(nearHeading(el), 60) : '', css: true }); }
+  }
+  return { images: imgs.concat(others), sprites };
+};
+kd.loadLazy = async () => {
+  for (const img of document.querySelectorAll('img')) {
+    if (img.loading === 'lazy') img.loading = 'eager';
+    const ds = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original');
+    if (ds && (!img.getAttribute('src') || img.src.startsWith('data:') || img.naturalWidth <= 1)) img.src = ds;
+    const dss = img.getAttribute('data-srcset');
+    if (dss && !img.getAttribute('srcset')) img.setAttribute('srcset', dss);
+  }
+  const start = scrollY;
+  const step = Math.max(innerHeight * 0.8, 400);
+  for (let y = 0, i = 0; y < document.documentElement.scrollHeight && i < 80; y += step, i++) {
+    scrollTo(0, y);
+    await new Promise((r) => setTimeout(r, 60));
+  }
+  scrollTo(0, start);
+  const pending = [...document.images].filter((i) => !i.complete);
+  await Promise.race([Promise.all(pending.map((i) => new Promise((r) => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); }))), new Promise((r) => setTimeout(r, 3000))]);
+  return { images: document.images.length, waited: pending.length };
+};
+const SKIP_MD = /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|SVG|BUTTON|INPUT|SELECT|TEXTAREA|FORM|NAV|IFRAME)$/;
+const NOISE = '.mw-editsection,.editsection,.noprint,.navbox,.toc,[role=navigation],.reference,.mw-cite-backlink';
+const noise = (el) => { try { return el.matches(NOISE); } catch (e) { return false; } };
+const IMG_FILE = /\.(png|jpe?g|gif|webp|svg|avif|bmp)(\/|\?|$)/i;
+kd.markdown = (scope, main) => {
+  const root = kd.rootOf(scope, main);
+  if (!root) return { error: 'No container matches scope: ' + scope };
+  const esc = (s) => s.replace(/\|/g, '\\|');
+  const inline = (node) => {
+    let out = '';
+    for (const c of node.childNodes) {
+      if (c.nodeType === 3) { out += c.textContent.replace(/\s+/g, ' '); continue; }
+      if (c.nodeType !== 1 || SKIP_MD.test(c.tagName) || noise(c) || c.getAttribute('aria-hidden') === 'true' || (c.offsetParent === null && getComputedStyle(c).display === 'none')) continue;
+      const t = c.tagName;
+      if (t === 'BR') out += '\n';
+      else if (t === 'IMG') { const s = kd.srcOf(c); if (s) out += '![' + clean(c.alt || c.getAttribute('data-image-name') || nameFromUrl(s)) + '](' + s + ')'; }
+      else if (t === 'A' && c.getAttribute('href') && !c.getAttribute('href').startsWith('javascript:')) {
+        const own = clean(inline(c));
+        if (/^!\[[^\]]*\]\([^)]*\)$/.test(own) && IMG_FILE.test(c.href)) { out += own; continue; }
+        const twin = (x) => x && x.tagName === 'A' && x.href === c.href;
+        if (!own && (twin(c.previousElementSibling) || twin(c.nextElementSibling))) continue;
+        const txt = own || clean(c.getAttribute('title') || '');
+        out += txt ? '[' + txt + '](' + c.href + ')' : '';
+      }
+      else if (t === 'STRONG' || t === 'B') { const x = clean(inline(c)); out += x ? '**' + x + '**' : ''; }
+      else if (t === 'EM' || t === 'I') { const x = clean(inline(c)); out += x ? '*' + x + '*' : ''; }
+      else if (t === 'CODE') out += '\x60' + c.textContent + '\x60';
+      else out += inline(c);
+    }
+    return out;
+  };
+  const blocks = [];
+  const table = (tb) => {
+    const rows = [...tb.rows].map((r) => [...r.cells].map((c) => esc(clean(inline(c).replace(/\n/g, ' ')))));
+    if (!rows.length) return;
+    const cols = Math.max(...rows.map((r) => r.length));
+    const pad = (r) => r.concat(Array(cols - r.length).fill(''));
+    const lines = ['| ' + pad(rows[0]).join(' | ') + ' |', '|' + ' --- |'.repeat(cols)];
+    for (const r of rows.slice(1)) lines.push('| ' + pad(r).join(' | ') + ' |');
+    blocks.push(lines.join('\n'));
+  };
+  const list = (el, depth) => {
+    let i = 0;
+    for (const li of el.children) {
+      if (li.tagName !== 'LI') continue;
+      i++;
+      const own = [...li.childNodes].filter((c) => !(c.nodeType === 1 && /^(UL|OL)$/.test(c.tagName)));
+      const holder = document.createElement('span');
+      for (const c of own) holder.appendChild(c.cloneNode(true));
+      const text = clean(inline(holder));
+      if (text) blocks.push('  '.repeat(depth) + (el.tagName === 'OL' ? i + '. ' : '- ') + text);
+      for (const sub of li.children) if (/^(UL|OL)$/.test(sub.tagName)) list(sub, depth + 1);
+    }
+  };
+  const walk = (el) => {
+    for (const c of el.children) {
+      const t = c.tagName;
+      if (SKIP_MD.test(t) || noise(c) || c.getAttribute('aria-hidden') === 'true' || (!vis(c) && t !== 'TABLE')) continue;
+      if (/^H[1-6]$/.test(t)) { const x = clean(inline(c)); if (x) blocks.push('#'.repeat(Number(t[1])) + ' ' + x); }
+      else if (t === 'P' || t === 'FIGCAPTION' || t === 'DT' || t === 'DD') { const x = inline(c).replace(/[ \t]+/g, ' ').trim(); if (x) blocks.push(x); }
+      else if (t === 'UL' || t === 'OL') list(c, 0);
+      else if (t === 'TABLE') table(c);
+      else if (t === 'PRE') blocks.push('\x60\x60\x60\n' + c.innerText + '\n\x60\x60\x60');
+      else if (t === 'BLOCKQUOTE') { const x = clean(inline(c)); if (x) blocks.push('> ' + x); }
+      else if (t === 'HR') blocks.push('---');
+      else if (t === 'IMG') { const x = inline({ childNodes: [c] }); if (x) blocks.push(x); }
+      else if (c.children.length && [...c.children].some((k) => /^(P|H[1-6]|UL|OL|TABLE|DIV|SECTION|ARTICLE|FIGURE|PRE|BLOCKQUOTE|DL|HR|IMG|ASIDE|MAIN|HEADER|FOOTER|CENTER)$/.test(k.tagName))) walk(c);
+      else { const x = inline(c).replace(/[ \t]+/g, ' ').trim(); if (x) blocks.push(x); }
+    }
+  };
+  walk(root === document ? document.body : root);
+  return { title: document.title, url: location.href, markdown: blocks.join('\n\n') };
+};
+kd.snapshot = (scope, withClickable, main, withImages) => {
   kd.reset();
-  const root = kd.scopeEl(scope);
+  const root = kd.rootOf(scope, main);
   if (!root) return { error: 'No container matches scope: ' + scope };
   const q = (s) => [...root.querySelectorAll(s)];
   const css = (el) => { if (el.id) return '#' + CSS.escape(el.id); const n = el.getAttribute('name'); const t = el.tagName.toLowerCase(); return n ? t + '[name="' + n.replace(/"/g, '\\"') + '"]' : t; };
@@ -245,7 +411,7 @@ kd.snapshot = (scope, withClickable) => {
   return {
     title: document.title,
     url: location.href,
-    headings: q('h1,h2,h3,h4,h5,h6').filter(vis).map((h) => ({ level: Number(h.tagName[1]), text: clean(h.textContent) })).filter((h) => h.text),
+    headings: q('h1,h2,h3,h4,h5,h6').filter(vis).map((h) => { const c = h.cloneNode(true); for (const n of c.querySelectorAll(NOISE)) n.remove(); return { level: Number(h.tagName[1]), text: clean(c.textContent).replace(/\[\]$/, '') }; }).filter((h) => h.text),
     links: q('a[href]').filter(vis).map((a) => ({ text: clean(a.textContent || a.getAttribute('aria-label')), href: a.href })),
     fields: fieldsAll.slice(0, 400).map((f) => {
       const tag = f.tagName.toLowerCase();
@@ -254,7 +420,9 @@ kd.snapshot = (scope, withClickable) => {
       const value = isButton ? undefined : type === 'password' ? (f.value ? '***' : '') : type === 'checkbox' || type === 'radio' ? (f.checked ? 'checked' : 'unchecked') : String(f.value ?? '');
       return { tag, type, name: f.getAttribute('name') || undefined, label: isButton ? clean(f.textContent || f.value) : labelOf(f), value, selector: css(f), ref: kd.ref(f) };
     }),
-    clickable: withClickable ? kd.collect('click', scope).filter((el) => textOf(el) || el.matches('input,select,textarea')).slice(0, 400).map((el) => ({ ref: kd.ref(el), tag: el.tagName.toLowerCase(), text: cut(textOf(el), 80), state: stateOf(el) })) : undefined,
+    clickable: withClickable ? kd.collect('click', root).filter((el) => textOf(el) || el.matches('input,select,textarea')).slice(0, 400).map((el) => ({ ref: kd.ref(el), tag: el.tagName.toLowerCase(), text: cut(textOf(el), 80), state: stateOf(el) })) : undefined,
+    images: withImages ? kd.images(scope, main) : undefined,
+    challenge: kd.challenge() || undefined,
     text: clean(base?.innerText),
   };
 };

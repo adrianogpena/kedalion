@@ -76,6 +76,10 @@ test('loading, url and title updates are pushed', async () => {
   client.emit('Target.targetInfoChanged', { targetInfo: { targetId: 't1', url: 'https://b.test', title: 'B' } });
   client.emit('Page.frameStoppedLoading', { frameId: 'f' }, 's-t1');
   expect(tabs.list()[0]).toMatchObject({ loading: false, url: 'https://b.test', title: 'B' });
+  client.emit('Page.navigatedWithinDocument', { frameId: 'iframe-1', url: 'https://auth.test/app' }, 's-t1');
+  expect(tabs.list()[0]!.url).toBe('https://b.test');
+  client.emit('Page.navigatedWithinDocument', { frameId: 't1', url: 'https://b.test/#x' }, 's-t1');
+  expect(tabs.list()[0]!.url).toBe('https://b.test/#x');
 });
 
 test('back, forward and navigation use the history', async () => {

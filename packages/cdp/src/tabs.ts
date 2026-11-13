@@ -182,7 +182,12 @@ export async function createTabs(client: CdpClient, opts: TabsOptions = {}): Pro
     if (p.frame?.parentId) return;
     update(sid, { url: p.frame.url }, true);
   });
-  client.on('Page.navigatedWithinDocument', (p, sid) => update(sid, { url: p.url }, true));
+  // Also fires for iframes (e.g. a sign-in frame calling pushState); only the main frame, whose id is the target id, moves the tab.
+  client.on('Page.navigatedWithinDocument', (p, sid) => {
+    const tab = sid ? bySession.get(sid) : undefined;
+    if (!tab || (p.frameId && p.frameId !== tab.info.id)) return;
+    update(sid, { url: p.url }, true);
+  });
 
   await client.send('Target.setDiscoverTargets', { discover: true });
   await Promise.all([...attaching.values()]);

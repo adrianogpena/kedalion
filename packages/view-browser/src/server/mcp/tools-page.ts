@@ -3,9 +3,10 @@ import { compactUrl, decodeOperations, prettyBody, STATIC_TYPES, summarizeReques
 import { stepLogFor } from './steps.ts';
 import { bool, num, pageSession, resolveTab, runtimeEval, str, withTimeout } from './page-util.ts';
 import { PAGE_LIB } from './page-lib.ts';
-import { DEFAULT_SNAPSHOT_CHARS, type PageSnapshot, renderSnapshot, SNAPSHOT_SECTIONS, type SnapshotSection } from './snapshot.ts';
+import { challengeNote, DEFAULT_SNAPSHOT_CHARS, type PageSnapshot, renderSnapshot, SNAPSHOT_SECTIONS, type SnapshotSection } from './snapshot.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
+import { writeOutput } from './resource.ts';
 import { failResult, type McpTool, textResult, type ToolContext, type ToolSchema } from './types.ts';
 
 const TAB = { type: 'string', description: 'Tab id from browser_tabs; default the active tab.' } as const;
@@ -62,6 +63,37 @@ async function navFailure(ctx: ToolContext, tab: string, since: number, ms = 200
 
 const lastNetworkId = (ctx: ToolContext, tab: string): number => ctx.service.logs(tab)?.network.entries({ limit: 1 }).at(-1)?.id ?? 0;
 
+/**
+ * Waits (up to `timeoutMs`) until the tab has loaded, then reports the final URL, title, HTTP status of
+ * the main document and a bot check covering the page.
+ */
+export async function loadReport(ctx: ToolContext, tab: string, since: number, timeoutMs = 15_000): Promise<string> {
+  const session = ctx.service.tabs().session(tab);
+  const deadline = Date.now() + timeoutMs;
+  await new Promise((res) => setTimeout(res, 200));
+  let done = false;
+  while (Date.now() < deadline) {
+    const info = ctx.service.tabs().list().find((t) => t.id === tab);
+    if (!info) return `Tab ${tab} was closed.`;
+    if (!info.loading) {
+      const r = await runtimeEval(session, 'document.readyState', { returnByValue: true, awaitPromise: false, timeoutMs: 3000 }).catch(() => undefined);
+      if (r?.ok && r.value !== 'loading') {
+        done = true;
+        break;
+      }
+    }
+    await new Promise((res) => setTimeout(res, 150));
+  }
+  const r = await runtimeEval(session, `(() => { const kd = ${PAGE_LIB}; return { title: document.title, url: location.href, challenge: kd.challenge() }; })()`, { returnByValue: true, awaitPromise: false, timeoutMs: 5000 }).catch(() => undefined);
+  const v = (r?.ok ? r.value : undefined) as { title: string; url: string; challenge: string | null } | undefined;
+  const main = ctx.service.logs(tab)?.network.entries({ since, filter: { type: 'document' } }).at(-1);
+  const lines = [`URL: ${v?.url ?? '?'}`, `Title: ${v?.title || '(none)'}`];
+  if (main?.status) lines.push(`Status: ${main.status}`);
+  if (!done) lines.push(`Still loading after ${Math.round(timeoutMs / 1000)}s.`);
+  if (v?.challenge) lines.push(challengeNote(v.challenge));
+  return lines.join('\n');
+}
+
 const tabLine =(t: { id: string; title: string; url: string; loading: boolean }, active: boolean) => `${active ? '*' : ' '} ${t.id}  ${t.title || '(untitled)'}  ${t.url}${t.loading ? '  (loading)' : ''}`;
 
 export const pageTools: McpTool[] = [
@@ -78,8 +110,17 @@ export const pageTools: McpTool[] = [
   },
   {
     name: 'browser_open',
-    description: 'Open a URL: in a new tab (newTab) or in the tab given (default the active tab; a new tab when none is open).',
-    inputSchema: schema({ url: { type: 'string', description: 'Address; a bare host gets https://.' }, newTab: { type: 'boolean', description: 'Open in a new tab.' } }, ['url']),
+    description:
+      'Open a URL: in a new tab (newTab) or in the tab given (default the active tab; a new tab when none is open). Waits until the page has loaded (wait=false to return at once) and returns the final URL, title, HTTP status and a warning when a bot check (Cloudflare, hCaptcha) covers the page.',
+    inputSchema: schema(
+      {
+        url: { type: 'string', description: 'Address; a bare host gets https://.' },
+        newTab: { type: 'boolean', description: 'Open in a new tab.' },
+        wait: { type: 'boolean', description: 'Wait for the load and report the result, default true.' },
+        timeoutMs: { type: 'integer', description: 'Longest wait for the load, default 15000, at most 60000.' },
+      },
+      ['url'],
+    ),
     async run(a, ctx) {
       await ctx.ready();
       let url: string;
@@ -90,17 +131,19 @@ export const pageTools: McpTool[] = [
       }
       const wanted = str(a, 'tab');
       const target = wanted ?? ctx.service.activeTab();
+      const wait = a.wait !== false;
+      const timeout = Math.min(Math.max(num(a, 'timeoutMs') ?? 15_000, 1000), 60_000);
       if (bool(a, 'newTab') || !target) {
         const t = await ctx.service.open(url);
         const failed = await navFailure(ctx, t.id, 0);
         if (failed) return failResult(`Navigation failed: ${failed} (tab ${t.id}, ${url})`);
-        return textResult(`Opened ${t.url} in tab ${t.id}`);
+        return textResult(wait ? `Opened in tab ${t.id}\n${await loadReport(ctx, t.id, 0, timeout)}` : `Opened ${t.url} in tab ${t.id}`);
       }
       const tab = await resolveTab(ctx, { tab: target });
       const since = lastNetworkId(ctx, tab);
       const navError = (await ctx.service.navigate(tab, url)) ?? (await navFailure(ctx, tab, since));
       if (navError) return failResult(`Navigation failed: ${navError}`);
-      return textResult(`Navigating tab ${tab} to ${url}`);
+      return textResult(wait ? `Loaded in tab ${tab}\n${await loadReport(ctx, tab, since, timeout)}` : `Navigating tab ${tab} to ${url}`);
     },
   },
   {
@@ -114,6 +157,7 @@ export const pageTools: McpTool[] = [
       if (a.action !== 'stop') {
         const failed = await navFailure(ctx, tab, since);
         if (failed) return failResult(`Navigation failed: ${failed}`);
+        return textResult(`${a.action} done on tab ${tab}\n${await loadReport(ctx, tab, since)}`);
       }
       return textResult(`${a.action} done on tab ${tab}`);
     },
@@ -149,19 +193,23 @@ export const pageTools: McpTool[] = [
   {
     name: 'browser_snapshot',
     description:
-      'Text snapshot of the page: title, url, headings, form fields (ref, password values masked), Clickable elements (buttons, links, tabs, td/div clickables, menu items, each with a ref e1.. usable by browser_click/type/fill/select until the next snapshot or navigation), links (30 per page) and visible text, pruned to maxChars. scope limits it to a container (selector or its text); section limits it to headings, fields, clickable, links or text; limit and offset page Clickable and Links.',
+      'Text snapshot of the page: title, url, a bot-check warning when one covers the page, headings, form fields (ref, password values masked), Clickable elements (buttons, links, tabs, td/div clickables, menu items, each with a ref e1.. usable by browser_click/type/fill/select until the next snapshot or navigation), links (30 per page), images (img and CSS background images with ref, name, alt, size, loaded state, nearest heading and real source; sprite sheets with their cells) and visible text, pruned to maxChars. main=true limits it to the main content (article, wiki body) without navigation; scope limits it to a container (selector or its text); section limits it to headings, fields, clickable, links, images or text; limit and offset page Clickable, Links and Images. loadLazy scrolls the page first so lazy images load.',
     inputSchema: schema({
       maxChars: { type: 'integer', description: `Budget of the snapshot, default ${DEFAULT_SNAPSHOT_CHARS}.` },
       scope: { type: 'string', description: 'CSS selector or text of a container.' },
+      main: { type: 'boolean', description: 'Only the main content (article, main, wiki body), without navigation and sidebars.' },
       section: { type: 'string', enum: SNAPSHOT_SECTIONS, description: 'Only this section.' },
-      limit: { type: 'integer', description: 'Items of Clickable and Links, default 60 and 30.' },
-      offset: { type: 'integer', description: 'Items of Clickable and Links to skip.' },
+      limit: { type: 'integer', description: 'Items of Clickable, Links and Images, default 60, 30 and 30.' },
+      offset: { type: 'integer', description: 'Items of Clickable, Links and Images to skip.' },
+      loadLazy: { type: 'boolean', description: 'Scroll through the page first so lazy-loaded images load (up to a few seconds).' },
     }),
     async run(a, ctx) {
       const { session } = await pageSession(ctx, a);
       const section = str(a, 'section') as SnapshotSection | undefined;
       const sections = section ? [section] : undefined;
-      const r = await runtimeEval(session, `(() => { const kd = ${PAGE_LIB}; return kd.snapshot(${JSON.stringify(str(a, 'scope') ?? null)}, ${!sections || section === 'clickable'}); })()`, { returnByValue: true, awaitPromise: false });
+      if (bool(a, 'loadLazy')) await runtimeEval(session, `(() => { const kd = ${PAGE_LIB}; return kd.loadLazy(); })()`, { returnByValue: true, awaitPromise: true, timeoutMs: 20_000 });
+      const args = [JSON.stringify(str(a, 'scope') ?? null), !sections || section === 'clickable', bool(a, 'main'), !sections || section === 'images'];
+      const r = await runtimeEval(session, `(() => { const kd = ${PAGE_LIB}; return kd.snapshot(${args.join(', ')}); })()`, { returnByValue: true, awaitPromise: false, timeoutMs: 15_000 });
       if (!r.ok) return failResult(r.text);
       if ((r.value as { error?: string }).error) return failResult((r.value as { error: string }).error);
       const maxChars = Math.min(Math.max(num(a, 'maxChars') ?? DEFAULT_SNAPSHOT_CHARS, 200), 19_000);
@@ -357,16 +405,23 @@ export const pageTools: McpTool[] = [
   },
   {
     name: 'browser_eval',
-    description: 'Evaluate a JavaScript expression in the page and return the result as text.',
+    description: 'Evaluate a JavaScript expression in the page and return the result as text. saveTo writes the whole result to a file instead (for large results).',
     inputSchema: schema({
       expression: { type: 'string' },
       awaitPromise: { type: 'boolean', description: 'Wait for a returned promise, default true.' },
       timeoutMs: { type: 'integer', description: 'Default 10000.' },
+      saveTo: { type: 'string', description: 'Absolute file path: write the whole result there and return only its path and size.' },
     }, ['expression']),
     async run(a, ctx) {
       const { session } = await pageSession(ctx, a);
       const r = await runtimeEval(session, a.expression as string, { awaitPromise: a.awaitPromise !== false, ...(num(a, 'timeoutMs') ? { timeoutMs: num(a, 'timeoutMs')! } : {}) });
-      return r.ok ? textResult(r.text, 'Return less from the expression.') : failResult(r.text);
+      if (!r.ok) return failResult(r.text);
+      const saveTo = str(a, 'saveTo');
+      if (saveTo) {
+        const file = await writeOutput(saveTo, r.text);
+        return textResult(`Saved the result (${r.text.length} chars) to ${file}`);
+      }
+      return textResult(r.text, 'Return less from the expression, or pass saveTo=<file path> to get all of it in a file.');
     },
   },
   {

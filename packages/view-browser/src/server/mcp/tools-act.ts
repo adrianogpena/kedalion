@@ -70,6 +70,9 @@ async function resolve(session: CdpSession, loc: Locator, kind: Kind, exclude?: 
     const cands = (await page(session, `kd.cands(${JSON.stringify(k)}, null, ${JSON.stringify(exclude ?? null)})`)) as Candidate[];
     const m = matchCandidates(cands, query);
     if (!m.hits.length) continue;
+    // An icon link and a text link to the same page (wiki item lists) are one target, not an ambiguity.
+    const sameLink = m.hits.length > 1 && m.hits.length <= 8 && kind === 'click' && (await page(session, `kd.sameLink(${JSON.stringify(m.hits.map((c) => c.i))})`));
+    if (sameLink) return ((await page(session, `kd.refs([${m.hits[0]!.i}])`)) as string[])[0]!;
     if (m.hits.length > 1 && !(exclude && k === 'text')) {
       const refs = (await page(session, `kd.refs(${JSON.stringify(m.hits.slice(0, 8).map((c) => c.i))})`)) as string[];
       throw new Error(`"${query}" is ambiguous (${m.hits.length} ${m.tier} matches); pass a ref:\n${describeCandidates(m.hits, refs)}`);
@@ -151,13 +154,27 @@ export const actTools: McpTool[] = [
   {
     name: 'browser_click',
     description:
-      'Click an element by text (visible text, exact match preferred, else contains; also finds td/div/span buttons), ref (from browser_snapshot), selector, saved target, or a viewport point (x, y). Scrolls into view and waits until visible, uncovered and stable. An ambiguous text lists the candidates. Returns what changed.',
-    inputSchema: schema({ ...LOCATE, text: { type: 'string', description: 'Visible text of the element.' }, x: { type: 'number' }, y: { type: 'number' } }),
+      'Click an element by text (visible text, exact match preferred, else contains; also finds td/div/span buttons), ref (from browser_snapshot), selector, saved target, or a viewport point (x, y). Scrolls into view and waits until visible, uncovered and stable. An ambiguous text lists the candidates. Returns what changed. newTab=true opens a link in a new background tab instead (the current page stays) and returns the new tab id.',
+    inputSchema: schema({
+      ...LOCATE,
+      text: { type: 'string', description: 'Visible text of the element.' },
+      x: { type: 'number' },
+      y: { type: 'number' },
+      newTab: { type: 'boolean', description: 'Open the link in a new background tab instead of clicking.' },
+    }),
     run: guard(async (a, ctx) => {
       const { tab, session } = await pageSession(ctx, a);
       const hasPoint = num(a, 'x') !== undefined && num(a, 'y') !== undefined;
       const loc = hasPoint ? {} : await locatorOf(session, ctx, a, 'text');
       if (!hasPoint && !loc.ref && !loc.selector && !loc.text && !loc.label) return failResult('Pass text, ref, selector, target, or both x and y.');
+      if (bool(a, 'newTab')) {
+        if (hasPoint) return failResult('newTab needs text, ref, selector or target, not x/y.');
+        const ref = await resolve(session, loc, 'click');
+        const href = (await page(session, `(() => { const el = kd.byRef(${JSON.stringify(ref)}); const l = el && (el.closest('a[href]') || el.querySelector('a[href]')); return l ? l.href : null; })()`)) as string | null;
+        if (!href || href.startsWith('javascript:')) return failResult(`${await nameOf(session, ref)} is not a link; click it without newTab.`);
+        const t = await ctx.service.open(href, { activate: false });
+        return textResult(`Opened ${href} in background tab ${t.id} (pass tab=${t.id} to work in it)`);
+      }
       return textResult(
         await withEffect(session, tab, ctx, async () => {
           if (hasPoint) {

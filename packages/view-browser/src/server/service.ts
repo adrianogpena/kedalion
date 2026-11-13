@@ -113,7 +113,8 @@ export interface BrowserService {
   /** Console and network logs of a tab; undefined for an unknown tab. */
   logs(tab: string): TabLogs | undefined;
   activeTab(): string | undefined;
-  open(url?: string): Promise<TabInfo>;
+  /** Opens a tab; `activate: false` keeps the current tab in front. */
+  open(url?: string, opts?: { activate?: boolean }): Promise<TabInfo>;
   close(id: string): Promise<void>;
   activate(id: string): Promise<void>;
   navigate(id: string, url: string): Promise<string | undefined>;
@@ -308,6 +309,7 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
       profileDir: opts.profileDir,
       allowOrigin: opts.origin() ?? 'http://127.0.0.1',
       ...(s.executable ? { executable: s.executable } : {}),
+      hideAutomation: s.hideAutomation,
     });
     let cdp: CdpClient;
     try {
@@ -403,9 +405,9 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     tabs: requireTabs,
     logs: (tab) => perTab.get(tab),
     activeTab: () => tabs?.active(),
-    async open(url) {
+    async open(url, o) {
       const target = url ?? opts.settings().home;
-      return openTab(requireTabs(), target, true);
+      return openTab(requireTabs(), target, o?.activate ?? true);
     },
     close: (id) => requireTabs().close(id),
     async activate(id) {

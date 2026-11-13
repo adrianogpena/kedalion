@@ -15,6 +15,7 @@ test('browserArgs builds the headless command line', () => {
     '--screen-info={1920x1080}',
   ]);
   expect(browserArgs({ profileDir: '/p', allowOrigin: 'x', userAgent: 'UA' }).at(-1)).toBe('--user-agent=UA');
+  expect(browserArgs({ profileDir: '/p', allowOrigin: 'x', userAgent: 'UA', hideAutomation: false })).toHaveLength(6);
 });
 
 test('desktopUserAgent drops the headless marker', () => {

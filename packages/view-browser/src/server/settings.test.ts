@@ -2,9 +2,10 @@ import { expect, test } from 'bun:test';
 import { browserSettingsOf, validBrowser } from './settings.ts';
 
 test('validBrowser accepts fitting values', () => {
-  expect(validBrowser({ executable: 'C:\\b.exe', ignoreLocalCertErrors: true, agentTools: false, home: 'https://a.b' })).toEqual({
+  expect(validBrowser({ executable: 'C:\\b.exe', ignoreLocalCertErrors: true, hideAutomation: false, agentTools: false, home: 'https://a.b' })).toEqual({
     executable: 'C:\\b.exe',
     ignoreLocalCertErrors: true,
+    hideAutomation: false,
     agentTools: false,
     home: 'https://a.b',
   });
@@ -19,6 +20,6 @@ test('validBrowser rejects wrong types and unknown keys', () => {
 });
 
 test('browserSettingsOf fills defaults', () => {
-  expect(browserSettingsOf(undefined)).toEqual({ executable: '', ignoreLocalCertErrors: false, agentTools: true, home: 'about:blank' });
+  expect(browserSettingsOf(undefined)).toEqual({ executable: '', ignoreLocalCertErrors: false, hideAutomation: true, agentTools: true, home: 'about:blank' });
   expect(browserSettingsOf({ browser: { home: '' } }).home).toBe('about:blank');
 });
