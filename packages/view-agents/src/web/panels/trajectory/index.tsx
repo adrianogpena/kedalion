@@ -1,4 +1,5 @@
 import { TrajectoryTab } from '../../TrajectoryTab';
+import { displayName } from '../../attention';
 import { categoryOf } from '../../filters';
 import { useAgentsHost } from '../../workspace/host';
 import type { PanelModule, PanelProps, SectionProps, WorkspaceApi } from '../../workspace/types';
@@ -22,6 +23,7 @@ function TrajectoryBody({ api, sessionId: given, onClose, compact, initialStep }
       initialStep={initialStep}
       onExpand={(step) => session && api.open('trajectory', { sessionId: session.id, step })}
       onOutput={(toolUseId) => session && api.open('output', { sessionId: session.id, toolUseId })}
+      {...(!compact && session ? { onBack: () => api.open('agent', { sessionId: session.id }), backLabel: displayName(session) } : {})}
     />
   );
 }

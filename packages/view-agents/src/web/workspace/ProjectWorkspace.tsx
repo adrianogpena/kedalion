@@ -14,8 +14,10 @@ import type { OpenOptions, PanelKind, PanelParams, PanelProps, WorkspaceApi } fr
 /** What the screen can do to one project's workspace. */
 export interface WorkspaceHandle {
   api: WorkspaceApi;
-  /** Shows the session's agent panel (replacing any open tool); `terminal` hints the pty to attach to. */
-  openAgent(sessionId: string, opts?: { terminal?: string }): void;
+  /** Shows the session's agent panel (replacing any open tool); `terminal` hints the pty to attach to; `trajectory` then shows its Trajectory over it. */
+  openAgent(sessionId: string, opts?: { terminal?: string; trajectory?: boolean }): void;
+  /** Kind of the tool shown over the session, if any. */
+  tool(): PanelKind | undefined;
   /** Drops the session's agent panel, if it is the shown one. */
   closeAgent(sessionId: string): void;
 }
@@ -52,6 +54,8 @@ export function ProjectWorkspace({ project, hidden, register, onFocusedAgent }: 
   hostRef.current = host;
   const [agent, setAgent] = useState<AgentView>();
   const [tools, setTools] = useState<Tool[]>([]);
+  const toolsRef = useRef(tools);
+  toolsRef.current = tools;
   const { list: localSide, setList: setLocalSide, open: localSideOpen, setOpen: setLocalSideOpen, folded: localFolded, setFolded: setLocalFolded } = useRightSide(project, host.rightSidebarOpen === true);
   const shared = host.rightSidebarPerProject !== true;
   const side = shared ? host.sharedSide.side : localSide;
@@ -107,7 +111,11 @@ export function ProjectWorkspace({ project, hidden, register, onFocusedAgent }: 
   const handle = useMemo<WorkspaceHandle>(
     () => ({
       api,
-      openAgent: (sessionId, opts) => void open('agent', { sessionId, ...(opts?.terminal ? { terminal: opts.terminal } : {}) }),
+      openAgent: (sessionId, opts) => {
+        open('agent', { sessionId, ...(opts?.terminal ? { terminal: opts.terminal } : {}) });
+        if (opts?.trajectory) open('trajectory', { sessionId });
+      },
+      tool: () => toolsRef.current[toolsRef.current.length - 1]?.kind,
       closeAgent: (sessionId) => setAgent((cur) => (cur?.sessionId === sessionId ? undefined : cur)),
     }),
     [api, open],

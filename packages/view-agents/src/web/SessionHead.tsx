@@ -90,6 +90,7 @@ export function SessionHead({ session: s, git, onRename, onStop, onRestart, onCo
         <span className="agents-head-sub" title={stats.tools.map(([n, c]) => `${n} ${c}`).join(' · ')}>{t('agents.head.tools', { n: stats.total })}</span>
       )}
       {stats && stats.subagents > 0 && <span className="agents-head-sub">{t('agents.head.subagents', { n: stats.subagents })}</span>}
+      {stats && stats.workflows > 0 && <span className="agents-head-sub">{t('agents.head.workflows', { n: stats.workflows })}</span>}
       <span className="agents-head-fill" />
       {git?.branch && (
         <span className="agents-head-git">

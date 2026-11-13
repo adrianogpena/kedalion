@@ -1,8 +1,8 @@
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, ContextMenu, type ContextMenuItem, Empty, ErrorBanner, Spinner, useAsync, useRovingList } from '@kedalion/ui';
-import type { AgentTraceStep } from '../protocol';
+import { type AgentTraceStep, shortModel, TRACE_AREAS } from '../protocol';
 import { t } from '../i18n';
-import { getTrace } from './api';
+import { getAgentTrace, getTrace } from './api';
 import { FilesView } from './trajectory/FilesView';
 import { StatsView } from './trajectory/StatsView';
 import { AgentsView, CommandsView, fmtCost, PromptsView, TodosView, WebView } from './trajectory/TabViews';
@@ -13,6 +13,7 @@ import {
   entriesOf,
   filesOf,
   filtersActive,
+  foldEntries,
   findFrom,
   fmtClock,
   fmtDelta,
@@ -70,6 +71,9 @@ export interface TrajectoryTabProps {
   onExpand?: (step: number) => void;
   /** Step (0-based) to select once the steps have loaded, e.g. when opened from the side panel. */
   initialStep?: number;
+  /** Wide form: shows the session itself (its terminal or chat); `backLabel` names it on the button. */
+  onBack?: () => void;
+  backLabel?: string;
 }
 
 function StepMeta({ s, info, n, total }: { s: AgentTraceStep; info?: StepInfo; n: number; total: number }) {
@@ -104,22 +108,39 @@ function StepMeta({ s, info, n, total }: { s: AgentTraceStep; info?: StepInfo; n
 }
 
 /** The Trajectory tab: the session's steps (prompts, replies, thinking, tool calls) newest first, with the picked step's detail; Files and Statistics views, filters and a timeline in the wide form. */
-export function TrajectoryTab({ sessionId, available, onClose, compact = false, running = false, canShow = false, onShow, onOutput, onExpand, initialStep }: TrajectoryTabProps) {
+export function TrajectoryTab({ sessionId, available, onClose, compact = false, running = false, canShow = false, onShow, onOutput, onExpand, initialStep, onBack, backLabel }: TrajectoryTabProps) {
   const [picked, setPicked] = useState<number>();
   const [seen, setSeen] = useState(0);
   const [tab, setTab] = useState<Tab>('steps');
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [fold, setFold] = useState(false);
   const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: Array<ContextMenuItem | 'sep'> }>();
   const [now, setNow] = useState(Date.now());
   const listRef = useRef<HTMLUListElement>(null);
   const detailRef = useRef<HTMLPreElement>(null);
-  const state = useAsync(() => (sessionId && available ? getTrace(sessionId) : Promise.resolve(undefined)), [sessionId, available], available && sessionId ? REFRESH_MS : 0);
+  const [agent, setAgent] = useState<{ agentId: string; runId?: string; label: string }>();
+  const sessionState = useAsync(() => (sessionId && available ? getTrace(sessionId) : Promise.resolve(undefined)), [sessionId, available], available && sessionId ? REFRESH_MS : 0);
+  const agentState = useAsync(() => (sessionId && agent ? getAgentTrace(sessionId, agent.agentId, agent.runId) : Promise.resolve(undefined)), [sessionId, agent], agent && sessionId ? REFRESH_MS : 0);
+  const state = agent ? agentState : sessionState;
   useRovingList(listRef, '.agents-traj-step');
   useEffect(() => {
     setPicked(undefined);
     setFilters(NO_FILTERS);
     setTab('steps');
+    setAgent(undefined);
   }, [sessionId]);
+  const openAgent = (a: { agentId: string; runId?: string; label: string }) => {
+    setAgent(a);
+    setPicked(undefined);
+    setFilters(NO_FILTERS);
+    setTab('steps');
+  };
+  const closeAgent = () => {
+    setAgent(undefined);
+    setPicked(undefined);
+    setFilters(NO_FILTERS);
+    setTab('agents');
+  };
 
   const steps = state.data?.steps;
   const appliedStep = useRef<string>();
@@ -138,7 +159,10 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
     return new Map(rows.map((r) => [r.i, { cost: r.cost, top: top > 0 && r.cost === top }]));
   }, [steps]);
   const files = useMemo(() => (tab === 'files' ? filesOf(steps ?? []) : []), [tab, steps]);
-  const visible = useMemo(() => applyFilters(entries, filters), [entries, filters]);
+  const visible = useMemo(() => {
+    const kept = applyFilters(entries, filters);
+    return fold ? foldEntries(kept) : kept;
+  }, [entries, filters, fold]);
   const infos = useMemo(() => infoOf(steps ?? []), [steps]);
   const tint = useMemo(() => {
     const m = new Map<string, number>();
@@ -174,15 +198,30 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
 
   if (!sessionId) return <Empty title={t('agents.trajectory.noSession')} />;
   if (!available) return <Empty title={t('agents.trajectory.unavailable')} />;
-  if (state.error) return <ErrorBanner error={state.error} onRetry={state.reload} />;
+  const agentBar = agent && (
+    <div className="agents-traj-agentbar" role="status">
+      <span title={agent.label}>{t('panel.trajectory.agents.viewing', { name: agent.label })}</span>
+      <Button variant="ghost" size="xs" onClick={closeAgent}>{t('panel.trajectory.agents.back')}</Button>
+    </div>
+  );
+  const early = (body: ReactElement) =>
+    agentBar ? (
+      <div className="agents-traj-root">
+        {agentBar}
+        {body}
+      </div>
+    ) : (
+      body
+    );
+  if (state.error) return early(<ErrorBanner error={state.error} onRetry={state.reload} />);
   if (!steps) {
-    return (
+    return early(
       <div className="agents-traj-loading">
         <Spinner />
-      </div>
+      </div>,
     );
   }
-  if (steps.length === 0) return <Empty title={t('agents.trajectory.empty')} />;
+  if (steps.length === 0) return early(<Empty title={t('agents.trajectory.empty')} />);
 
   const pick = (i: number) => {
     setPicked(i >= last ? undefined : i);
@@ -231,6 +270,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
     if (!compact) {
       if (s.file) items.push({ id: 'files', label: t('panel.trajectory.menu.files'), icon: 'file', run: () => setTab('files') });
       if (s.tool) items.push({ id: 'only', label: t('panel.trajectory.menu.onlyTool', { tool: s.tool }), icon: 'search', run: () => openTool(s.tool!) });
+      if (s.area) items.push({ id: 'area', label: t('panel.trajectory.menu.onlyArea', { area: t(`panel.trajectory.area.${s.area}`) }), icon: 'search', run: () => { setFilters({ ...NO_FILTERS, area: s.area! }); setTab('steps'); } });
     }
     setMenu({ at: { x: e.clientX, y: e.clientY }, items });
   };
@@ -276,7 +316,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
   const tools = toolNames(steps);
   const active = filtersActive(filters);
 
-  const row = (i: number, s: AgentTraceStep, around: [AgentTraceStep | undefined, AgentTraceStep | undefined]) => {
+  const row = (i: number, s: AgentTraceStep, around: [AgentTraceStep | undefined, AgentTraceStep | undefined], folded?: { members: number[]; ms: number }) => {
     const grouped = s.messageId !== undefined && tint.has(s.messageId);
     const edge = (n: AgentTraceStep | undefined) => (n?.messageId === s.messageId ? '' : ' agents-traj-grp-edge');
     const grp = grouped ? ` agents-traj-grp agents-traj-grp-${tint.get(s.messageId!)}${edge(around[0]).replace('edge', 'top')}${edge(around[1]).replace('edge', 'bottom')}` : '';
@@ -292,6 +332,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
         onContextMenu={(e) => openMenu(e, i)}
       >
         <span className="agents-traj-num">#{i + 1}</span>
+        {s.area && <span className={`agents-traj-area agents-area-${s.area}`} title={t(`panel.trajectory.area.${s.area}`)} aria-label={t(`panel.trajectory.area.${s.area}`)} />}
         {!compact && s.ts && <span className="agents-traj-time">{fmtClock(s.ts)}</span>}
         <span className="agents-traj-kind">{kindLabel(s)}:</span>
         <span className="agents-traj-label">{s.label}</span>
@@ -299,12 +340,18 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
           <span className="agents-traj-same" title={t('panel.trajectory.sameRequest', { n: infos[i]!.head! + 1 })}>{t('panel.trajectory.partOf', { n: infos[i]!.head! + 1 })}</span>
         )}
         {!compact && s.pending && <span className="agents-traj-pending" aria-label={t('panel.trajectory.pending')} />}
+        {folded && <span className="agents-traj-fold" title={t('panel.trajectory.fold.more', { n: folded.members.length - 1 })}>+{folded.members.length - 1}</span>}
+        {s.modelFrom && s.model && <span className="agents-traj-marker agents-traj-model-change" title={t('panel.trajectory.modelChange')}>◆ {shortModel(s.modelFrom)} → {shortModel(s.model)}</span>}
         {s.marker && <span className={`agents-traj-marker agents-traj-marker-${s.marker}`}>{t(`panel.trajectory.marker.${s.marker}`)}</span>}
         {s.kind === 'thinking' && s.detail.length > 0 && <span className="agents-traj-meta" title={t('panel.trajectory.meta.thinking')}>~{fmtTokens(Math.ceil(s.detail.length / 4))}</span>}
         {promptCost.get(i) && promptCost.get(i)!.cost > 0 && (
           <span className={`agents-traj-meta${promptCost.get(i)!.top ? ' agents-traj-topcost' : ''}`} title={t(promptCost.get(i)!.top ? 'panel.trajectory.prompts.top' : 'panel.trajectory.prompts.cost')}>{fmtCost(promptCost.get(i)!.cost)}</span>
         )}
-        {s.durationMs !== undefined && <span className="agents-traj-meta" title={t('panel.trajectory.meta.duration')}>{fmtDuration(s.durationMs)}</span>}
+        {folded ? (
+          <span className="agents-traj-meta" title={t('panel.trajectory.meta.duration')}>{fmtDuration(folded.ms)}</span>
+        ) : (
+          s.durationMs !== undefined && <span className="agents-traj-meta" title={t('panel.trajectory.meta.duration')}>{fmtDuration(s.durationMs)}</span>
+        )}
         {s.context ? <span className="agents-traj-meta agents-traj-ctx" title={t('panel.trajectory.meta.context')}>{s.contextPercent !== undefined ? `${s.contextPercent}%` : fmtTokens(s.context)}</span> : null}
       </button>
     </li>
@@ -326,7 +373,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
         </Button>
       )}
       <ul ref={listRef} className="agents-traj-list" aria-label={t('agents.trajectory.steps')}>
-        {[...visible].reverse().map(({ step: s, i }, k, all) => row(i, s, [all[k - 1]?.step, all[k + 1]?.step]))}
+        {[...visible].reverse().map(({ step: s, i, fold: f }, k, all) => row(i, s, [all[k - 1]?.step, all[k + 1]?.step], f))}
       </ul>
     </div>
   );
@@ -359,10 +406,16 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
     );
   }
 
-  const shown = new Set(visible.map((v) => v.i));
+  const shown = new Set(visible.flatMap((v) => v.fold?.members ?? [v.i]));
   return (
     <div className="agents-traj-root" onKeyDownCapture={onKeyDownCapture}>
+      {agentBar}
       <div className="agents-traj-bar">
+        {onBack && (
+          <Button variant="ghost" size="xs" icon="back" title={t('panel.trajectory.backToSession.hint', { name: backLabel ?? '' })} onClick={onBack}>
+            {t('panel.trajectory.backToSession')}
+          </Button>
+        )}
         <div className="agents-traj-tabs" role="tablist">
           {TABS.map((k) => (
             <button key={k} type="button" role="tab" aria-selected={tab === k} className="agents-traj-tab" onClick={() => setTab(k)}>
@@ -388,6 +441,15 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
                 <option key={x} value={x}>{x}</option>
               ))}
             </select>
+            <select className="agents-traj-tool" aria-label={t('panel.trajectory.filter.area')} value={filters.area} onChange={(e) => setFilters((f) => ({ ...f, area: e.target.value as Filters['area'] }))}>
+              <option value="">{t('panel.trajectory.filter.allAreas')}</option>
+              {TRACE_AREAS.filter((a) => steps.some((x) => x.area === a)).map((a) => (
+                <option key={a} value={a}>{t(`panel.trajectory.area.${a}`)}</option>
+              ))}
+            </select>
+            <Button variant="ghost" size="xs" pressed={fold} title={t('panel.trajectory.fold.hint')} onClick={() => setFold((v) => !v)}>
+              {t('panel.trajectory.fold')}
+            </Button>
             <input
               type="search"
               className="agents-traj-search"
@@ -424,7 +486,7 @@ export function TrajectoryTab({ sessionId, available, onClose, compact = false, 
       {tab === 'files' && <FilesView files={files} cwd={state.data?.cwd} sessionId={sessionId} stamp={steps.length} onGoto={gotoStep} />}
       {tab === 'commands' && <CommandsView steps={steps} onGoto={gotoStep} />}
       {tab === 'todos' && <TodosView steps={steps} onGoto={gotoStep} />}
-      {tab === 'agents' && <AgentsView steps={steps} onGoto={gotoStep} />}
+      {tab === 'agents' && <AgentsView steps={steps} infos={agent ? undefined : state.data?.subagents} onGoto={gotoStep} onOpenAgent={openAgent} />}
       {tab === 'prompts' && <PromptsView steps={steps} onGoto={gotoStep} />}
       {tab === 'web' && <WebView steps={steps} onGoto={gotoStep} />}
       {tab === 'stats' && <StatsView steps={steps} sessionId={sessionId} onTool={openTool} onGoto={gotoStep} />}

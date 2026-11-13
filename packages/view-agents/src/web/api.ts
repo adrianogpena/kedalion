@@ -99,6 +99,8 @@ export const listAgentSessions = () => request<AgentSessionView[]>('GET', '/api/
 
 /** The trace (steps) of a session. */
 export const getTrace = (sessionId: string) => request<AgentTraceResponse>('GET', '/api/agents/trace', { sessionId });
+/** The steps of one subagent of a session (`runId` for an agent of a workflow run). */
+export const getAgentTrace = (sessionId: string, agentId: string, runId?: string) => request<AgentTraceResponse>('GET', '/api/agents/trace/agent', { sessionId, agentId, ...(runId ? { runId } : {}) });
 /** Git standing of the files a session touched. */
 export const getFileStatus = (sessionId: string) => request<AgentFileStatusResponse>('GET', '/api/agents/trace/files', { sessionId });
 /** Other sessions of the same project, newest first. */

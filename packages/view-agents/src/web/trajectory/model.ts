@@ -1,4 +1,4 @@
-import type { AgentTraceStep } from '../../protocol';
+import type { AgentTraceArea, AgentTraceStep } from '../../protocol';
 
 export type StepKind = AgentTraceStep['kind'];
 export const STEP_KINDS: StepKind[] = ['user', 'assistant', 'thinking', 'tool'];
@@ -7,18 +7,22 @@ export const STEP_KINDS: StepKind[] = ['user', 'assistant', 'thinking', 'tool'];
 export interface Entry {
   step: AgentTraceStep;
   i: number;
+  /** Folded row: the newest of `members` (oldest first), finished calls in a row in one area; `ms` is their summed time. */
+  fold?: { members: number[]; ms: number };
 }
 
 export interface Filters {
   kinds: StepKind[];
   tool: string;
+  /** Only tool calls of this area; '' for all. */
+  area: AgentTraceArea | '';
   errorsOnly: boolean;
   query: string;
 }
 
-export const NO_FILTERS: Filters = { kinds: [...STEP_KINDS], tool: '', errorsOnly: false, query: '' };
+export const NO_FILTERS: Filters = { kinds: [...STEP_KINDS], tool: '', area: '', errorsOnly: false, query: '' };
 
-export const filtersActive = (f: Filters) => f.kinds.length !== STEP_KINDS.length || !!f.tool || f.errorsOnly || !!f.query.trim();
+export const filtersActive = (f: Filters) => f.kinds.length !== STEP_KINDS.length || !!f.tool || !!f.area || f.errorsOnly || !!f.query.trim();
 
 export const entriesOf = (steps: AgentTraceStep[]): Entry[] => steps.map((step, i) => ({ step, i }));
 
@@ -27,10 +31,29 @@ export function applyFilters(entries: Entry[], f: Filters): Entry[] {
   return entries.filter(({ step: s }) => {
     if (!f.kinds.includes(s.kind)) return false;
     if (f.tool && s.tool !== f.tool) return false;
+    if (f.area && s.area !== f.area) return false;
     if (f.errorsOnly && !s.error) return false;
     if (q && !`${s.label}\n${s.detail}`.toLowerCase().includes(q)) return false;
     return true;
   });
+}
+
+const plainCall = (s: AgentTraceStep) => s.kind === 'tool' && !!s.area && !s.error && !s.pending && !s.marker;
+
+/** Folds finished tool calls that follow one another in one area (and on the same side of a subagent) into one entry, the newest of them. */
+export function foldEntries(entries: Entry[]): Entry[] {
+  const out: Entry[] = [];
+  for (const e of entries) {
+    const prev = out[out.length - 1];
+    const s = e.step;
+    if (prev && plainCall(s) && plainCall(prev.step) && prev.step.area === s.area && !!prev.step.sidechain === !!s.sidechain) {
+      const f = prev.fold ?? { members: [prev.i], ms: prev.step.durationMs ?? 0 };
+      out[out.length - 1] = { ...e, fold: { members: [...f.members, e.i], ms: f.ms + (s.durationMs ?? 0) } };
+      continue;
+    }
+    out.push(e);
+  }
+  return out;
 }
 
 /** Names of the tools the session called, most used first. */

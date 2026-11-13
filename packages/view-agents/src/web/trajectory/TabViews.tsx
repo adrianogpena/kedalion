@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Button, Empty } from '@kedalion/ui';
-import type { AgentTraceStep } from '../../protocol';
+import type { AgentSubagentInfo, AgentTraceStep } from '../../protocol';
 import { t } from '../../i18n';
 import { fmtClock, fmtDuration, fmtTokens } from './model';
-import { agentsOf, commandsOf, promptRows, todosOf, webCallsOf } from './views';
+import { type AgentRow, agentsOf, commandsOf, phaseProgress, promptRows, todosOf, webCallsOf } from './views';
 
 export const fmtCost = (usd: number) => (usd === 0 ? '–' : usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`);
 
@@ -101,15 +101,106 @@ export function TodosView({ steps, onGoto }: ViewProps) {
   );
 }
 
-/** Subagents launched during the session. */
-export function AgentsView({ steps, onGoto }: ViewProps) {
-  const rows = useMemo(() => agentsOf(steps), [steps]);
-  const [open, setOpen] = useState<number>();
+const COLS = 8;
+
+interface AgentsViewProps extends ViewProps {
+  infos?: AgentSubagentInfo[];
+  /** Shows one agent's own steps. */
+  onOpenAgent(agent: { agentId: string; runId?: string; label: string }): void;
+}
+
+/** Subagents and workflow runs of the session; a run is a group of agents, by phase. Each agent's own steps can be opened. */
+export function AgentsView({ steps, infos, onGoto, onOpenAgent }: AgentsViewProps) {
+  const rows = useMemo(() => agentsOf(steps, infos), [steps, infos]);
+  const [open, setOpen] = useState<string>();
+  const [folded, setFolded] = useState<Record<number, boolean>>({});
   if (rows.length === 0) return <Empty title={t('panel.trajectory.agents.empty')} />;
+  const count = rows.reduce((n, r) => n + (r.workflow ? r.workflow.agents.length : 1), 0);
   const totalTokens = rows.reduce((a, r) => a + (r.tokens ?? 0), 0);
+  const totalCost = rows.reduce((a, r) => a + (r.cost ?? 0), 0);
+  const runs = rows.filter((r) => r.workflow).length;
+
+  const line = (r: AgentRow, key: string, member: boolean) => {
+    const label = `${r.type} ${r.description}`;
+    return [
+      <tr key={key} className={`${r.status === 'failed' ? 'agents-traj-error' : ''}${member ? ' agents-traj-member' : ''}${r.workflow ? ' agents-traj-run' : ''}`}>
+        <td>{member ? '' : r.i + 1}</td>
+        <td className="agents-traj-cmd">
+          {r.workflow && (
+            <Button variant="ghost" size="xs" aria-expanded={!folded[r.i]} title={t(folded[r.i] ? 'panel.trajectory.agents.expand' : 'panel.trajectory.agents.collapse')} onClick={() => setFolded((f) => ({ ...f, [r.i]: !f[r.i] }))}>
+              {folded[r.i] ? '▸' : '▾'}
+            </Button>
+          )}
+          <strong>{r.workflow ? t('panel.trajectory.agents.workflow') : r.type}</strong> {r.workflow?.name && r.workflow.name !== r.description ? <>{r.workflow.name} <span className="agents-traj-meta">{r.description}</span></> : r.description}
+          {r.background && !r.workflow && <span className="agents-traj-meta"> {t('panel.trajectory.agents.background')}</span>}
+          {r.model && <span className="agents-traj-meta"> {r.model}</span>}
+          {r.workflow && (
+            <span className="agents-traj-phases">
+              {phaseProgress(r).map((p) => (
+                <span key={p.phase} className={`agents-traj-phase${p.total > 0 && p.ended === p.total ? ' agents-traj-phase-done' : ''}`}>
+                  {p.phase} {p.ended}/{p.total}
+                </span>
+              ))}
+              <span className="agents-traj-meta">{t('panel.trajectory.agents.count', { n: r.workflow.agents.length })}</span>
+            </span>
+          )}
+          {r.current && <code className="agents-traj-current" title={r.current}>{r.current}</code>}
+        </td>
+        <td>{t(`panel.trajectory.agents.status.${r.status}`)}</td>
+        <td>{fmtDuration(r.durationMs) || '–'}</td>
+        <td>{r.tokens ? fmtTokens(r.tokens) : ''}</td>
+        <td>{r.cost !== undefined ? fmtCost(r.cost) : ''}</td>
+        <td>{r.toolUses ?? ''}</td>
+        <td className="agents-traj-rowact">
+          <Button variant="ghost" size="xs" onClick={() => setOpen(open === key ? undefined : key)}>{t('panel.trajectory.agents.details')}</Button>
+          {r.agentId && <Button variant="ghost" size="xs" onClick={() => onOpenAgent({ agentId: r.agentId!, ...(r.runId ? { runId: r.runId } : {}), label })}>{t('panel.trajectory.agents.steps')}</Button>}
+          {!member && <Button variant="ghost" size="xs" onClick={() => onGoto(r.i)}>{t('panel.trajectory.files.goto')}</Button>}
+          {!member && r.noticeI !== undefined && <Button variant="ghost" size="xs" onClick={() => onGoto(r.noticeI!)}>{t('panel.trajectory.agents.report')}</Button>}
+        </td>
+      </tr>,
+      open === key && (
+        <tr key={`${key}-d`}>
+          <td />
+          <td colSpan={COLS - 1}>
+            {r.prompt && <pre className="agents-traj-detail agents-traj-agentbox">{r.prompt}</pre>}
+            {(r.summary || r.result) && <pre className="agents-traj-detail agents-traj-agentbox">{r.summary ? `${r.summary}\n\n` : ''}{r.result ?? ''}</pre>}
+            {!r.prompt && !r.summary && !r.result && <p className="agents-empty">{t('panel.trajectory.agents.noDetail')}</p>}
+          </td>
+        </tr>
+      ),
+    ];
+  };
+
+  const members = (r: AgentRow) => {
+    if (!r.workflow || folded[r.i]) return [];
+    if (r.workflow.agents.length === 0) {
+      return [
+        <tr key={`${r.i}-none`} className="agents-traj-member">
+          <td />
+          <td colSpan={COLS - 1} className="agents-traj-meta">{t('panel.trajectory.agents.noMembers')}</td>
+        </tr>,
+      ];
+    }
+    const phases = phaseProgress(r).map((p) => p.phase);
+    const groups: Array<{ phase?: string; agents: AgentRow[] }> = [...phases.map((phase) => ({ phase, agents: r.workflow!.agents.filter((a) => a.phase === phase) })), { agents: r.workflow.agents.filter((a) => !a.phase) }].filter((g) => g.agents.length > 0);
+    return groups.flatMap((g) => [
+      ...(groups.length > 1 || g.phase ? [
+        <tr key={`${r.i}-p-${g.phase ?? ''}`} className="agents-traj-member agents-traj-phaserow">
+          <td />
+          <td colSpan={COLS - 1}>{g.phase ?? t('panel.trajectory.agents.noPhase')}</td>
+        </tr>,
+      ] : []),
+      ...g.agents.flatMap((a) => line(a, `${r.i}-${a.agentId}`, true)),
+    ]);
+  };
+
   return (
     <div className="agents-traj-pane">
-      <p className="agents-empty">{t('panel.trajectory.agents.total', { n: rows.length, tokens: fmtTokens(totalTokens) || '0' })}</p>
+      <p className="agents-empty">
+        {t('panel.trajectory.agents.total', { n: count, tokens: fmtTokens(totalTokens) || '0' })}
+        {totalCost > 0 && ` · ${fmtCost(totalCost)}`}
+        {runs > 0 && ` · ${t('panel.trajectory.agents.runs', { n: runs })}`}
+      </p>
       <table className="agents-traj-table agents-traj-cmds">
         <thead>
           <tr>
@@ -118,40 +209,12 @@ export function AgentsView({ steps, onGoto }: ViewProps) {
             <th>{t('panel.trajectory.agents.status')}</th>
             <th>{t('panel.trajectory.commands.duration')}</th>
             <th>{t('panel.trajectory.stats.tokens')}</th>
+            <th>{t('panel.trajectory.agents.cost')}</th>
             <th>{t('panel.trajectory.agents.toolUses')}</th>
             <th />
           </tr>
         </thead>
-        <tbody>
-          {rows.flatMap((r) => [
-            <tr key={r.i} className={r.status === 'failed' ? 'agents-traj-error' : undefined}>
-              <td>{r.i + 1}</td>
-              <td className="agents-traj-cmd">
-                <strong>{r.type}</strong> {r.description}
-                {r.background && <span className="agents-traj-meta"> {t('panel.trajectory.agents.background')}</span>}
-                {r.model && <span className="agents-traj-meta"> {r.model}</span>}
-              </td>
-              <td>{t(`panel.trajectory.agents.status.${r.status}`)}</td>
-              <td>{fmtDuration(r.durationMs) || '–'}</td>
-              <td>{r.tokens ? fmtTokens(r.tokens) : ''}</td>
-              <td>{r.toolUses ?? ''}</td>
-              <td className="agents-traj-rowact">
-                <Button variant="ghost" size="xs" onClick={() => setOpen(open === r.i ? undefined : r.i)}>{t('panel.trajectory.agents.details')}</Button>
-                <Button variant="ghost" size="xs" onClick={() => onGoto(r.i)}>{t('panel.trajectory.files.goto')}</Button>
-                {r.noticeI !== undefined && <Button variant="ghost" size="xs" onClick={() => onGoto(r.noticeI!)}>{t('panel.trajectory.agents.report')}</Button>}
-              </td>
-            </tr>,
-            open === r.i && (
-              <tr key={`${r.i}-d`}>
-                <td />
-                <td colSpan={6}>
-                  {r.prompt && <pre className="agents-traj-detail agents-traj-agentbox">{r.prompt}</pre>}
-                  {(r.summary || r.result) && <pre className="agents-traj-detail agents-traj-agentbox">{r.summary ? `${r.summary}\n\n` : ''}{r.result ?? ''}</pre>}
-                </td>
-              </tr>
-            ),
-          ])}
-        </tbody>
+        <tbody>{rows.flatMap((r) => [...line(r, String(r.i), false), ...members(r)])}</tbody>
       </table>
     </div>
   );

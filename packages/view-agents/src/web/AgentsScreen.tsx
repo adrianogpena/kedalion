@@ -176,7 +176,7 @@ export function AgentsScreen({ usageSettings, rightSidebarOpen = false, rightSid
   const pathOf = useCallback((s: Pick<AgentSessionView, 'project' | 'cwd'>) => projectPathOf(s, projects), [projects]);
   /** Shows the session in its project's workspace. */
   const showAgent = useCallback(
-    (path: string, sessionId: string, opts?: { terminal?: string }) => {
+    (path: string, sessionId: string, opts?: { terminal?: string; trajectory?: boolean }) => {
       const project = activate(path);
       withWorkspace(project, (h) => h.openAgent(sessionId, opts));
     },
@@ -264,9 +264,11 @@ export function AgentsScreen({ usageSettings, rightSidebarOpen = false, rightSid
       setError('');
       void markSeen(sessionId).catch(() => undefined);
       const s = sessions.find((x) => x.id === sessionId);
-      if (s) showAgent(pathOf(s), sessionId);
+      // Trajectory shown: the picked session opens on its own Trajectory.
+      const trajectory = activeProject !== undefined && handleOf(activeProject)?.tool() === 'trajectory';
+      if (s) showAgent(pathOf(s), sessionId, trajectory ? { trajectory } : undefined);
     },
-    [sessions, showAgent, pathOf],
+    [sessions, showAgent, pathOf, activeProject, handleOf],
   );
 
   const jumpWaiting = useCallback(() => {

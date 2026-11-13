@@ -10,7 +10,7 @@ import * as task from './task/i18n';
 import * as notes from './notes/i18n';
 import * as trajectory from './trajectory/i18n';
 import * as output from './output/i18n';
-import * as workflows from './workflows/i18n';
+import * as activity from './activity/i18n';
 
 /** Every panel's messages, spread into `src/i18n.ts`. A panel adds keys to its own `<kind>/i18n.ts`, never here. */
 export const panelsEn = {
@@ -26,7 +26,7 @@ export const panelsEn = {
   ...notes.en,
   ...trajectory.en,
   ...output.en,
-  ...workflows.en,
+  ...activity.en,
 };
 
 export const panelsPtBR = {
@@ -42,5 +42,5 @@ export const panelsPtBR = {
   ...notes.ptBR,
   ...trajectory.ptBR,
   ...output.ptBR,
-  ...workflows.ptBR,
+  ...activity.ptBR,
 };

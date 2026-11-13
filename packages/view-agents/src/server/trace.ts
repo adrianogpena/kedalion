@@ -2,13 +2,17 @@ import { readFileSync } from 'node:fs';
 import { contextPercentOf } from './discovery.ts';
 import type { AgentTraceEdit, AgentTraceStep } from '../protocol.ts';
 import { costParts } from './pricing.ts';
+import { areaOf, clean, cleanText, redactCredentials, safeUrl } from './classify.ts';
 import { shellFileOps } from './shell-files.ts';
 import { inputExtras, noticeOf, resultExtras, userMarker } from './trace-extras.ts';
 
 const MAX_LABEL = 72;
 const PRIMARY_KEYS = ['file_path', 'path', 'command', 'pattern', 'query', 'url', 'description'];
 
-const cap = (s: string) => (s.length > MAX_LABEL ? `${s.slice(0, MAX_LABEL - 1)}…` : s);
+const cap = (raw: string) => {
+  const s = clean(redactCredentials(raw));
+  return s.length > MAX_LABEL ? `${s.slice(0, MAX_LABEL - 1)}…` : s;
+};
 const SHELL_TAG = /^<bash-(input|stdout|stderr)>/;
 
 /** Readable text of a `! cmd` turn: `! cmd` for the input, the plain output for stdout/stderr. */
@@ -86,7 +90,7 @@ function toolLabel(name: unknown, input: unknown): string {
     const rec = input as Record<string, unknown>;
     const key = PRIMARY_KEYS.find((k) => rec[k] !== undefined && rec[k] !== null);
     const v = key ? rec[key] : undefined;
-    if (typeof v === 'string' && v) arg = v.replace(/\s+/g, ' ').trim();
+    if (typeof v === 'string' && v) arg = (key === 'url' ? safeUrl(v) : v).replace(/\s+/g, ' ').trim();
   }
   return cap(arg ? `${n}(${arg})` : n);
 }
@@ -114,9 +118,10 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
   const tools = new Map<string, AgentTraceStep>();
   const usageSeen = new Set<string>();
   let prevTs: number | undefined;
+  let lastModel: string | undefined;
   for (const line of jsonl.split('\n')) {
     if (!line.trim()) continue;
-    let e: { type?: string; cwd?: string; timestamp?: string; isSidechain?: boolean; isMeta?: boolean; origin?: { kind?: string }; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, unknown> } };
+    let e: { type?: string; cwd?: string; timestamp?: string; isSidechain?: boolean; isMeta?: boolean; origin?: { kind?: string }; toolUseResult?: unknown; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, unknown> } };
     try {
       e = JSON.parse(line);
     } catch {
@@ -140,7 +145,7 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
           step.detail += `\n\n${err ? 'Error:' : 'Result:'} ${text || '(empty)'}`;
           delete step.pending;
           step.resultChars = text.length;
-          resultExtras(step, text, err);
+          resultExtras(step, text, err, e.toolUseResult);
           if ((step.tool === 'Grep' || step.tool === 'Glob') && !err) {
             const hits = hitsOf(text);
             if (hits.length > 0) step.hits = hits;
@@ -152,7 +157,7 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
       const text = textOf(content).trim();
       if (text) {
         const source = userSource(e, text);
-        const shown = source === 'shell' ? shellText(text) : text;
+        const shown = cleanText(source === 'shell' ? shellText(text) : text);
         const marker = userMarker(text);
         const notice = noticeOf(text);
         steps.push({ kind: 'user', label: firstLine(shown), detail: shown, ...(source ? { source } : {}), ...(marker ? { marker } : {}), ...(notice ? { notice } : {}), ...base });
@@ -164,6 +169,11 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
       const u = e.message?.usage;
       const mid = e.message?.id;
       let meta: Partial<AgentTraceStep> | undefined;
+      const model = e.message?.model;
+      if (model && model !== '<synthetic>' && !e.isSidechain) {
+        if (lastModel && model !== lastModel && (!mid || !usageSeen.has(mid))) meta = { modelFrom: lastModel };
+        lastModel = model;
+      }
       if (u && (!mid || !usageSeen.has(mid))) {
         if (mid) usageSeen.add(mid);
         const input = num(u.input_tokens);
@@ -171,7 +181,7 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
         const cacheWrite = num(u.cache_creation_input_tokens);
         const tk = { input, output: num(u.output_tokens), cacheRead, cacheWrite };
         const cost = costParts(e.message?.model, tk);
-        meta = { tokens: tk, ...(cost ? { cost } : {}), context: input + cacheRead + cacheWrite, ...(contextPercentOf(e.message?.model, input + cacheRead + cacheWrite, e.message?.model ? windowOf?.(e.message.model) : undefined) !== undefined ? { contextPercent: contextPercentOf(e.message?.model, input + cacheRead + cacheWrite, e.message?.model ? windowOf?.(e.message.model) : undefined) } : {}), ...(e.message?.model ? { model: e.message.model } : {}) };
+        meta = { ...meta, tokens: tk, ...(cost ? { cost } : {}), context: input + cacheRead + cacheWrite, ...(contextPercentOf(e.message?.model, input + cacheRead + cacheWrite, e.message?.model ? windowOf?.(e.message.model) : undefined) !== undefined ? { contextPercent: contextPercentOf(e.message?.model, input + cacheRead + cacheWrite, e.message?.model ? windowOf?.(e.message.model) : undefined) } : {}), ...(e.message?.model ? { model: e.message.model } : {}) };
       }
       const take = (): Partial<AgentTraceStep> => {
         const m = meta;
@@ -181,10 +191,10 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
       for (const b of blocks) {
         if (b?.type === 'thinking') {
           const text = typeof b.thinking === 'string' ? b.thinking.trim() : '';
-          if (text) steps.push({ kind: 'thinking', label: firstLine(text), detail: text, ...take() });
+          if (text) steps.push({ kind: 'thinking', label: firstLine(text), detail: cleanText(text), ...take() });
         } else if (b?.type === 'text' && typeof b.text === 'string') {
           const text = b.text.trim();
-          if (text) steps.push({ kind: 'assistant', label: firstLine(text), detail: text, ...take() });
+          if (text) steps.push({ kind: 'assistant', label: firstLine(text), detail: cleanText(text), ...take() });
         } else if (b?.type === 'tool_use') {
           const name = typeof b.name === 'string' && b.name ? b.name : 'tool';
           const rec = b.input && typeof b.input === 'object' ? (b.input as Record<string, unknown>) : {};
@@ -198,6 +208,7 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
             label: toolLabel(b.name, b.input),
             detail: `${name}\n${b.input === undefined ? 'undefined' : JSON.stringify(b.input, null, 2)}`,
             tool: name,
+            area: areaOf(name, rec),
             pending: true,
             ...(typeof b.id === 'string' ? { toolUseId: b.id } : {}),
             ...(file ? { file } : {}),
@@ -208,6 +219,7 @@ export function parseTrace(jsonl: string, windowOf?: (model: string) => number |
             ...inputExtras(name, b.input),
             ...take(),
           };
+          if (step.subagent?.workflow?.name) step.label = cap(`Workflow(${step.subagent.workflow.name})`);
           steps.push(step);
           if (typeof b.id === 'string') tools.set(b.id, step);
         }

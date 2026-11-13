@@ -200,7 +200,7 @@ Found by the audit of 2026-10-21. Fixing these makes the views match this docume
 - Disabled opacity varies from .4 to .55; Agents buttons have no disabled state.
 
 **Tokens and type**
-- Hard-coded colours: Agents panels (`panels/output/style.css` 30, `sidebar.css` 10, `review/style.css` 9, `workflows`, `run`, `usage`), `TerminalSchemes.tsx` (these two may be intentional palettes).
+- Hard-coded colours: Agents panels (`panels/output/style.css` 30, `sidebar.css` 10, `review/style.css` 9, `run`, `usage`), `TerminalSchemes.tsx` (these two may be intentional palettes).
 - Undefined tokens with fallbacks: `--danger`, `--bg-elevated`, `--surface`, `--surface-raised`, `--text-dim`, `--mono`, `--radius-6`. Agents also uses `--ink`, `--ink-muted` beside `--text`/`--text-2`.
 - 53 literal font sizes (9px to 28px, plus `.7em`–`.9em` in Agents panels); 56 literal radii, mostly in `view-agents`.
 - Other fonts: `Georgia` (`editor/rich/toolbar.css:12`), `ui-monospace`/`monospace`/`JetBrains Mono` in Agents panels, literal Geist Mono stack at `styles.css:139`.

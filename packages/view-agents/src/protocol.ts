@@ -388,6 +388,20 @@ export interface AgentTraceStep {
   resultChars?: number;
   /** Written by a subagent. */
   sidechain?: boolean;
+  /** Tool: what kind of work it is (files, shell, network, …), read from the tool and, for a shell, the command. */
+  area?: AgentTraceArea;
+  /** Assistant step whose model differs from the previous request's: the previous model. */
+  modelFrom?: string;
+}
+
+/** What a tool call works on: the stations of the Activity map and the area filter of the Trajectory. */
+export type AgentTraceArea = 'you' | 'model' | 'memory' | 'files' | 'shell' | 'web' | 'browser' | 'agents' | 'skills';
+export const TRACE_AREAS: readonly AgentTraceArea[] = ['you', 'model', 'memory', 'files', 'shell', 'web', 'browser', 'agents', 'skills'];
+
+/** `claude-opus-5-5` reads as `opus 5.5` (after lot-map, MIT). */
+export function shortModel(model: string): string {
+  const m = /claude-([a-z]+)-(\d+)(?:-(\d+))?/.exec(model);
+  return m === null ? model : `${m[1]} ${m[2]}${m[3] !== undefined ? `.${m[3]}` : ''}`;
 }
 
 export interface AgentTraceTodo {
@@ -406,12 +420,53 @@ export interface AgentTraceSubagent {
   tokens?: number;
   toolUses?: number;
   durationMs?: number;
+  /** Claude Code's id of the agent: its transcript is `subagents/agent-<id>.jsonl` next to the session's. */
+  agentId?: string;
+  /** Workflow tool: the run, a group of agents. */
+  workflow?: AgentTraceWorkflow;
+}
+
+export interface AgentTraceWorkflow {
+  /** `meta.name` of the script, or the saved workflow's name. */
+  name?: string;
+  /** Folder of the run under `subagents/workflows/`. */
+  runId?: string;
+  /** Phase titles declared in `meta.phases`. */
+  phases?: string[];
+}
+
+/** One subagent's own transcript, summed up: a launched agent or an agent of a workflow run. */
+export interface AgentSubagentInfo {
+  agentId: string;
+  /** Workflow run the agent belongs to. */
+  runId?: string;
+  type?: string;
+  description?: string;
+  model?: string;
+  phase?: string;
+  /** From the workflow journal (a result record) or, for a launched agent, whether its last tool call has a result. */
+  status: 'running' | 'done' | 'failed';
+  startedAt?: number;
+  endedAt?: number;
+  /** Tokens of its last request (context plus output), as Claude Code reports an agent's total. */
+  tokens?: number;
+  /** Estimated USD of all its requests. */
+  cost?: number;
+  toolUses: number;
+  errors: number;
+  /** Label of the tool call it is waiting on. */
+  current?: string;
+  prompt?: string;
+  /** Its last reply, or the result the workflow journal recorded. */
+  result?: string;
 }
 
 export interface AgentTraceNotice {
   toolUseId: string;
   status?: string;
   summary?: string;
+  /** Workflow notification: the value the script returned, capped. */
+  result?: string;
   tokens?: number;
   toolUses?: number;
   durationMs?: number;
@@ -471,6 +526,8 @@ export interface AgentTraceResponse {
   steps: AgentTraceStep[];
   /** Working directory of the session. */
   cwd?: string;
+  /** The session's subagents (launched and workflow agents), read from their own transcripts. */
+  subagents?: AgentSubagentInfo[];
 }
 
 /** Where a file the session touched stands in git now. */

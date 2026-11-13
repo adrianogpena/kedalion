@@ -27,6 +27,7 @@ import { lastResponse } from './server/last-response.ts';
 import { diskCheck, fileStatus } from './server/file-status.ts';
 import { averageOf, siblingFiles, siblingList, summaryOf, summaryOfFile } from './server/trace-summary.ts';
 import { readTraceFull } from './server/trace.ts';
+import { subagentFile, subagentsOf } from './server/subagents.ts';
 import { listScoped } from './server/skills.ts';
 import { capPerProject, createSessionScanner, matchProject } from './server/discovery.ts';
 import { createLifecycle, cwdProblem, planRestart, stopOutcome, type TermInfo } from './server/lifecycle.ts';
@@ -738,8 +739,26 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
             const file = findSessionFile(a.dir, id);
             if (file) {
               let windows: Map<string, number> | undefined;
-              return readTraceFull(file, (m) => (windows ??= usageReader.read(accounts(), undefined).windows).get(m));
+              const windowOf = (m: string) => (windows ??= usageReader.read(accounts(), undefined).windows).get(m);
+              const subagents = subagentsOf(file, windowOf);
+              return { ...readTraceFull(file, windowOf), ...(subagents.length > 0 ? { subagents } : {}) };
             }
+          }
+          return { steps: [] };
+        },
+        // One subagent's own steps (`runId` for an agent of a workflow run).
+        'GET /api/agents/trace/agent': ({ url }) => {
+          const id = url?.searchParams.get('sessionId') ?? '';
+          const agentId = url?.searchParams.get('agentId') ?? '';
+          const runId = url?.searchParams.get('runId') || undefined;
+          for (const a of accounts()) {
+            const file = findSessionFile(a.dir, id);
+            if (!file) continue;
+            const sub = subagentFile(file, agentId, runId);
+            if (!sub) return { steps: [] };
+            let windows: Map<string, number> | undefined;
+            const { steps, cwd } = readTraceFull(sub, (m) => (windows ??= usageReader.read(accounts(), undefined).windows).get(m));
+            return { steps: steps.map(({ sidechain: _s, ...s }) => s), ...(cwd ? { cwd } : {}) };
           }
           return { steps: [] };
         },

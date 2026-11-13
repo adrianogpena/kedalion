@@ -1,4 +1,4 @@
-import type { AgentTraceStep, AgentTraceTodo } from '../../protocol';
+import { type AgentSubagentInfo, type AgentTraceStep, type AgentTraceTodo, shortModel } from '../../protocol';
 import { resultTokens } from './model';
 
 const stepCost = (s: AgentTraceStep) => (s.cost ? s.cost.input + s.cost.output + s.cost.cacheRead + s.cost.cacheWrite : 0);
@@ -63,7 +63,7 @@ export interface AgentRow {
   model?: string;
   prompt?: string;
   background: boolean;
-  status: 'running' | 'done' | 'failed';
+  status: 'running' | 'done' | 'failed' | 'stopped';
   summary?: string;
   result?: string;
   tokens?: number;
@@ -71,9 +71,61 @@ export interface AgentRow {
   durationMs?: number;
   /** Position of the notification step that reported the end of a background agent. */
   noticeI?: number;
+  /** Its own transcript can be opened. */
+  agentId?: string;
+  runId?: string;
+  cost?: number;
+  /** Tool call it is waiting on. */
+  current?: string;
+  phase?: string;
+  /** Workflow run: its name, declared phases and agents. */
+  workflow?: { name?: string; phases: string[]; agents: AgentRow[] };
 }
 
-export function agentsOf(steps: AgentTraceStep[]): AgentRow[] {
+/** Phases of a run in order (declared first, then as agents report them), with how many of their agents ended. */
+export function phaseProgress(row: AgentRow): Array<{ phase: string; ended: number; total: number }> {
+  const wf = row.workflow;
+  if (!wf) return [];
+  const order = [...wf.phases];
+  for (const a of wf.agents) if (a.phase && !order.includes(a.phase)) order.push(a.phase);
+  return order.map((phase) => {
+    const of = wf.agents.filter((a) => a.phase === phase);
+    return { phase, ended: of.filter((a) => a.status !== 'running').length, total: of.length };
+  });
+}
+
+/** A row for one agent of a workflow run; a run that ended leaves its unfinished agents `stopped`. */
+function memberRow(a: AgentSubagentInfo, i: number, ended: boolean): AgentRow {
+  const durationMs = a.startedAt !== undefined && a.endedAt !== undefined ? a.endedAt - a.startedAt : undefined;
+  return {
+    i,
+    type: a.type ?? 'general-purpose',
+    description: a.description ?? a.agentId,
+    background: false,
+    status: a.status === 'running' && ended ? 'stopped' : a.status,
+    agentId: a.agentId,
+    toolUses: a.toolUses,
+    ...(a.runId ? { runId: a.runId } : {}),
+    ...(a.phase ? { phase: a.phase } : {}),
+    ...(a.startedAt !== undefined ? { ts: a.startedAt } : {}),
+    ...(a.model ? { model: a.model } : {}),
+    ...(a.prompt ? { prompt: a.prompt } : {}),
+    ...(a.result ? { result: a.result } : {}),
+    ...(a.tokens !== undefined ? { tokens: a.tokens } : {}),
+    ...(a.cost !== undefined ? { cost: a.cost } : {}),
+    ...(a.current && !ended ? { current: a.current } : {}),
+    ...(durationMs !== undefined ? { durationMs } : {}),
+  };
+}
+
+const sum = (rows: AgentRow[], key: 'tokens' | 'cost' | 'toolUses'): number | undefined => {
+  const vals = rows.flatMap((r) => (r[key] !== undefined ? [r[key]!] : []));
+  return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : undefined;
+};
+
+/** Subagents and workflow runs launched in the session, merged with what their own transcripts say (`infos`). */
+export function agentsOf(steps: AgentTraceStep[], infos: AgentSubagentInfo[] = []): AgentRow[] {
+  const own = new Map(infos.filter((a) => !a.runId).map((a) => [a.agentId, a]));
   const notices = new Map<string, { i: number; step: AgentTraceStep }>();
   steps.forEach((s, i) => {
     if (s.notice) notices.set(s.notice.toolUseId, { i, step: s });
@@ -87,24 +139,34 @@ export function agentsOf(steps: AgentTraceStep[]): AgentRow[] {
     const background = sub.background === true;
     const failed = s.error === true || (notice?.status !== undefined && notice.status !== 'completed');
     const finished = background ? notice !== undefined : !s.pending;
-    const tokens = notice?.tokens ?? sub.tokens;
-    const toolUses = notice?.toolUses ?? sub.toolUses;
-    const durationMs = notice?.durationMs ?? sub.durationMs ?? (background ? undefined : s.durationMs);
+    const status: AgentRow['status'] = failed ? 'failed' : finished ? 'done' : 'running';
+    const wf = sub.workflow;
+    const members = wf?.runId ? infos.filter((a) => a.runId === wf.runId).map((a) => memberRow(a, i, status !== 'running')) : [];
+    const info = sub.agentId ? own.get(sub.agentId) : undefined;
+    const tokens = wf ? sum(members, 'tokens') : (notice?.tokens ?? sub.tokens ?? info?.tokens);
+    const toolUses = wf ? sum(members, 'toolUses') : (notice?.toolUses ?? sub.toolUses ?? (info ? info.toolUses : undefined));
+    const cost = wf ? sum(members, 'cost') : info?.cost;
+    const durationMs = notice?.durationMs ?? sub.durationMs ?? (background ? (info?.startedAt !== undefined && info.endedAt !== undefined && finished ? info.endedAt - info.startedAt : undefined) : s.durationMs);
+    const model = sub.model ?? (info?.model ? shortModel(info.model) : undefined);
     out.push({
       i,
       type: sub.type ?? 'general-purpose',
       description: sub.description ?? s.label,
       background,
-      status: failed ? 'failed' : finished ? 'done' : 'running',
+      status,
       ...(s.ts !== undefined ? { ts: s.ts } : {}),
-      ...(sub.model ? { model: sub.model } : {}),
+      ...(model ? { model } : {}),
       ...(sub.prompt ? { prompt: sub.prompt } : {}),
       ...(notice?.summary ? { summary: notice.summary } : {}),
-      ...(sub.result ? { result: sub.result } : {}),
+      ...(sub.result ? { result: sub.result } : wf && notice?.result ? { result: notice.result } : !finished || !info?.result ? {} : { result: info.result }),
       ...(tokens !== undefined ? { tokens } : {}),
       ...(toolUses !== undefined ? { toolUses } : {}),
+      ...(cost !== undefined ? { cost } : {}),
       ...(durationMs !== undefined ? { durationMs } : {}),
       ...(n ? { noticeI: n.i } : {}),
+      ...(info ? { agentId: info.agentId } : {}),
+      ...(info?.current && !finished ? { current: info.current } : {}),
+      ...(wf ? { workflow: { ...(wf.name ? { name: wf.name } : {}), phases: wf.phases ?? [], agents: members }, ...(wf.runId ? { runId: wf.runId } : {}) } : {}),
     });
   });
   return out;

@@ -48,20 +48,24 @@ export interface ToolStats {
   tools: Array<[name: string, count: number]>;
   total: number;
   subagents: number;
+  /** Workflow runs launched (each a group of agents). */
+  workflows: number;
 }
 
-/** Tool-call totals and the number of subagents launched, from the loaded history events. */
+/** Tool-call totals and the number of subagents and workflow runs launched, from the loaded history events. */
 export function toolStats(events: ChatEvent[]): ToolStats {
   const counts = new Map<string, number>();
   let total = 0;
   let subagents = 0;
+  let workflows = 0;
   for (const e of events) {
     if (e.type !== 'tool_use' || e.parentId) continue;
     total++;
     counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
     if (SUBAGENT_TOOLS.has(e.name)) subagents++;
+    if (e.name === 'Workflow') workflows++;
   }
-  return { tools: [...counts].sort((a, b) => b[1] - a[1]), total, subagents };
+  return { tools: [...counts].sort((a, b) => b[1] - a[1]), total, subagents, workflows };
 }
 
 /** A path relative to the cwd when inside it, else unchanged. Handles both slash styles. */

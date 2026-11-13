@@ -20,6 +20,35 @@ const tag = (text: string, name: string): string | undefined => new RegExp(`<${n
 
 export const isSubagentTool = (name: string) => name === 'Agent' || name === 'Task';
 
+const quoted = (src: string, key: string): string | undefined => {
+  const m = new RegExp(`\\b${key}\\s*:\\s*(['"\`])((?:\\\\.|(?!\\1)[^\\\\])*)\\1`).exec(src);
+  return m?.[2]?.replace(/\\(.)/g, '$1').trim() || undefined;
+};
+
+/** `name`, `description` and phase titles of a workflow script's `export const meta = {…}` (a pure literal). */
+export function workflowMeta(script: string): { name?: string; description?: string; phases: string[] } {
+  const start = script.search(/export\s+const\s+meta\s*=\s*\{/);
+  if (start < 0) return { phases: [] };
+  let depth = 0;
+  let end = script.length;
+  for (let i = script.indexOf('{', start); i < script.length; i++) {
+    const c = script[i];
+    if (c === '{' || c === '[') depth++;
+    else if (c === '}' || c === ']') depth--;
+    if (depth === 0) {
+      end = i + 1;
+      break;
+    }
+  }
+  const src = script.slice(start, end);
+  const phasesAt = src.search(/\bphases\s*:\s*\[/);
+  const head = phasesAt < 0 ? src : src.slice(0, phasesAt);
+  const phases = phasesAt < 0 ? [] : [...src.slice(phasesAt).matchAll(/\btitle\s*:\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)].map((m) => m[2]!.replace(/\\(.)/g, '$1').trim()).filter(Boolean);
+  const name = quoted(head, 'name');
+  const description = quoted(head, 'description');
+  return { ...(name ? { name } : {}), ...(description ? { description } : {}), phases };
+}
+
 /** Step fields only a tool's input carries: todo list, launched subagent, web target. */
 export function inputExtras(name: string, input: unknown): Partial<AgentTraceStep> {
   const rec = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
@@ -43,6 +72,19 @@ export function inputExtras(name: string, input: unknown): Partial<AgentTraceSte
     };
     return { subagent: sub };
   }
+  if (name === 'Workflow') {
+    const meta = workflowMeta(str(rec.script) ?? '');
+    const saved = str(rec.name) ?? (str(rec.scriptPath) ? /([^/\\]+?)(?:-wf_[\w-]+)?\.js$/.exec(str(rec.scriptPath)!)?.[1] : undefined);
+    const wfName = meta.name ?? saved;
+    return {
+      subagent: {
+        type: 'workflow',
+        background: true,
+        ...(meta.description ? { description: meta.description } : wfName ? { description: wfName } : {}),
+        workflow: { ...(wfName ? { name: wfName } : {}), ...(meta.phases.length > 0 ? { phases: meta.phases } : {}) },
+      },
+    };
+  }
   if (name === 'WebFetch' || name === 'WebSearch') {
     const target = str(rec.url) ?? str(rec.query);
     return target ? { target: target.slice(0, MAX_TARGET) } : {};
@@ -51,13 +93,24 @@ export function inputExtras(name: string, input: unknown): Partial<AgentTraceSte
 }
 
 /** Fields a tool result adds: Bash exit code, permission denial, subagent outcome. */
-export function resultExtras(step: AgentTraceStep, text: string, err: boolean): void {
+export function resultExtras(step: AgentTraceStep, text: string, err: boolean, toolUseResult?: unknown): void {
+  const tur = toolUseResult && typeof toolUseResult === 'object' ? (toolUseResult as Record<string, unknown>) : {};
+  const id = (v: unknown) => (typeof v === 'string' && /^[\w-]{1,80}$/.test(v) ? v : undefined);
+  if (step.subagent) {
+    const agentId = id(tur.agentId);
+    if (agentId) step.subagent.agentId = agentId;
+    if (step.subagent.workflow) {
+      const runId = id(tur.runId) ?? /Run ID: (wf_[\w-]+)/.exec(text)?.[1];
+      if (runId) step.subagent.workflow.runId = runId;
+      if (!step.subagent.workflow.name && typeof tur.workflowName === 'string' && tur.workflowName) step.subagent.workflow.name = tur.workflowName;
+    }
+  }
   if (step.tool === 'Bash' && err) {
     const m = /Exit code (\d+)/.exec(text);
     if (m) step.exitCode = Number(m[1]);
   }
   if (err && DENIED.test(text)) step.marker = 'denied';
-  if (step.subagent) {
+  if (step.subagent && !step.subagent.workflow) {
     const sub = step.subagent;
     sub.result = text.slice(0, MAX_RESULT);
     if (/output_file:/.test(text)) sub.background = true;
@@ -87,5 +140,6 @@ export function noticeOf(text: string): AgentTraceNotice | undefined {
   const tokens = usageOf(text, 'tokens');
   const toolUses = usageOf(text, 'toolUses');
   const durationMs = usageOf(text, 'durationMs');
-  return { toolUseId, ...(status ? { status } : {}), ...(summary ? { summary } : {}), ...(tokens !== undefined ? { tokens } : {}), ...(toolUses !== undefined ? { toolUses } : {}), ...(durationMs !== undefined ? { durationMs } : {}) };
+  const result = tag(text, 'result');
+  return { toolUseId, ...(status ? { status } : {}), ...(summary ? { summary } : {}), ...(result ? { result: result.slice(0, MAX_RESULT) } : {}),...(tokens !== undefined ? { tokens } : {}), ...(toolUses !== undefined ? { toolUses } : {}), ...(durationMs !== undefined ? { durationMs } : {}) };
 }

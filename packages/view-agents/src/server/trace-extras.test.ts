@@ -62,3 +62,18 @@ test('summaries and their average', () => {
   expect(averageOf([a, { ...a, cost: 4 }])?.cost).toBe(3);
   expect(averageOf([])).toBeUndefined();
 });
+
+test('a Workflow call is a background group named by its script meta; its result gives the run id', () => {
+  const script = "export const meta = {\n  name: 'review-changes',\n  description: 'Review the diff, verify each finding',\n  phases: [{ title: 'Review' }, { title: \"Verify\", detail: 'x' }],\n}\nphase('Review')";
+  expect(inputExtras('Workflow', { script })).toEqual({ subagent: { type: 'workflow', background: true, description: 'Review the diff, verify each finding', workflow: { name: 'review-changes', phases: ['Review', 'Verify'] } } });
+  expect(inputExtras('Workflow', { scriptPath: 'C:/x/workflows/scripts/tcr-dry-run-wf_2dbf0b4b-481.js' })).toMatchObject({ subagent: { description: 'tcr-dry-run', workflow: { name: 'tcr-dry-run' } } });
+  const step = { kind: 'tool', label: '', detail: '', tool: 'Workflow', ...inputExtras('Workflow', { script }) } as AgentTraceStep;
+  resultExtras(step, 'Workflow launched in background.', false, { runId: 'wf_2dbf0b4b-481', workflowName: 'other' });
+  expect(step.subagent).toMatchObject({ workflow: { runId: 'wf_2dbf0b4b-481', name: 'review-changes' } });
+  expect(step.subagent?.result).toBeUndefined();
+  const agent = { kind: 'tool', label: '', detail: '', tool: 'Agent', subagent: {} } as AgentTraceStep;
+  resultExtras(agent, 'launched', false, { agentId: 'a08fad9d7546121bf' });
+  resultExtras({ ...agent, subagent: {} }, 'launched', false, { agentId: '../x' });
+  expect(agent.subagent?.agentId).toBe('a08fad9d7546121bf');
+  expect(noticeOf('<task-notification><tool-use-id>w</tool-use-id><status>completed</status><result>"done"</result></task-notification>')).toMatchObject({ toolUseId: 'w', result: '"done"' });
+});

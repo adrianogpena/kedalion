@@ -115,6 +115,15 @@
 .agents-traj-cmd code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agents-traj-rowact { white-space: nowrap; }
 .agents-traj-agentbox { max-height: 220px; margin: var(--space-4) 0; white-space: pre-wrap; overflow: auto; }
+.agents-traj-run > td { border-top: 1px solid var(--border); }
+.agents-traj-member .agents-traj-cmd { padding-left: var(--space-16); }
+.agents-traj-phaserow td { padding-left: var(--space-12); font-size: var(--fs-sm); font-weight: 600; color: var(--text-3); }
+.agents-traj-phases { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); }
+.agents-traj-phase { padding: 0 var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: var(--fs-sm); color: var(--text-2); }
+.agents-traj-phase-done { color: var(--ok); border-color: var(--ok); }
+.agents-traj-current { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); color: var(--accent); }
+.agents-traj-agentbar { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) var(--space-8); border-bottom: 1px solid var(--border); background: var(--panel-2); font-size: var(--fs-sm); }
+.agents-traj-agentbar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agents-traj-todos { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-4); }
 .agents-traj-todo-completed { color: var(--text-3); text-decoration: line-through; }
 .agents-traj-todo-in_progress { color: var(--accent); }
@@ -122,3 +131,17 @@
 .agents-traj-marker { flex-shrink: 0; font-size: var(--fs-sm); color: var(--text-3); }
 .agents-traj-marker-denied, .agents-traj-marker-interrupt { color: var(--err); }
 .agents-traj-select { width: auto; max-width: 100%; }
+
+/* Areas of tool calls (shared with the Activity map). */
+.agents-area-you { --area-c: var(--text); }
+.agents-area-model { --area-c: var(--accent-2); }
+.agents-area-memory { --area-c: var(--ok); }
+.agents-area-files { --area-c: var(--info); }
+.agents-area-shell { --area-c: var(--text-2); }
+.agents-area-web { --area-c: var(--warn); }
+.agents-area-browser { --area-c: var(--y-key); }
+.agents-area-agents { --area-c: var(--accent); }
+.agents-area-skills { --area-c: var(--y-bool); }
+.agents-traj-area { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--area-c); }
+.agents-traj-fold { flex-shrink: 0; font-size: var(--fs-xs); color: var(--text-3); }
+.agents-traj-model-change { color: var(--accent); }

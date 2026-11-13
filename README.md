@@ -4,7 +4,7 @@
 
 Kedalion is a local-first desktop app that builds to one self-contained executable. It opens on the Dashboard and has views for files, HTTP, SQL, terminals, git and Claude Code sessions.
 
-The Agents view (`view-agents`): Claude Code sessions per project, with live status, terminal/chat, usage and attention. Tool panels dock around the selected session: changes, diff, files, code, review, run, output, tasks, workflows, notes, preview, JSON, scratchpad, trajectory and usage. Skills opens as its own page.
+The Agents view (`view-agents`): Claude Code sessions per project, with live status, terminal/chat, usage and attention. Tool panels dock around the selected session: changes, diff, files, code, review, run, output, tasks, notes, preview, JSON, scratchpad, trajectory and usage. Skills opens as its own page.
 
 - Projects are any picked folder. The sidebar is a tree of folders and tags. Sessions can be archived or moved to the trash; sort by manual, recent or needs attention.
 - Each project shows at most `agents.maxSessionsPerProject` sessions (default 10); live sessions come first.
