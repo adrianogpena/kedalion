@@ -6,6 +6,7 @@ import { tKey } from './i18n';
 import { fetchSource } from './source';
 import { opmlUrls } from './panels/feeds/opml';
 import { feedUrls } from './panels/feeds/rss';
+import { parseDated } from './panels/calendar/dates';
 
 function NumberInput({ field, value, onChange }: { field: Extract<PanelField, { kind: 'number' }>; value: number; onChange: (n: number) => void }) {
   const [text, setText] = useState(String(value));
@@ -27,6 +28,43 @@ function NumberInput({ field, value, onChange }: { field: Extract<PanelField, { 
 }
 
 const MAX_IMPORTED_FEEDS = 10;
+
+interface DatedRow { id: number; label: string; date: string }
+
+/** Rows of a label and a date picker over the `YYYY-MM-DD | label` lines of a text field. */
+function DatedListField({ field, value, hint, onChange }: { field: Extract<PanelField, { kind: 'text' }>; value: string; hint?: string; onChange: (value: string) => void }) {
+  const nextId = useRef(0);
+  const [rows, setRows] = useState<DatedRow[]>(() =>
+    parseDated(value).map((d) => ({ id: nextId.current++, ...d })),
+  );
+  const commit = (next: DatedRow[]) => {
+    setRows(next);
+    onChange(next.filter((r) => r.date !== '').map((r) => (r.label.trim() ? `${r.date} | ${r.label.replace(/[\r\n|]+/g, ' ').trim()}` : r.date)).join('\n'));
+  };
+  const patch = (id: number, p: Partial<DatedRow>) => commit(rows.map((r) => (r.id === id ? { ...r, ...p } : r)));
+  return (
+    <fieldset className="field">
+      <legend className="mono-label">{tKey(field.label)}</legend>
+      {rows.map((r) => (
+        <span key={r.id} className="grid-config-date">
+          <input
+            value={r.label}
+            placeholder={tKey('grid.field.dated.label')}
+            aria-label={tKey('grid.field.dated.label')}
+            spellCheck={false}
+            onChange={(e) => patch(r.id, { label: e.target.value })}
+          />
+          <input type="date" value={r.date} aria-label={tKey('grid.field.dated.date')} onChange={(e) => patch(r.id, { date: e.target.value })} />
+          <IconButton icon="close" label={tKey('grid.field.dated.remove')} onClick={() => commit(rows.filter((x) => x.id !== r.id))} />
+        </span>
+      ))}
+      <span className="grid-config-import">
+        <Button onClick={() => setRows([...rows, { id: nextId.current++, label: '', date: '' }])}>{tKey('grid.field.dated.add')}</Button>
+      </span>
+      {hint && <span className="muted">{hint}</span>}
+    </fieldset>
+  );
+}
 
 function TextField({ field, value, hint, onChange }: { field: Extract<PanelField, { kind: 'text' }>; value: string; hint?: string; onChange: (value: string) => void }) {
   const [status, setStatus] = useState('');
@@ -229,6 +267,7 @@ function FieldRow({ field, value, config, onChange, connections }: { field: Pane
       );
     }
     case 'text':
+      if (field.dated) return <DatedListField field={field} value={typeof value === 'string' ? value : field.default} hint={hint} onChange={onChange} />;
       return <TextField field={field} value={typeof value === 'string' ? value : field.default} hint={hint} onChange={onChange} />;
     case 'date': {
       const date = typeof value === 'string' ? value : field.default;

@@ -26,7 +26,7 @@ export const SPRINT_FIELDS: readonly PanelField[] = [
 ];
 
 export const COUNTDOWNS_FIELDS: readonly PanelField[] = [
-  { key: 'items', kind: 'text', label: 'dash.calendar.items', description: 'dash.calendar.datedLines.hint', default: '', rows: 6, placeholder: 'dash.calendar.datedLines.placeholder' },
+  { key: 'items', kind: 'text', label: 'dash.calendar.items', default: '', dated: true },
   { key: 'showPast', kind: 'boolean', label: 'dash.calendar.showPast', default: false },
   { key: 'layout', kind: 'enum', label: 'dash.calendar.layout', default: 'list', values: ['list', 'tiles'], optionLabel: 'dash.calendar.layout' },
 ];
