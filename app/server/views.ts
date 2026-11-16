@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { appHome, createNotifications } from '@kedalion/platform';
 import type { ServerViewDef } from '@kedalion/server-core';
 import { dashboardServerView, dashboardSources, dashboardSpecs } from '@kedalion/view-grid/server';
+import { agentDataServerView } from '@kedalion/agent-data';
 import { browserServerView } from '@kedalion/view-browser/server';
 import { explorerServerView } from '@kedalion/view-explorer/server';
 import { gitServerView } from '@kedalion/view-git/server';
@@ -42,14 +43,17 @@ const browser = browserServerView({
   origin: () => appOrigin?.(),
 });
 
+const agentData = agentDataServerView({ dataDir: join(appHome(APP.id), 'agent-data'), origin: () => appOrigin?.() });
+
 export const serverViews: ServerViewDef[] = [
   explorer,
-  terminalServerView({ integrationDir: join(appHome(APP.id), 'shell-integration'), resolveCwd: explorer.resolveCwd, launchers: launchers({ claude: agentsLauncher({ home: agentsHome, mcpConfig: () => browser.mcpConfigFile() }) }), sessions: terminalStore }),
+  terminalServerView({ integrationDir: join(appHome(APP.id), 'shell-integration'), resolveCwd: explorer.resolveCwd, launchers: launchers({ claude: agentsLauncher({ home: agentsHome, mcpConfig: () => [browser.mcpConfigFile(), agentData.mcpConfigFile()].filter((f): f is string => f !== undefined) }) }), sessions: terminalStore }),
   workbenchServerView(),
   restServerView(),
   gitServerView(),
   dashboardServerView({ panels: dashboardSpecs, sources: dashboardSources, notifications }),
   browser,
+  agentData,
   agentsServerView({
     home: agentsHome,
     link: () => appLink,

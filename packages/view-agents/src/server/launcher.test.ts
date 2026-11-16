@@ -40,6 +40,11 @@ test('mcpConfig returning undefined leaves the argv unchanged', () => {
   expect(r.cmd).toEqual(['claude', '--session-id', ID]);
 });
 
+test('mcpConfig with several files passes all of them after one --mcp-config', () => {
+  const r = launchers({ claude: claudeLauncher({ accounts, env: {}, cmd: 'claude', mcpConfig: () => ['/a.json', '/b.json'] }) }).resolve('claude', { account: '.claude', sessionId: ID }, { shell: ['sh'] })!;
+  expect(r.cmd).toEqual(['claude', '--session-id', ID, '--mcp-config', '/a.json', '/b.json']);
+});
+
 test('an unsafe mcpConfig path via a .cmd base throws', () => {
   const spy = spyOn(claudeCommand, 'argv').mockReturnValue(['cmd.exe', '/c', 'claude.cmd']);
   try {

@@ -1,0 +1,15 @@
+{
+  "name": "@kedalion/agent-data",
+  "version": "0.7.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@kedalion/db": "workspace:*",
+    "@kedalion/server-core": "workspace:*",
+    "@kedalion/server-mods": "workspace:*"
+  }
+}

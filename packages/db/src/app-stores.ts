@@ -7,7 +7,7 @@ import { connectionRoutes } from './connection-routes.ts';
 import { sqlHistory, type SqlHistory } from './history.ts';
 import { parseOracleUrl, validConnection, type DbConnectionFields } from './oracle-url.ts';
 import { dbRoutes } from './routes.ts';
-import { dbSessions } from './sessions.ts';
+import { dbSessions, type DbSessions } from './sessions.ts';
 
 export interface DbStoresOptions {
   /** The app data folder; defaults to `appHome(appId)`. */
@@ -23,6 +23,8 @@ export interface DbStores {
   dbConnections: RecordStore<DbConnectionFields & { password?: unknown }>;
   /** Statements the Workbench and the Explorer ran. */
   sqlHistory: SqlHistory;
+  /** The open database sessions; the routes and the agent SQL tools share them, so a session and its pending changes are one. */
+  sessions: DbSessions;
 }
 
 /** Builds `dbConnections` and `sqlHistory` for app `appId`; spread next to `appStores` into `mountViews` `stores`. */
@@ -37,13 +39,14 @@ export function dbStores(appId: string, opts: DbStoresOptions = {}): DbStores {
       validate: (input) => validConnection(input),
     }),
     sqlHistory: sqlHistory({ dir: home, max: opts.sqlHistoryMax ?? 500 }),
+    sessions: dbSessions(),
   };
 }
 
 /** `/api/db/*`: connections, sessions, queries and scripts (in `<dataDir>/workbench`). Shared by the workbench and explorer views as `shared: 'db'`. */
 export function dbSharedRoutes(stores: DbStores, dataDir: string): Routes {
   const { dbConnections } = stores;
-  const sessions = dbSessions();
+  const { sessions } = stores;
   const scriptFile = (id: string) => join(dataDir, 'workbench', `${id}.sql`);
   return {
     ...connectionRoutes(dbConnections, sessions),

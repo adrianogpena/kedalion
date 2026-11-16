@@ -24,8 +24,8 @@ export interface ClaudeLauncherOptions {
   env?: Record<string, string | undefined>;
   /** Executable (tests); defaults to the resolved `claudeCommand` (settings, then detection). */
   cmd?: string;
-  /** JSON file path passed as `--mcp-config`, or undefined to add nothing. */
-  mcpConfig?: () => string | undefined;
+  /** JSON file path(s) passed as `--mcp-config`, or undefined/empty to add nothing. */
+  mcpConfig?: () => string | readonly string[] | undefined;
 }
 
 /** Terminal launcher `claude`: the CLI under an account's config dir. `meta.agentSession` links the pty to its Claude session. */
@@ -45,9 +45,10 @@ export function claudeLauncher(opts: ClaudeLauncherOptions): Launcher<ClaudeLaun
     command: (a) => {
       const base = opts.cmd ? [opts.cmd] : claudeCommand.argv();
       const extra = claudeCommand.extraArgs();
-      const cfg = opts.mcpConfig?.();
+      const made = opts.mcpConfig?.();
+      const cfg = typeof made === 'string' ? [made] : [...(made ?? [])];
       if (isViaInterpreter(base)) {
-        if (cfg && !isInterpreterSafeArg(cfg)) throw invalid('claudeArgsViaCmd', 'The MCP config path contains characters that cannot be passed to a .cmd/.bat claude command.');
+        if (!cfg.every(isInterpreterSafeArg)) throw invalid('claudeArgsViaCmd', 'The MCP config path contains characters that cannot be passed to a .cmd/.bat claude command.');
         // cmd.exe re-parses the line: a free-text prompt could be cut at a newline or run commands.
         if (a.prompt) throw invalid('claudePromptViaCmd', 'A prompt cannot be passed to a .cmd/.bat claude command; set the claude command to claude.exe in Settings.');
         if (!extra.every(isInterpreterSafeArg)) throw invalid('claudeArgsViaCmd', 'Claude arguments with " % ! ^ & | < > ( ) or line breaks cannot be passed to a .cmd/.bat claude command.');
@@ -57,7 +58,7 @@ export function claudeLauncher(opts: ClaudeLauncherOptions): Launcher<ClaudeLaun
         a.resume ? '--resume' : '--session-id',
         a.sessionId,
         ...(a.mode ? ['--permission-mode', a.mode] : []),
-        ...(cfg ? ['--mcp-config', cfg] : []),
+        ...(cfg.length ? ['--mcp-config', ...cfg] : []),
         ...extra,
         ...(a.prompt ? ['--', a.prompt] : []),
       ];

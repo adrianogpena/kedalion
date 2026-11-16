@@ -429,11 +429,14 @@ function validVars(raw: unknown): Record<string, string> {
   return out;
 }
 
-/** `POST /api/http/send` (`HttpSendInput`: `{ request, secretRef?, environment? }`, `{{name}}` resolved before sending) and `POST /api/http/save` (`{ id, target }`, `target` is the path the in-app save dialog returned). */
-export function httpRoutes(executor: HttpExecutor, opts: HttpRoutesOptions = {}): Routes {
-  const { secretHeaders, environmentVars, secretVars, onSend, picks } = opts;
+/**
+ * The send step of `POST /api/http/send` without the route: `body` is a `HttpSendInput` (`{ request, secretRef?, environment?, vars? }`),
+ * `{{name}}` is resolved before sending. Throws `invalid`/`unknownVariable` AppErrors.
+ */
+export function httpSender(executor: HttpExecutor, opts: Pick<HttpRoutesOptions, 'secretHeaders' | 'environmentVars' | 'secretVars'> = {}): (body: Record<string, unknown>, signal?: AbortSignal) => Promise<HttpResponseInfo> {
+  const { secretHeaders, environmentVars, secretVars } = opts;
 
-  async function send(body: Record<string, unknown>, signal: AbortSignal): Promise<HttpResponseInfo> {
+  return async function send(body, signal) {
     const values = { ...(typeof body.environment === 'string' && environmentVars ? await environmentVars(body.environment) : {}), ...validVars(body.vars) };
     const vars = variableResolver(values);
     const request = resolveRequest(body.request, vars);
@@ -462,6 +465,13 @@ export function httpRoutes(executor: HttpExecutor, opts: HttpRoutesOptions = {})
     if (added.length > 0) spec.secretHeaderNames = added;
     return executor.send(spec, signal);
   }
+}
+
+/** `POST /api/http/send` (`HttpSendInput`: `{ request, secretRef?, environment? }`, `{{name}}` resolved before sending) and `POST /api/http/save` (`{ id, target }`, `target` is the path the in-app save dialog returned). */
+export function httpRoutes(executor: HttpExecutor, opts: HttpRoutesOptions = {}): Routes {
+  const { onSend, picks } = opts;
+
+  const send = httpSender(executor, opts);
 
   return {
     'POST /api/http/send': async ({ req, json }) => {

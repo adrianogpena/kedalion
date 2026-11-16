@@ -123,7 +123,7 @@ export interface AgentsServerViewOptions {
 export type { AgentsFrame };
 
 /** The `claude` terminal launcher for `terminalServerView({ launchers: launchers({ claude: agentsLauncher() }) })`; same `home` as the view. */
-export function agentsLauncher(opts: Pick<AgentsServerViewOptions, 'home'> & { env?: Record<string, string | undefined>; cmd?: string; mcpConfig?: () => string | undefined } = {}) {
+export function agentsLauncher(opts: Pick<AgentsServerViewOptions, 'home'> & { env?: Record<string, string | undefined>; cmd?: string; mcpConfig?: () => string | readonly string[] | undefined } = {}) {
   const home = opts.home ?? homedir();
   return claudeLauncher({ accounts: () => detectAccounts(home), env: opts.env, cmd: opts.cmd, mcpConfig: opts.mcpConfig });
 }
