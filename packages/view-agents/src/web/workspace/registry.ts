@@ -12,9 +12,10 @@ import { panel as notes } from '../panels/notes';
 import { panel as trajectory } from '../panels/trajectory';
 import { panel as output } from '../panels/output';
 import { panel as activity } from '../panels/activity';
+import { panel as terminal } from '../panels/terminal';
 
 /** Every panel module (static imports: a new kind is one folder under `panels/` plus one line here). */
-export const PANELS: readonly PanelModule[] = [agent, changes, diff, review, usage, run, scratchpad, code, task, notes, trajectory, output, activity];
+export const PANELS: readonly PanelModule[] = [agent, changes, diff, review, usage, run, scratchpad, code, task, notes, trajectory, output, activity, terminal];
 
 const byKind = new Map<string, PanelModule>(PANELS.map((p) => [p.kind, p]));
 
