@@ -1,5 +1,5 @@
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
-import { addItem, Button, ContextMenu, Empty, PageHead, PanelGrid, sameItems, t, useCommand, useDialogs, useViewSidePanel, validConfig, ViewSidePanel,type ContextMenuItem, type GridItem, type PanelConfig } from '@kedalion/ui';
+import { addItem, Button, ContextMenu, Empty, PageHead, PanelGrid, t, useCommand, useDialogs, useViewSidePanel, validConfig, ViewSidePanel,type ContextMenuItem, type GridItem, type PanelConfig } from '@kedalion/ui';
 import { ConfigDialog } from '../ConfigForm';
 import { ConnectionsDialog } from '../connections/ConnectionsDialog';
 import { tKey } from '../i18n';
@@ -11,7 +11,7 @@ import { PanelHost } from '../PanelHost';
 import { runAction } from '../source';
 import { showTicketsNow } from '../panels/tickets/TicketsPanel';
 import type { Ticket } from '../panels/tickets/model';
-import { activeLayout, itemFromPreset, layoutsOrDefault, MAX_LAYOUTS, MAX_NAME, MAX_PRESETS, newLayoutId, newPresetId, presetFromItem, validDashboardPresets, type DashboardLayouts, type DashboardPreset } from './model';
+import { activeLayout, itemFromPreset, keepViewState, sameLayout, layoutsOrDefault, MAX_LAYOUTS, MAX_NAME, MAX_PRESETS, newLayoutId, newPresetId, presetFromItem, validDashboardPresets, type DashboardLayouts, type DashboardPreset } from './model';
 import '../grid.css';
 import './dashboard.css';
 
@@ -52,13 +52,16 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
 
   const current = activeLayout(state);
   setDashboardItems(state.layouts.flatMap((l) => (l.id === current.id ? items : l.items)));
-  const dirty = !sameItems(items, current.items);
+  const dirty = !sameLayout(items, current.items);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const change = (next: GridItem[]) => {
-    unsaved = sameItems(next, current.items) ? null : { layoutId: current.id, items: next };
+    unsaved = sameLayout(next, current.items) ? null : { layoutId: current.id, items: next };
     setItems(next);
   };
   const persist = (next: DashboardLayouts) => {
+    stateRef.current = next;
     setState(next);
     onSave({ dashboardLayouts: next });
   };
@@ -176,7 +179,29 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
   };
   const itemsRef = useRef(items);
   itemsRef.current = items;
-  const setItemConfig = (id: string, config: PanelConfig) => change(itemsRef.current.map((i) => (i.id === id ? { ...i, config } : i)));
+  /** A panel's own settings and content are not part of the layout: they are stored at once, and Save and Reset leave them alone. */
+  const storeNow = (nextItems: GridItem[], changes: ReadonlyMap<string, Partial<GridItem>>) => {
+    itemsRef.current = nextItems;
+    change(nextItems);
+    const saved = stateRef.current;
+    const layout = activeLayout(saved);
+    if (!layout.items.some((i) => changes.has(i.id))) return;
+    persist(withItems(saved, layout.id, layout.items.map((i) => ({ ...i, ...changes.get(i.id) }))));
+  };
+  const setItemConfig = (id: string, config: PanelConfig) =>
+    storeNow(itemsRef.current.map((i) => (i.id === id ? { ...i, config } : i)), new Map([[id, { config }]]));
+  /** Collapsing and expanding a panel is stored at once too; every other grid change waits for Save. */
+  const onGridChange = (next: GridItem[]) => {
+    const changes = new Map<string, Partial<GridItem>>();
+    for (const n of next) {
+      const old = itemsRef.current.find((i) => i.id === n.id);
+      if (old && !!old.collapsed !== !!n.collapsed) changes.set(n.id, { collapsed: n.collapsed });
+    }
+    if (changes.size === 0) change(next);
+    else storeNow(next, changes);
+  };
+  const resetLayout = () =>
+    change(keepViewState(current.items, items));
   const sideContentId = side.content?.id;
   useEffect(() => {
     if (sideContentId && !items.some((i) => sideContentId.startsWith(`${i.id}:`))) side.closeAll();
@@ -213,7 +238,7 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
         <Button size="sm" variant={dirty ? 'primary' : 'default'} icon="check" title={tKey('grid.save')} onClick={save} disabled={!dirty}>
           {dirty && <span className="dirty-dot" aria-hidden="true" />} {tKey('grid.save')}
         </Button>
-        <Button size="sm" icon="rotate-ccw" title={tKey('grid.reset')} onClick={() => change(current.items)} disabled={!dirty}>{tKey('grid.reset')}</Button>
+        <Button size="sm" icon="rotate-ccw" title={tKey('grid.reset')} onClick={resetLayout} disabled={!dirty}>{tKey('grid.reset')}</Button>
       </PageHead>
       <ViewSidePanel side={side}>
       <div className="scroll dash-scroll">
@@ -247,7 +272,7 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
               );
             }}
             itemMenu={itemMenu}
-            onChange={change}
+            onChange={onGridChange}
           />
         )}
       </div>
@@ -273,7 +298,7 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
           editor={targetKind.configEditor}
           value={target.config ?? {}}
           onSave={(config) => {
-            change(items.map((i) => (i.id === target.id ? { ...i, config } : i)));
+            setItemConfig(target.id, config);
             if (target.kind !== 'tickets') return;
             const before = target.config?.autoMove !== false;
             const after = config.autoMove !== false;

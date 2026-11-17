@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { CLOCK_SPEC } from '../clock-fields';
-import { activeLayout, defaultLayouts, itemFromPreset, layoutsOrDefault, newLayoutId, newPresetId, presetFromItem, validDashboardLayouts, validDashboardPresets } from './model';
+import { activeLayout, defaultLayouts, itemFromPreset, keepViewState, layoutsOrDefault, sameLayout, newLayoutId, newPresetId, presetFromItem, validDashboardLayouts, validDashboardPresets } from './model';
 
 const kinds = { clock: CLOCK_SPEC };
 const item = { id: 'clock', kind: 'clock', x: 0, y: 0, w: 3, h: 4 };
@@ -76,5 +76,23 @@ describe('presets to items', () => {
 
   test('newPresetId avoids used ids', () => {
     expect(newPresetId([{ id: 'preset-1', name: 'a', kind: 'clock', w: 1, h: 1 }])).toBe('preset-2');
+  });
+});
+
+describe('sameLayout and keepViewState', () => {
+  const a = { ...item, config: { text: 'a' } };
+
+  test('config and collapsed do not make a layout differ, geometry and title do', () => {
+    expect(sameLayout([a], [{ ...a, config: { text: 'b' }, collapsed: true }])).toBe(true);
+    expect(sameLayout([a], [{ ...a, w: 5 }])).toBe(false);
+    expect(sameLayout([a], [{ ...a, title: 'X' }])).toBe(false);
+  });
+
+  test('keepViewState restores geometry but keeps config and collapsed of matching ids', () => {
+    const live = [{ ...a, x: 4, config: { text: 'new' }, collapsed: true }, { ...item, id: 'added', x: 8 }];
+    const out = keepViewState([a, { ...item, id: 'removed', config: { text: 'r' } }], live);
+    expect(out[0]).toEqual({ ...a, config: { text: 'new' }, collapsed: true });
+    expect(out[1]?.config).toEqual({ text: 'r' });
+    expect(out).toHaveLength(2);
   });
 });

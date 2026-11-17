@@ -1,4 +1,4 @@
-import { addItem, MAX_ID, MIN_PANEL_H, MIN_PANEL_W, validGridItems, type GridItem, type PanelConfig, type PanelDef, type PanelKindSpec } from '@kedalion/ui/grid';
+import { addItem, sameItems, MAX_ID, MIN_PANEL_H, MIN_PANEL_W, validGridItems, type GridItem, type PanelConfig, type PanelDef, type PanelKindSpec } from '@kedalion/ui/grid';
 
 type IconName = NonNullable<GridItem['icon']>;
 
@@ -114,4 +114,17 @@ export function itemFromPreset(items: readonly GridItem[], preset: DashboardPres
   if (preset.title) extra.title = preset.title;
   if (preset.icon) extra.icon = preset.icon;
   return [...next.slice(0, -1), { ...added, ...extra }];
+}
+
+const withoutViewState = (list: readonly GridItem[]): GridItem[] => list.map(({ config: _config, collapsed: _collapsed, ...rest }) => rest);
+
+/** Whether two item lists have the same panels, sizes, positions, titles and icons; panel config and collapsed state are not compared. */
+export const sameLayout = (a: readonly GridItem[], b: readonly GridItem[]): boolean => sameItems(withoutViewState(a), withoutViewState(b));
+
+/** The `saved` items with the config and collapsed state of the matching `live` items (by id), so a reset keeps what is not layout. */
+export function keepViewState(saved: readonly GridItem[], live: readonly GridItem[]): GridItem[] {
+  return saved.map((i) => {
+    const l = live.find((x) => x.id === i.id);
+    return l ? { ...i, config: l.config, collapsed: l.collapsed } : i;
+  });
 }
