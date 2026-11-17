@@ -23,8 +23,57 @@ export function langOfFile(name: string): Lang {
   return langOfEffective(effectiveName(name));
 }
 
+const LANG_BY_NAME: Record<string, Lang> = {
+  '.bashrc': 'shell', '.bash_profile': 'shell', '.bash_aliases': 'shell', '.profile': 'shell', '.zshrc': 'shell', '.zprofile': 'shell', '.zshenv': 'shell',
+  pkgbuild: 'shell', '.editorconfig': 'properties', '.gitconfig': 'properties', '.gitattributes': 'properties', pipfile: 'toml', 'cargo.lock': 'toml', 'poetry.lock': 'toml',
+};
+
+const INTERPRETERS: Record<string, Lang> = {
+  sh: 'shell', bash: 'shell', zsh: 'shell', dash: 'shell', ash: 'shell', ksh: 'shell', fish: 'shell',
+  python: 'python', pypy: 'python', node: 'javascript', nodejs: 'javascript', deno: 'typescript', bun: 'typescript', tsx: 'typescript', 'ts-node': 'typescript',
+};
+
+const MODES: Record<string, Lang> = {
+  sh: 'shell', shell: 'shell', 'shell-script': 'shell', python: 'python', javascript: 'javascript', js: 'javascript', js2: 'javascript', typescript: 'typescript',
+  json: 'json', yaml: 'yaml', toml: 'toml', xml: 'xml', html: 'html', css: 'css', sql: 'sql', java: 'java', c: 'c', 'c++': 'cpp', rust: 'rust', go: 'go', markdown: 'markdown',
+};
+
+const lookup = (table: Record<string, Lang>, key: string | undefined) => (key && Object.hasOwn(table, key) ? table[key] : undefined);
+
+/** The interpreter of a `#!` line (`/usr/bin/env -S node --x` -> `node`), version suffix removed (`python3.11` -> `python`). */
+function shebangLang(first: string): Lang | undefined {
+  const m = /^#!\s*(\S+)(?:\s+(.*))?$/.exec(first);
+  if (!m) return undefined;
+  const base = (path: string) => path.slice(path.lastIndexOf('/') + 1).toLowerCase();
+  let interpreter = base(m[1]!);
+  if (interpreter === 'env') {
+    const arg = (m[2] ?? '').split(/\s+/).find((a) => a && !a.startsWith('-') && !a.includes('='));
+    if (!arg) return undefined;
+    interpreter = base(arg);
+  }
+  return lookup(INTERPRETERS, interpreter.replace(/[\d.]+$/, ''));
+}
+
+/** An Emacs `-*- mode: x -*-` or `-*- x -*-` header. */
+function modelineLang(line: string): Lang | undefined {
+  const m = /-\*-\s*(.*?)\s*-\*-/.exec(line);
+  if (!m) return undefined;
+  const mode = /(?:^|;)\s*mode\s*:\s*([^;\s]+)/i.exec(m[1]!)?.[1] ?? (/^[\w+#-]+$/.test(m[1]!) ? m[1] : undefined);
+  return lookup(MODES, mode?.toLowerCase());
+}
+
+/** The editor language by name, falling back to the first two lines (shebang, Emacs modeline) when the name says nothing. */
+export function langOfContent(name: string, text: string | undefined): Lang {
+  const byName = langOfFile(name);
+  if (byName !== 'text' || !text) return byName;
+  const [first = '', second = ''] = text.slice(0, 512).split(/\r?\n/);
+  return shebangLang(first) ?? modelineLang(first) ?? modelineLang(second) ?? 'text';
+}
+
 function langOfEffective(name: string): Lang {
   const lower = name.toLowerCase();
+  const byName = lookup(LANG_BY_NAME, lower);
+  if (byName) return byName;
   if (lower === 'dockerfile' || lower.startsWith('dockerfile.')) return 'dockerfile';
   if (lower === '.env' || lower.startsWith('.env.')) return 'properties';
   return LANG_BY_EXT[extOf(name)] ?? 'text';

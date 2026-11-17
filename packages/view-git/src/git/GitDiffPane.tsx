@@ -1,5 +1,5 @@
 import { forwardRef, lazy, Suspense } from 'react';
-import { CodeView, type DiffMode, type DiffViewHandle, langOfFile } from '@kedalion/editor';
+import { CodeView, type DiffMode, type DiffViewHandle, langOfContent } from '@kedalion/editor';
 import type { GitCommitFile, GitFile, GitFileContent } from '@kedalion/server-core/protocol';
 import { ErrorBanner, PanelBanner, PanelLoading, PanelNotice, useAsync } from '@kedalion/ui';
 import { t } from '../i18n';
@@ -33,7 +33,7 @@ export const GitDiffPane = forwardRef<DiffViewHandle, GitDiffPaneProps>(function
   if (sides.error) return <ErrorBanner error={sides.error} onRetry={sides.reload} />;
   if (!sides.data) return <PanelLoading />;
   const { original, modified } = sides.data;
-  const lang = langOfFile(file.path.split('/').pop() ?? file.path);
+  const lang = langOfContent(file.path.split('/').pop() ?? file.path, (modified ?? original)?.text);
   const problem = problemOf(original) ?? problemOf(modified);
   if (problem) return <PanelNotice icon="file" title={file.path} message={problem} />;
   if (!original) {
@@ -44,8 +44,10 @@ export const GitDiffPane = forwardRef<DiffViewHandle, GitDiffPaneProps>(function
       </div>
     );
   }
+  const modeChange = source.commit === undefined ? source.file.modeChange : undefined;
   return (
     <Suspense fallback={<PanelLoading />}>
+      {modeChange && <PanelBanner tone="warn">{t('git.modeChange', modeChange)}</PanelBanner>}
       <DiffView
         ref={ref}
         original={original.text ?? ''}

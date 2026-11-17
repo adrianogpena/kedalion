@@ -83,11 +83,12 @@ export function parsePorcelainV2(text: string): PorcelainStatus {
       }
     } else if (t[0] === '1') {
       const f = t.split(' ');
-      addEntry(out.files, f[1]!, t.split(' ').slice(8).join(' '));
+      addEntry(out.files, f[1]!, t.split(' ').slice(8).join(' '), undefined, { head: f[3]!, index: f[4]!, work: f[5]! });
     } else if (t[0] === '2') {
       const path = t.split(' ').slice(9).join(' ');
       const origPath = tokens[++i] ?? '';
-      addEntry(out.files, t.split(' ')[1]!, path, origPath);
+      const f = t.split(' ');
+      addEntry(out.files, f[1]!, path, origPath, { head: f[3]!, index: f[4]!, work: f[5]! });
     } else if (t[0] === 'u') {
       const path = t.split(' ').slice(10).join(' ');
       out.files.push({ path, index: 'U', worktree: 'U', group: 'conflict' });
@@ -98,6 +99,17 @@ export function parsePorcelainV2(text: string): PorcelainStatus {
     }
   }
   return out;
+}
+
+/**
+ * Parses `git check-attr -z diff -- <path>` output (`path NUL attr NUL value NUL`): `binary` when the `diff` attribute
+ * is unset (`-diff`, also what the `binary` macro implies), `text` when it is set or names a driver, else undefined.
+ */
+export function parseDiffAttr(out: string): 'binary' | 'text' | undefined {
+  const value = out.split('\0')[2];
+  if (value === 'unset') return 'binary';
+  if (value === 'set' || (value && value !== 'unspecified')) return 'text';
+  return undefined;
 }
 
 /** Parses `git diff --numstat -z` output into counts by (new) path; binary files (`-\t-`) get no counts. */
@@ -149,12 +161,13 @@ export function parseNameStatus(text: string): GitCommitFile[] {
   return out;
 }
 
-function addEntry(files: GitFile[], xy: string, path: string, origPath?: string): void {
+function addEntry(files: GitFile[], xy: string, path: string, origPath?: string, modes?: { head: string; index: string; work: string }): void {
   const index = xy[0] as GitCode;
   const worktree = xy[1] as GitCode;
   const base = origPath ? { path, origPath } : { path };
-  if (index !== '.') files.push({ ...base, index, worktree, group: 'staged' });
-  if (worktree !== '.') files.push({ ...base, index, worktree, group: 'unstaged' });
+  const change = (from?: string, to?: string) => (from && to && from !== to && from !== '000000' && to !== '000000' ? { modeChange: { from, to } } : {});
+  if (index !== '.') files.push({ ...base, index, worktree, group: 'staged', ...change(modes?.head, modes?.index) });
+  if (worktree !== '.') files.push({ ...base, index, worktree, group: 'unstaged', ...change(modes?.index, modes?.work) });
 }
 
 let gitOnPath: boolean | undefined;
@@ -256,6 +269,16 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
     return undefined;
   }
 
+  /** The repo's `diff` attribute for a root-relative path (`.gitattributes`), undefined when unset or git cannot say. */
+  async function diffAttrOf(root: FsRoot, path: string) {
+    try {
+      const r = await git(root, ['check-attr', '-z', 'diff', '--', path]);
+      return r.code === 0 ? parseDiffAttr(r.stdout) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   async function status(root: FsRoot, untracked: boolean, ignored = false): Promise<GitStatus> {
     const args = [...(await filterOverrides(root)), 'status', '--porcelain=v2', '-z', '--branch', untracked ? '--untracked-files=all' : '--untracked-files=no', ...(ignored ? ['--ignored=matching'] : []), '--', '.'];
     const parsed = parsePorcelainV2(await gitOut(root, args, STATUS_TIMEOUT_MS));
@@ -338,8 +361,10 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
         return { missing: true } satisfies GitFileContent;
       }
       if (Number(size.stdout.trim()) > MAX_FILE_BYTES) return { tooLarge: true } satisfies GitFileContent;
+      const attr = await diffAttrOf(root, `${prefix}${path}`);
+      if (attr === 'binary') return { binary: true } satisfies GitFileContent;
       const text = await gitOut(root, ['show', rev]);
-      if (isBinary(new TextEncoder().encode(text.slice(0, 8192)))) return { binary: true } satisfies GitFileContent;
+      if (attr !== 'text' && isBinary(new TextEncoder().encode(text.slice(0, 8192)))) return { binary: true } satisfies GitFileContent;
       return { text } satisfies GitFileContent;
     },
 

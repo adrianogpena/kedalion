@@ -104,4 +104,4 @@ export function parserOf(lang: Lang): Parser | null {
 }
 
 
-export { langOfFile, previewKind, type PreviewKind } from './fileKinds';
+export { langOfContent, langOfFile, previewKind, type PreviewKind } from './fileKinds';

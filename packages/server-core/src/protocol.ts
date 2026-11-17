@@ -346,6 +346,8 @@ export interface GitFile {
   index: GitCode;
   worktree: GitCode;
   group: 'staged' | 'unstaged' | 'untracked' | 'conflict';
+  /** File mode change of this group's side, as git prints modes (`100644` to `100755`); absent when the mode is unchanged. */
+  modeChange?: { from: string; to: string };
   /** Added and removed line counts; undefined for binary or oversized files and when git could not count. */
   added?: number;
   removed?: number;

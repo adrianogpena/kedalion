@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { EditorState } from '@codemirror/state';
 import { setFileAssociations } from '@kedalion/ui/file-associations';
-import { columnCompletion, langOfFile, languageFor, parserOf, previewKind } from '../src/languages.ts';
+import { columnCompletion, langOfContent, langOfFile, languageFor, parserOf, previewKind } from '../src/languages.ts';
 
 describe('langOfFile', () => {
   test('maps extensions case-insensitively', () => {
@@ -117,4 +117,15 @@ test('plsql completes upper-case tables without quotes', async () => {
   const customer = options.find((o) => o.label === 'CUSTOMER');
   expect(customer).toBeDefined();
   expect(customer!.apply).toBeUndefined();
+});
+
+describe('langOfContent', () => {
+  test('reads shebang and modeline when the name says nothing', () => {
+    expect(langOfContent('run', '#!/usr/bin/env -S node --x\n')).toBe('javascript');
+    expect(langOfContent('run', '#!/usr/bin/python3.11\n')).toBe('python');
+    expect(langOfContent('x', '# -*- mode: yaml -*-\n')).toBe('yaml');
+    expect(langOfContent('x', 'plain')).toBe('text');
+    expect(langOfContent('a.ts', '#!/bin/sh')).toBe('typescript');
+    expect(langOfContent('.bashrc', undefined)).toBe('shell');
+  });
 });

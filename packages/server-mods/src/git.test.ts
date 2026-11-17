@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RunResult } from '@kedalion/platform';
-import { gitRoutes, parseLog, parseNameStatus, parseNumstat, parsePorcelainV2 } from './git.ts';
+import { gitRoutes, parseLog, parseNameStatus, parseDiffAttr, parseNumstat, parsePorcelainV2 } from './git.ts';
 
 const done = (stdout: string, code = 0, stderr = ''): RunResult => ({ kind: 'done', code, stdout, stderr });
 const roots = async () => [{ id: 'r1', path: 'C:/proj' }];
@@ -147,4 +147,15 @@ test('commit diffs against the first parent, or the empty tree for a root commit
   expect(calls[1]!.slice(-3)).toEqual(['p1', 'abc1234', '--']);
   await gitRoutes({ roots, run: run('abc1234\n') })['GET /api/git/commit']!(q({ root: 'r1', commit: 'abc1234' }));
   expect(calls[3]!.slice(-3)).toEqual(['--root', 'abc1234', '--']);
+});
+
+test('parseDiffAttr maps the diff attribute', () => {
+  expect(parseDiffAttr('a.bin\0diff\0unset\0')).toBe('binary');
+  expect(parseDiffAttr('a.txt\0diff\0set\0')).toBe('text');
+  expect(parseDiffAttr('a.txt\0diff\0unspecified\0')).toBeUndefined();
+});
+
+test('parsePorcelainV2 reports a file mode change per side', () => {
+  const out = parsePorcelainV2('1 .M N... 100644 100644 100755 h1 h2 run.sh\0');
+  expect(out.files).toEqual([{ path: 'run.sh', index: '.', worktree: 'M', group: 'unstaged', modeChange: { from: '100644', to: '100755' } }]);
 });
