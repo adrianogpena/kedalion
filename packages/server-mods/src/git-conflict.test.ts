@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { conflictCount, parseConflicts, renderConflicts, resolveAll, resolveConflict, unresolvedCount } from './git-conflict.ts';
+import { conflictCount, conflictKindOf, parseConflicts, parseUnmergedStages, renderConflicts, resolveAll, resolveConflict, unresolvedCount } from './git-conflict.ts';
 
 const two = ['top', '<<<<<<< HEAD', 'o1', '=======', 't1', '>>>>>>> feat', 'mid', '<<<<<<< HEAD', 'o2', '=======', 't2', '>>>>>>> feat', 'end', ''].join('\n');
 const crlf = two.replace(/\n/g, '\r\n');
@@ -46,4 +46,21 @@ test('unterminated conflict does not drop the rest of the file', () => {
   const p = parseConflicts(u);
   expect(conflictCount(p)).toBe(1);
   expect(renderConflicts(p)).toBe(u);
+});
+
+test('base pick needs diff3 markers; merged carries text', () => {
+  const diff3 = ['<<<<<<< HEAD', 'o', '||||||| base', 'b', '=======', 't', '>>>>>>> f', ''].join('\n');
+  expect(renderConflicts(resolveAll(parseConflicts(diff3), 'base'))).toBe('b\n');
+  expect(renderConflicts(resolveAll(parseConflicts(two), 'base'))).toBe(two);
+  expect(renderConflicts(resolveConflict(parseConflicts(diff3), 0, 'merged', 'm\n'))).toBe('m\n');
+  expect(resolveConflict(parseConflicts(diff3), 0, 'merged')[0]).toMatchObject({ resolution: 'unresolved' });
+});
+
+test('conflict kinds from index stages', () => {
+  const stages = parseUnmergedStages(['100644 aaa 1\ta.ts', '100644 bbb 2\ta.ts', '100644 ccc 3\ta.ts', '100644 ddd 2\tb c.ts', ''].join('\0'));
+  expect(conflictKindOf(stages.get('a.ts')!)).toBe('bothModified');
+  expect(conflictKindOf(stages.get('b c.ts')!)).toBe('addedByUs');
+  expect(conflictKindOf([1])).toBe('bothDeleted');
+  expect(conflictKindOf([2, 3])).toBe('bothAdded');
+  expect(conflictKindOf([1, 3])).toBe('deletedByUs');
 });

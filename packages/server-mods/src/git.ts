@@ -18,7 +18,8 @@ import {
   type Routes,
 } from '@kedalion/server-core';
 import { isBinary } from './bytes.ts';
-import { parseBlame } from './git-blame.ts';
+import { parseBlame, uncommittedBlame } from './git-blame.ts';
+import { withRepoGate } from './git-gate.ts';
 import { hunkToPatch } from './git-patch.ts';
 import { parseWorktrees } from './git-worktree.ts';
 import { humanizeGitError, IN_PROGRESS_MARKERS } from './git-errors.ts';
@@ -375,7 +376,7 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
     'GET /api/git/worktrees': async ({ query }) => {
       const root = await findRoot(query.get('root'));
       const top = (await gitOut(root, ['rev-parse', '--show-toplevel'])).trim();
-      return parseWorktrees(await gitOut(root, ['worktree', 'list', '--porcelain']), top);
+      return parseWorktrees(await gitOut(root, ['worktree', 'list', '--porcelain', '-z']), top);
     },
 
     'GET /api/git/blame': async ({ query }) => {
@@ -383,7 +384,16 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
       const path = filePath(query);
       const commit = query.get('commit');
       const rev = commit ? [commitOf(query)] : [];
-      return parseBlame(await gitOut(root, ['blame', '--porcelain', ...rev, '--', path], STATUS_TIMEOUT_MS));
+      const r = await git(root, ['blame', '--porcelain', ...rev, '--', path], STATUS_TIMEOUT_MS);
+      if (r.code === 0) return parseBlame(r.stdout, path);
+      // An untracked file, or a repo without commits yet: all of it is uncommitted.
+      if (!commit && /no such path|does not have any commits|bad revision 'HEAD'/i.test(r.stderr)) {
+        const file = Bun.file(join(root.path, path));
+        if (!(await file.exists())) throw notFound('fileNotFound', 'This file no longer exists.');
+        if (file.size > MAX_FILE_BYTES) throw invalid('tooLarge', 'This file is too large to blame.');
+        return uncommittedBlame(await file.text());
+      }
+      throw /not a git repository/i.test(r.stderr) ? notARepo() : gitFailed(r.stderr);
     },
 
     'POST /api/git/apply-hunk': async ({ json }) => {
@@ -393,18 +403,23 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
       if (!segments.length || typeof body.hunk !== 'number' || !Number.isInteger(body.hunk) || body.hunk < 0) throw segments.length ? invalid('badRequest', 'Invalid request.') : badPath();
       const path = segments.join('/');
       const staged = body.staged === true;
-      const diff = await gitOut(root, [...(await filterOverrides(root)), 'diff', ...(staged ? ['--cached'] : []), '--no-color', '--no-ext-diff', '--no-textconv', '--', path]);
-      const patch = hunkToPatch(diff, body.hunk);
-      if (patch === undefined) throw invalid('badRequest', 'That hunk no longer exists.');
-      const dir = await mkdtemp(join(tmpdir(), 'kedalion-hunk-'));
-      try {
-        const file = join(dir, 'hunk.patch');
-        await writeFile(file, patch);
-        await gitOut(root, ['apply', '--cached', ...(staged ? ['--reverse'] : []), '--recount', file], STATUS_TIMEOUT_MS);
-      } finally {
-        await rm(dir, { recursive: true, force: true });
-      }
-      return { ok: true };
+      const hunk = body.hunk;
+      const common = (await gitOut(root, ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim();
+      // Read the diff and apply inside the gate, so a second click applies against the updated index.
+      return withRepoGate(common, async () => {
+        const diff = await gitOut(root, [...(await filterOverrides(root)), 'diff', ...(staged ? ['--cached'] : []), '--no-color', '--no-ext-diff', '--no-textconv', '--', path]);
+        const patch = hunkToPatch(diff, hunk);
+        if (patch === undefined) throw invalid('badRequest', 'That hunk no longer exists.');
+        const dir = await mkdtemp(join(tmpdir(), 'kedalion-hunk-'));
+        try {
+          const file = join(dir, 'hunk.patch');
+          await writeFile(file, patch);
+          await gitOut(root, ['apply', '--cached', ...(staged ? ['--reverse'] : []), '--recount', '--whitespace=nowarn', file], STATUS_TIMEOUT_MS);
+        } finally {
+          await rm(dir, { recursive: true, force: true });
+        }
+        return { ok: true };
+      });
     },
   };
 }

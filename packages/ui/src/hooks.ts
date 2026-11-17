@@ -11,7 +11,8 @@ export interface AsyncState<T> {
 
 /**
  * Runs `fn` whenever `deps` change and, if `intervalMs` > 0, on a timer.
- * Polls never overlap, stale responses (from old deps) are dropped, and hidden windows don't poll.
+ * Polls never overlap (a tick during a load queues one refresh after it), stale responses (from old deps)
+ * are dropped, and hidden windows don't poll.
  */
 export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], intervalMs = 0): AsyncState<T> {
   const [data, setData] = useState<T>();
@@ -19,11 +20,18 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], intervalMs = 
   const [loading, setLoading] = useState(true);
   const generation = useRef(0);
   const inFlight = useRef(false);
+  const pending = useRef(false);
+  const runRef = useRef<(background: boolean) => void>(() => {});
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
   const run = useCallback((background: boolean) => {
-    if (background && inFlight.current) return;
+    // A poll during a load queues one refresh (not one per tick), run when the load ends.
+    if (background && inFlight.current) {
+      pending.current = true;
+      return;
+    }
+    pending.current = false;
     // A foreground run supersedes any poll still in flight.
     if (!background) generation.current++;
     const gen = generation.current;
@@ -43,12 +51,15 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], intervalMs = 
         if (gen !== generation.current) return;
         inFlight.current = false;
         setLoading(false);
+        if (pending.current) runRef.current(true);
       });
   }, []);
+  runRef.current = run;
 
   useEffect(() => {
     generation.current++;
     inFlight.current = false;
+    pending.current = false;
     setData(undefined);
     setError(undefined);
     run(false);

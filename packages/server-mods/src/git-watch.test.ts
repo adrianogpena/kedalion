@@ -6,7 +6,7 @@ import { fingerprintsEqual, gitFingerprint, isRelevantEvent, startGitWatch, type
 
 test('relevance whitelist', () => {
   for (const p of ['HEAD', 'MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REBASE_HEAD', 'FETCH_HEAD', 'ORIG_HEAD', 'index', 'packed-refs', 'refs/heads/main', 'refs\\remotes\\origin\\x']) expect(isRelevantEvent(p)).toBe(true);
-  for (const p of ['index.lock', 'objects/ab/cd', 'config', 'refs/heads/main.lock', 'logs/HEAD', 'COMMIT_EDITMSG']) expect(isRelevantEvent(p)).toBe(false);
+  for (const p of ['index.lock', '.watchman-cookie-host-1','objects/ab/cd', 'config', 'refs/heads/main.lock', 'logs/HEAD', 'COMMIT_EDITMSG']) expect(isRelevantEvent(p)).toBe(false);
 });
 
 test('fingerprint detects HEAD, FETCH_HEAD and ref changes', async () => {
@@ -46,4 +46,34 @@ test('debounces relevant events and stops', async () => {
   await Bun.sleep(40);
   expect(calls).toBe(1);
   expect(closed).toBe(true);
+});
+
+test('a burst that never goes quiet fires at the max delay; nameless events count', async () => {
+  let listener: (e: string, f: string | null) => void = () => {};
+  const watch: WatchFn = (_d, _o, l) => {
+    listener = l;
+    return { close: () => {} };
+  };
+  let calls = 0;
+  const stop = startGitWatch({ gitDir: 'x', onChange: () => calls++, debounceMs: 30, maxDelayMs: 60, watch });
+  for (let i = 0; i < 8; i++) {
+    listener('change', i % 2 ? 'HEAD' : null);
+    await Bun.sleep(15);
+  }
+  expect(calls).toBeGreaterThanOrEqual(1);
+  stop();
+});
+
+test('a rejected fingerprint still fires', async () => {
+  let listener: (e: string, f: string | null) => void = () => {};
+  const watch: WatchFn = (_d, _o, l) => {
+    listener = l;
+    return { close: () => {} };
+  };
+  let calls = 0;
+  const stop = startGitWatch({ gitDir: 'x', onChange: () => calls++, debounceMs: 10, watch, fingerprint: () => Promise.reject(new Error('gone')) });
+  listener('change', 'HEAD');
+  await Bun.sleep(40);
+  expect(calls).toBe(1);
+  stop();
 });

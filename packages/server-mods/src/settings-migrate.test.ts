@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { cycleFormat, formatById, migrateSettings, type FormatOption, type MigrationStep } from './settings-migrate.ts';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { backupBeforeMigrate, cycleFormat, formatById, lenientEntries, lenientFields, migrateSettings, type FormatOption, type MigrationStep } from './settings-migrate.ts';
 
 const steps: MigrationStep[] = [
   {
@@ -44,5 +47,37 @@ describe('format list', () => {
   test('formatById falls back to first', () => {
     expect(formatById(list, 'us').format).toBe('MM/DD/YYYY');
     expect(formatById(list, undefined).id).toBe('iso');
+  });
+});
+
+describe('lenient parsing and backup', () => {
+  test('lenientFields falls back per field and keeps unknown keys', () => {
+    const r = lenientFields({ size: 'big', name: 'x', extra: 1 }, { size: 12, name: '', flag: true }, { size: (v) => typeof v === 'number', name: (v) => typeof v === 'string' });
+    expect(r.value as Record<string, unknown>).toEqual({ size: 12, name: 'x', flag: true, extra: 1 });
+    expect(r.rejected).toEqual(['size']);
+    expect(lenientFields('junk', { a: 1 }, {}).value).toEqual({ a: 1 });
+  });
+
+  test('lenientEntries drops only bad entries', () => {
+    const r = lenientEntries({ a: 1, b: 'no', c: 3 }, (v): v is number => typeof v === 'number');
+    expect(r.value).toEqual({ a: 1, c: 3 });
+    expect(r.rejected).toEqual(['b']);
+  });
+
+  test('backupBeforeMigrate keeps the first copy', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kmig-'));
+    try {
+      const file = join(dir, 'settings.json');
+      expect(await backupBeforeMigrate(file, ['x'])).toBeUndefined();
+      await writeFile(file, 'one');
+      expect(await backupBeforeMigrate(file, [])).toBeUndefined();
+      const bak = await backupBeforeMigrate(file, ['proto/v2']);
+      expect(bak).toBe(`${file}.pre-proto_v2.bak`);
+      await writeFile(file, 'two');
+      expect(await backupBeforeMigrate(file, ['proto/v2'])).toBe(bak);
+      expect(await readFile(bak!, 'utf8')).toBe('one');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

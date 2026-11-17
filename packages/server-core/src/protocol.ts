@@ -423,6 +423,12 @@ export interface GitBlameLine {
   time: number;
   summary: string;
   text: string;
+  /** Not committed yet (git's all-zero id, or a file git does not track). */
+  uncommitted?: boolean;
+  /** The commit before `sha` (git's `previous` line), for "blame at parent". */
+  previous?: string;
+  /** The file's path in `sha` when it differs from the requested path (renamed since). */
+  origPath?: string;
 }
 
 /** Body of `POST /api/git/apply-hunk`: stages (or, with `staged`, unstages) one hunk of a file's diff. */
