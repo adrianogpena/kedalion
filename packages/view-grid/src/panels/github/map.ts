@@ -97,7 +97,8 @@ export function reduceChecks(rollup: Rollup | null | undefined): { state: CiStat
   const policyOnly = !running && list.some((d) => d.state === 'pending');
   switch (rollup.state) {
     case 'SUCCESS':
-      return { state: 'pass', failing: [] };
+      // A required context never reported (EXPECTED, added by withExpected) is absent from GitHub's own rollup, which then says SUCCESS.
+      return { state: policyOnly ? 'policy' : running ? 'pending' : 'pass', failing: [] };
     case 'FAILURE':
     case 'ERROR':
       return { state: running ? 'pending' : 'fail', failing: names };

@@ -47,6 +47,11 @@ describe('reduceChecks', () => {
     expect(reduceChecks({ state: 'PENDING', contexts: { nodes: [ok, policy] } }).state).toBe('policy');
     expect(reduceChecks({ state: 'PENDING', contexts: { nodes: [ok, policy, running] } }).state).toBe('pending');
   });
+  test('a rollup SUCCESS with an unreported required policy-bot gives the policy state', () => {
+    const ok = { __typename: 'CheckRun', name: 'build', status: 'COMPLETED', conclusion: 'SUCCESS' } as const;
+    const rollup = withExpected({ state: 'SUCCESS', contexts: { nodes: [ok] } }, ['build', 'policy-bot: master']);
+    expect(reduceChecks(rollup).state).toBe('policy');
+  });
 });
 
 describe('countChecks', () => {
