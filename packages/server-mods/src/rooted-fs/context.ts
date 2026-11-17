@@ -1,6 +1,6 @@
 import { lstat, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { moveToTrash } from '@kedalion/platform';
+import { isWindowsHidden, moveToTrash } from '@kedalion/platform';
 import { forbidden, notFound, socketTickets } from '@kedalion/server-core';
 import { pickedPaths } from '../dialogs.ts';
 import {
@@ -82,7 +82,10 @@ export function createContext(opts: RootedFsOptions) {
   async function describe(path: string, name: string, realRoot: string): Promise<FsEntry | null> {
     const st = await lstat(path).catch(() => null);
     if (!st) return null;
-    const below = inside(dirname(path), realRoot) ? {} : { readOnly: true as const };
+    const below = {
+      ...(inside(dirname(path), realRoot) ? {} : { readOnly: true as const }),
+      ...(isWindowsHidden(path) ? { hidden: true as const } : {}),
+    };
     if (!st.isSymbolicLink()) {
       const dir = st.isDirectory();
       return { name, kind: dir ? 'dir' : 'file', size: dir ? 0 : st.size, mtime: Math.round(st.mtimeMs), ...below };

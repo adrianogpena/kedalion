@@ -40,6 +40,7 @@ interface Node {
   readOnly?: boolean;
   target?: FsEntry['target'];
   excluded?: true;
+  hidden?: true;
   /** Files shown under this file (file nesting); they are in the same folder on disk. */
   nested?: Node[];
 }
@@ -239,6 +240,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
       readOnly: e.readOnly,
       target: e.target,
       excluded: e.excluded,
+      hidden: e.hidden,
     }));
     if (!nester) return nodes;
     const byName = new Map(nodes.filter((n) => !isDir(n)).map((n) => [n.name, n]));
@@ -827,7 +829,7 @@ export function ProjectTree({ project, expanded, onExpandedChange, onExpandedAdd
         idOf={(n) => nodeId(n.project, n.path)}
         labelOf={(n) => (n.outside ? `${n.name} (${t('explorer.outside')})` : n.name)}
         iconOf={iconOf}
-        dimmedOf={(n) => !!n.excluded || (!!git && isDir(n) && !n.outside && !isRoot(n) && isIgnored(git, n.path))}
+        dimmedOf={(n) => !!n.excluded || !!n.hidden || (!!git && isDir(n) && !n.outside && !isRoot(n) && isIgnored(git, n.path))}
         iconToneOf={(n) => (isDir(n) ? undefined : fileIconOf(n.name).tone)}
         hasChildren={(n) => isDir(n) || !!n.nested?.length}
         isFolder={isDir}

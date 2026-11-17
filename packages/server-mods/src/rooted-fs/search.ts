@@ -3,8 +3,9 @@ import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ndjson, type Routes } from '@kedalion/server-core';
 import { isBinary } from '../bytes.ts';
-import { collator, notADir, parseExclude, type SearchHit } from './common.ts';
+import { collator, notADir, parseExclude, skipUnreadable, type SearchHit } from './common.ts';
 import type { Ctx } from './context.ts';
+import { matchAt, needsStat, parseSearchQuery, statMatches, typeMatches, type SearchQuery } from './search-query.ts';
 
 const MAX_SEARCH_HITS = 5000;
 const MAX_NAME_HITS = 200_000;
@@ -13,25 +14,27 @@ const MAX_HITS_PER_FILE = 20;
 const SKIP_DIRS = new Set(['node_modules', '.git']);
 
 /**
- * Walks the tree below `start` breadth-first and yields name hits (case-insensitive substring of
- * `q`, and `glob` on the name when given) and, with `content`, lines containing `q` in text files
- * up to 1 MB (`glob` then picks the files). Skips `node_modules`, `.git` and links; returns as soon
- * as `signal` aborts. Exported for the tests.
+ * Walks the tree below `start` breadth-first and yields name hits (`q` parsed by `parseSearchQuery`:
+ * terms, `|` alternatives, type/size/date filters; `glob` on the name when given) and, with `content`,
+ * lines matching the terms in text files up to 1 MB that pass the filters (`glob` then picks the files).
+ * Skips `node_modules`, `.git` and links; returns as soon as `signal` aborts. Exported for the tests.
  */
 export async function* searchTree(
   start: { abs: string; rel: string },
   query: { q: string; content: boolean; glob: Bun.Glob | null; exclude?: Bun.Glob[] },
   signal: AbortSignal,
 ): AsyncGenerator<SearchHit> {
-  const q = query.q.toLowerCase();
-  const nameMatches = (name: string) => (q === '' || name.toLowerCase().includes(q)) && (!query.glob || query.glob.match(name));
+  const q = parseSearchQuery(query.q);
+  const withStat = needsStat(q);
+  const globMatches = (name: string) => !query.glob || query.glob.match(name);
   const queue = [start];
   while (queue.length && !signal.aborted) {
     const dir = queue.shift()!;
     let dirents: Dirent[];
     try {
       dirents = await readdir(dir.abs, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      skipUnreadable(err, dir.abs);
       continue;
     }
     dirents.sort((a, b) => collator.compare(a.name, b.name));
@@ -41,9 +44,17 @@ export async function* searchTree(
       const rel = dir.rel ? `${dir.rel}/${d.name}` : d.name;
       if (query.exclude?.some((g) => g.match(rel))) continue;
       const abs = join(dir.abs, d.name);
-      if (nameMatches(d.name)) yield { path: rel, kind: d.isDirectory() ? 'dir' : 'file' };
+      const kind = d.isDirectory() ? 'dir' : 'file';
       if (d.isDirectory()) queue.push({ abs, rel });
-      else if (query.content && q !== '' && (!query.glob || query.glob.match(d.name))) {
+      const nameHit = matchAt(q, d.name) >= 0;
+      const wantContent = kind === 'file' && query.content && q.any.length > 0;
+      if (!(nameHit || wantContent) || !globMatches(d.name) || !typeMatches(q, d.name, kind)) continue;
+      if (withStat) {
+        const st = await stat(abs).catch(() => null);
+        if (!st || !statMatches(q, st, kind)) continue;
+      }
+      if (nameHit) yield { path: rel, kind };
+      if (wantContent) {
         for (const hit of await contentHits(abs, q)) {
           if (signal.aborted) return;
           yield { path: rel, kind: 'file', ...hit };
@@ -53,8 +64,8 @@ export async function* searchTree(
   }
 }
 
-/** Up to MAX_HITS_PER_FILE lines of a text file containing `q` (lower-cased); [] for big, binary or unreadable files. */
-async function contentHits(file: string, q: string): Promise<Array<{ line: number; text: string }>> {
+/** Up to MAX_HITS_PER_FILE lines of a text file matching the terms of `q`; [] for big, binary or unreadable files. */
+async function contentHits(file: string, q: SearchQuery): Promise<Array<{ line: number; text: string }>> {
   try {
     if ((await stat(file)).size > MAX_CONTENT_BYTES) return [];
     const bytes = await Bun.file(file).bytes();
@@ -62,7 +73,7 @@ async function contentHits(file: string, q: string): Promise<Array<{ line: numbe
     const hits: Array<{ line: number; text: string }> = [];
     const lines = new TextDecoder().decode(bytes).split(/\r?\n/);
     for (let i = 0; i < lines.length && hits.length < MAX_HITS_PER_FILE; i++) {
-      const at = lines[i]!.toLowerCase().indexOf(q);
+      const at = matchAt(q, lines[i]!);
       if (at < 0) continue;
       // Long lines (minified code) are cut to a window around the match.
       const from = Math.max(0, at - 100);

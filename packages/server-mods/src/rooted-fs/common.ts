@@ -53,6 +53,8 @@ export interface FsEntry {
   readOnly?: true;
   /** Matches an exclude glob; set only when the list asked for all entries. */
   excluded?: true;
+  /** Windows Hidden or System attribute (shown dimmed). */
+  hidden?: true;
 }
 
 export interface SearchHit {
@@ -212,6 +214,25 @@ export async function escapes(dir: string): Promise<boolean> {
 export function outermost(paths: string[]): string[] {
   const folded = paths.map(fold);
   return paths.filter((_, i) => !folded.some((q, j) => (j < i && q === folded[i]) || folded[i]!.startsWith(q + sep)));
+}
+
+// Policy from filebrowser's skipEntry (https://github.com/gtsteffaniak/filebrowser,
+// backend/pkg/indexing/dir_entries_skip.go), Apache-2.0; changed: other errors are logged and skipped, not fatal.
+const QUIET_CODES = new Set(['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'EBUSY']);
+const warned = new Set<string>();
+const MAX_WARNED = 1000;
+
+/**
+ * For a tree walk that skips a folder it can't read: one that vanished meanwhile or is denied is skipped
+ * quietly, any other error is logged once per path (the set is capped) before the walk moves on.
+ */
+export function skipUnreadable(err: unknown, path: string): void {
+  const code = (err as NodeJS.ErrnoException | null)?.code;
+  if (code && QUIET_CODES.has(code)) return;
+  if (warned.has(path)) return;
+  if (warned.size >= MAX_WARNED) warned.clear();
+  warned.add(path);
+  console.warn(`[fs] skipped ${path}: ${err instanceof Error ? err.message : String(err)}`);
 }
 
 export const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });

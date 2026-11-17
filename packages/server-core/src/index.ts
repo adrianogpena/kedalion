@@ -1,3 +1,4 @@
+export * from './coalesce.ts';
 export * from './errors.ts';
 export * from './protocol.ts';
 export * from './release.ts';

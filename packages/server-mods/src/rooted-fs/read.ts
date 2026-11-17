@@ -1,5 +1,5 @@
 import type { Dirent } from 'node:fs';
-import { lstat, readdir, stat } from 'node:fs/promises';
+import { lstat, readdir, stat, statfs } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import { invalid, ndjson, type Routes, type TailChunk } from '@kedalion/server-core';
 import type { FsDuProgress, FsHash, FsInfo } from '@kedalion/server-core/protocol';
@@ -18,6 +18,7 @@ import {
   ownerWritable,
   parseExclude,
   RAW_TYPES,
+  skipUnreadable,
   type FsEntry,
 } from './common.ts';
 import type { Ctx } from './context.ts';
@@ -95,6 +96,8 @@ export function readRoutes(ctx: Ctx): Routes {
         throw fileNotFound();
       });
       const born = Math.round(st.birthtimeMs);
+      // Volume space idea from filebrowser's partition_*.go (Apache-2.0); statfs covers Windows and Unix.
+      const fs = await statfs(entry).catch(() => null);
       return {
         name: basename(loc.abs),
         fullPath: entry,
@@ -104,10 +107,11 @@ export function readRoutes(ctx: Ctx): Routes {
         modified: Math.round(st.mtimeMs),
         accessed: Math.round(st.atimeMs),
         readOnly: !!loc.root.readOnly || loc.external || !ownerWritable(st.mode),
+        volume: fs && fs.blocks > 0 ? { free: fs.bavail * fs.bsize, total: fs.blocks * fs.bsize } : null,
       };
     },
 
-    // Total size of a folder: running totals, then `done`. Links are counted as neither and not followed.
+    // Total size of a folder: running totals, then `done`. Links are counted as neither and not followed; hard links once.
     'GET /api/fs/du': async ({ req, query }) => {
       const { root, path } = fromQuery(query);
       const loc = await locate(root, path, true, true);
@@ -119,10 +123,14 @@ export function readRoutes(ctx: Ctx): Routes {
           totals.bytes = top.size;
         }
         const queue = top.isDirectory() ? [loc.real] : [];
+        const linked = new Set<string>();
         let last = Date.now();
         while (queue.length && !signal.aborted) {
           const dir = queue.pop()!;
-          const items = await readdir(dir, { withFileTypes: true }).catch(() => [] as Dirent[]);
+          const items = await readdir(dir, { withFileTypes: true }).catch((err) => {
+            skipUnreadable(err, dir);
+            return [] as Dirent[];
+          });
           for (const d of items) {
             if (signal.aborted) return;
             if (d.isSymbolicLink()) continue;
@@ -131,10 +139,16 @@ export function readRoutes(ctx: Ctx): Routes {
               totals.dirs++;
               queue.push(full);
             } else if (d.isFile()) {
-              const st = await lstat(full).catch(() => null);
+              const st = await lstat(full, { bigint: true }).catch(() => null);
               if (!st) continue;
+              // A hard-linked file counts once (bigint: Windows file ids overflow a double).
+              if (st.nlink > 1n) {
+                const key = `${st.dev}:${st.ino}`;
+                if (linked.has(key)) continue;
+                linked.add(key);
+              }
               totals.files++;
-              totals.bytes += st.size;
+              totals.bytes += Number(st.size);
             }
           }
           if (Date.now() - last >= DU_PROGRESS_MS) {

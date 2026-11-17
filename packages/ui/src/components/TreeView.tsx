@@ -214,6 +214,7 @@ function TreeViewInner<N>(props: TreeViewProps<N>, ref: Ref<TreeViewHandle<N>>) 
   const { roots, hideRoots, idOf, labelOf, iconOf, iconToneOf, dimmedOf, hasChildren, isFolder = hasChildren, compact, expanded, visibleOf, markOf, decorationOf, forceExpanded, onExpandedChange, onOpen, onPreview, onOpenToSide, onContextMenu, onRename, onDelete, onCopy, onCut, onPaste, onUndo, newEntry, draggable, onDrop, onDropFiles, dragOut } = props;
   const cache = useRef(new Map<string, Entry<N>>());
   const generations = useRef(new Map<string, number>());
+  const queued = useRef(new Map<string, N>());
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const [ownSelected, setOwnSelected] = useState<string | null>(null);
   const selected = props.selected !== undefined ? props.selected : ownSelected;
@@ -277,26 +278,44 @@ function TreeViewInner<N>(props: TreeViewProps<N>, ref: Ref<TreeViewHandle<N>>) 
     return gen;
   };
 
+  const forget = (id: string) => {
+    bumpGeneration(id);
+    queued.current.delete(id);
+    cache.current.delete(id);
+  };
+
+  // A load asked for while one runs for the same id waits and runs once after it (latest node wins).
   const load = (node: N, id: string) => {
+    if (cache.current.get(id)?.status === 'loading') {
+      queued.current.set(id, node);
+      return;
+    }
     const gen = bumpGeneration(id);
     cache.current.set(id, { status: 'loading', children: loadedChildren(id) });
     bump();
+    const settle = (entry: Entry<N>) => {
+      cache.current.set(id, entry);
+      const next = queued.current.get(id);
+      queued.current.delete(id);
+      if (next !== undefined) load(next, id);
+      else bump();
+    };
     latest.current.loadChildren(node).then(
       (children) => {
         if (generations.current.get(id) !== gen) return;
-        const kept = new Set(children.map(idOf));
-        const missing = (loadedChildren(id) ?? []).map(idOf).filter((c) => !kept.has(c));
-        for (const gone of subtreeIds(missing, loadedChildren, idOf)) {
-          bumpGeneration(gone);
-          cache.current.delete(gone);
-        }
-        cache.current.set(id, { status: 'ok', children });
-        bump();
+        const folder = latest.current.isFolder ?? latest.current.hasChildren;
+        const fresh = new Map(children.map((c) => [idOf(c), c]));
+        // Gone, or turned from a file into a folder (or back): its cached subtree no longer applies.
+        const stale = (loadedChildren(id) ?? []).filter((c) => {
+          const now = fresh.get(idOf(c));
+          return now === undefined || folder(now) !== folder(c);
+        });
+        for (const gone of subtreeIds(stale.map(idOf), loadedChildren, idOf)) forget(gone);
+        settle({ status: 'ok', children });
       },
       (err) => {
         if (generations.current.get(id) !== gen) return;
-        cache.current.set(id, { status: 'error', error: errorOf(err) });
-        bump();
+        settle({ status: 'error', error: errorOf(err) });
       },
     );
   };
@@ -387,8 +406,7 @@ function TreeViewInner<N>(props: TreeViewProps<N>, ref: Ref<TreeViewHandle<N>>) 
         } else if (root && latest.current.hideRoots) {
           load(root, key);
         } else {
-          bumpGeneration(key);
-          cache.current.delete(key);
+          forget(key);
         }
       }
       bump();
@@ -412,16 +430,21 @@ function TreeViewInner<N>(props: TreeViewProps<N>, ref: Ref<TreeViewHandle<N>>) 
   };
 
   const typeAhead = (key: string) => {
+    const fold = (s: string) => s.normalize('NFC').toLocaleLowerCase();
     const now = Date.now();
     const ta = typeahead.current;
-    ta.text = now - ta.at > TYPEAHEAD_MS ? key.toLowerCase() : ta.text + key.toLowerCase();
+    ta.text = now - ta.at > TYPEAHEAD_MS ? fold(key) : ta.text + fold(key);
     ta.at = now;
+    const chars = [...ta.text];
+    // The same key again cycles through the rows starting with it, as in file managers.
+    const repeat = chars.length > 1 && chars.every((c) => c === chars[0]);
+    const prefix = repeat ? chars[0]! : ta.text;
     const cur = current ? rows.indexOf(current) : -1;
     // A longer prefix may still match the current row; a new first letter moves on.
-    const from = Math.max(0, ta.text.length > 1 ? cur : cur + 1);
+    const from = Math.max(0, chars.length > 1 && !repeat ? cur : cur + 1);
     for (let k = 0; k < rows.length; k++) {
       const row = rows[(from + k) % rows.length];
-      if (labelOfRow(row).toLowerCase().startsWith(ta.text)) {
+      if (fold(labelOfRow(row)).startsWith(prefix)) {
         select(row);
         return;
       }
@@ -644,7 +667,10 @@ function TreeViewInner<N>(props: TreeViewProps<N>, ref: Ref<TreeViewHandle<N>>) 
               onDragStart={(e) => {
                 e.dataTransfer.setData(TREE_DRAG_TYPE, id);
                 e.dataTransfer.effectAllowed = 'copyMove';
-                dragged.current = isPicked(row) ? pickedItems() : [{ id, node }];
+                // Dragging a row outside the selection selects it, so the highlight shows what moves.
+                const inSelection = isPicked(row);
+                if (!inSelection) select(row, false, false, segmentOf(row, e).index);
+                dragged.current = inSelection ? pickedItems() : [{ id, node }];
                 const out = dragged.current.length === 1 ? dragOut?.link(node) : undefined;
                 if (out) e.dataTransfer.setData('DownloadURL', `application/octet-stream:${out.name}:${out.url}`);
               }}

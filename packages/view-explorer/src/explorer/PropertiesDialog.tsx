@@ -119,6 +119,7 @@ export function PropertiesDialog({ root, path, onClose }: { root: string; path: 
           {row(t('explorer.props.modified'), when(info.modified))}
           {row(t('explorer.props.accessed'), when(info.accessed))}
           {row(t('explorer.props.readOnly'), t(info.readOnly ? 'explorer.props.yes' : 'explorer.props.no'))}
+          {info.volume && row(t('explorer.props.volume'), t('explorer.props.volumeFree', { free: formatBytes(info.volume.free), total: formatBytes(info.volume.total) }))}
           {info.type === 'file' &&
             row(
               t('explorer.props.sha256'),

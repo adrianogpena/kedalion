@@ -27,6 +27,8 @@ export interface FsEntry {
   readOnly?: true;
   /** Matches an exclude glob; only listed when the tree shows excluded entries. */
   excluded?: true;
+  /** Windows Hidden or System attribute (shown dimmed). */
+  hidden?: true;
 }
 
 /** The text encodings the server reads and writes. */

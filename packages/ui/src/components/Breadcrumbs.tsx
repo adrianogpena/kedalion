@@ -6,6 +6,9 @@ import { t } from '../i18n';
 import { Icon } from './ui';
 
 const EDGE = 4;
+/** Deeper paths show the root, an ellipsis and the last segments. */
+const MAX_SEGMENTS = 5;
+const TAIL = 3;
 
 export interface BreadcrumbEntry {
   name: string;
@@ -35,6 +38,8 @@ interface Segment {
   /** The folder its list shows: its own, or the parent of the file. */
   dir: string;
   file: boolean;
+  /** The ellipsis: the folders it stands for, listed by its menu. */
+  hidden?: Segment[];
 }
 
 /** The path as a toolbar of segments; a segment lists its folder's entries to pick a file from. */
@@ -47,10 +52,14 @@ export function Breadcrumbs({ root, path, icon, list, onPick, focusSignal, title
       return { label: name, dir: parts.slice(0, file ? i : i + 1).join('/'), file };
     }),
   ];
+  const shown: Segment[] =
+    segments.length > MAX_SEGMENTS
+      ? [segments[0]!, { label: '…', dir: '', file: false, hidden: segments.slice(1, -TAIL) }, ...segments.slice(-TAIL)]
+      : segments;
   const bar = useRef<HTMLDivElement>(null);
   const [focusIdx, setFocusIdx] = useState(0);
   const [open, setOpen] = useState<number>();
-  const roving = Math.min(focusIdx, segments.length - 1);
+  const roving = Math.min(focusIdx, shown.length - 1);
   useFileIconVersion();
 
   const buttons = () => Array.from(bar.current?.querySelectorAll<HTMLButtonElement>('.breadcrumbs-seg') ?? []);
@@ -92,10 +101,10 @@ export function Breadcrumbs({ root, path, icon, list, onPick, focusSignal, title
   return (
     <>
       <div ref={bar} className="breadcrumbs" role="toolbar" aria-label={t('breadcrumbs.label')} title={title} onKeyDown={onKeyDown}>
-        {segments.map((s, i) => (
-          <Fragment key={i}>
+        {shown.map((s, i) => (
+          <Fragment key={s.hidden ? 'more' : `${s.dir}/${s.label}`}>
             {i > 0 && <span className="breadcrumbs-sep" aria-hidden="true"><Icon name="chevron" size={12} /></span>}
-            <button title={s.label}
+            <button title={s.hidden ? s.hidden.map((h) => h.label).join('/') : s.label}
               type="button"
               className={`breadcrumbs-seg${s.file ? ' file' : ''}${open === i ? ' open' : ''}`}
               tabIndex={i === roving ? 0 : -1}
@@ -110,12 +119,13 @@ export function Breadcrumbs({ root, path, icon, list, onPick, focusSignal, title
           </Fragment>
         ))}
       </div>
-      {open !== undefined && anchor && segments[open] && (
+      {open !== undefined && anchor && shown[open] && (
         <Picker
           key={open}
           anchor={anchor}
           bar={bar.current}
-          start={segments[open].dir}
+          start={shown[open].dir}
+          ancestors={shown[open].hidden}
           current={path}
           list={list}
           onPick={onPick}
@@ -134,19 +144,26 @@ type Listing = { status: 'loading' } | { status: 'error'; message: string } | { 
 const byKindAndName = (a: BreadcrumbEntry, b: BreadcrumbEntry) =>
   (a.kind === b.kind ? 0 : a.kind === 'dir' ? -1 : 1) || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 
-/** A folder's entries below a segment, in the context menu's look; a folder opens in place, a file is picked. */
-function Picker({ anchor, bar, start, current, list, onPick, onClose }: {
+/**
+ * A folder's entries below a segment, in the context menu's look; a folder opens in place, a file is picked.
+ * With `ancestors` (the ellipsis) it first lists those folders instead.
+ */
+function Picker({ anchor, bar, start, ancestors, current, list, onPick, onClose }: {
   anchor: HTMLElement;
   bar: HTMLElement | null;
   start: string;
+  ancestors?: Segment[];
   current: string;
   list(dir: string): Promise<BreadcrumbEntry[]>;
   onPick(entry: BreadcrumbEntry): void;
   onClose(refocus: boolean): void;
 }) {
   const menu = useRef<HTMLDivElement>(null);
-  const [dir, setDir] = useState(start);
-  const [listing, setListing] = useState<Listing>({ status: 'loading' });
+  // null: the ellipsis' list of hidden folders.
+  const [dir, setDir] = useState<string | null>(ancestors ? null : start);
+  const [listing, setListing] = useState<Listing>(() =>
+    ancestors ? { status: 'ready', entries: ancestors.map((a) => ({ name: a.label, kind: 'dir' as const, path: a.dir })) } : { status: 'loading' },
+  );
   useFileIconVersion();
   const [pos, setPos] = useState(() => {
     const r = anchor.getBoundingClientRect();
@@ -158,6 +175,7 @@ function Picker({ anchor, bar, start, current, list, onPick, onClose }: {
   listRef.current = list;
 
   useEffect(() => {
+    if (dir === null) return;
     let live = true;
     setListing({ status: 'loading' });
     listRef.current(dir).then(
@@ -223,11 +241,11 @@ function Picker({ anchor, bar, start, current, list, onPick, onClose }: {
     items[next]?.focus();
   };
 
-  const parent = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '';
+  const parent = dir === null ? null : dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '';
 
   return createPortal(
     <div ref={menu} className="context-menu breadcrumbs-menu" role="menu" tabIndex={-1} style={{ left: pos.x, top: pos.y }} onKeyDown={onKeyDown} onContextMenu={(e) => e.preventDefault()}>
-      {dir !== start && (
+      {parent !== null && dir !== start && (
         <button className="menu-item" role="menuitem" title={t('breadcrumbs.up')} onClick={() => setDir(parent)}>
           <span className="menu-icon"><Icon name="chevron-up" size={15} /></span>
           <span className="menu-label">..</span>

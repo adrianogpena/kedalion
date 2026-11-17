@@ -61,6 +61,7 @@ export function ProjectSearch({ project, exclude, onOpenFile, onClose, focusSign
             value={query}
             placeholder={t('explorer.search.placeholder', { name: project.name })}
             aria-label={t('explorer.search.placeholder', { name: project.name })}
+            title={t('explorer.search.syntax')}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key !== 'Escape') return;

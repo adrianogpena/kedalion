@@ -257,6 +257,8 @@ export interface FsInfo {
   modified: number;
   accessed: number;
   readOnly: boolean;
+  /** Free and total bytes of the volume holding it; null when the system doesn't tell. */
+  volume: { free: number; total: number } | null;
 }
 
 /** One `GET /api/fs/du` line: running totals; the last one has `done`. */

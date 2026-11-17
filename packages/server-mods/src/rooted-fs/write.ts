@@ -105,7 +105,10 @@ export function writeRoutes(ctx: Ctx): Routes {
       const onExisting = query.get('onExisting');
       if (onExisting !== null && onExisting !== 'replace' && onExisting !== 'keepBoth') throw badRequest();
       const tooLarge = () => invalid('uploadTooLarge', 'The file is too large (200 MB at most).');
-      if (Number(req.headers.get('content-length') ?? 0) > MAX_UPLOAD_BYTES) throw tooLarge();
+      const lengthHeader = req.headers.get('content-length');
+      const declared = lengthHeader === null ? undefined : Number(lengthHeader);
+      if (declared !== undefined && !(Number.isSafeInteger(declared) && declared >= 0)) throw badRequest();
+      if (declared !== undefined && declared > MAX_UPLOAD_BYTES) throw tooLarge();
       let to = await entryPath(loc);
       const old = await lstat(to).catch(() => null);
       let replaced = false;
@@ -122,6 +125,10 @@ export function writeRoutes(ctx: Ctx): Routes {
             received += chunk.byteLength;
             if (received > MAX_UPLOAD_BYTES) throw tooLarge();
             controller.enqueue(chunk);
+          },
+          // A body cut short (a dropped connection) must not land as a whole file.
+          flush() {
+            if (declared !== undefined && received !== declared) throw invalid('uploadTruncated', 'The upload stopped before the whole file arrived.');
           },
         }),
       );
@@ -265,7 +272,7 @@ export function writeRoutes(ctx: Ctx): Routes {
       } catch (err) {
         if (errno(err) !== 'EXDEV') throw err;
         // Across volumes: copy, then the source goes to the bin (never a permanent delete). A failed copy leaves the source alone.
-        await cp(from, target, { recursive: true, errorOnExist: true, force: false });
+        await cp(from, target, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true, verbatimSymlinks: true });
         await confirmEntry(src);
         await trash([from]).catch(fromPlatform);
       }
@@ -286,7 +293,7 @@ export function writeRoutes(ctx: Ctx): Routes {
       const to = await freeName(wanted, (await lstat(from)).isDirectory());
       await confirmEntry(src);
       await confirmEntry(dest);
-      await cp(from, to, { recursive: true, errorOnExist: true, force: false });
+      await cp(from, to, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true, verbatimSymlinks: true });
       return described(to, basename(to), dest.realRoot);
     },
 

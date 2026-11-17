@@ -38,6 +38,7 @@ interface Row {
   mtime: number;
   outside?: true;
   excluded?: true;
+  hidden?: true;
 }
 
 const MAX_LISTED = 10;
@@ -95,6 +96,7 @@ export function DetailsTab({ project, path, exclude, showHidden = false, sort, o
           mtime: e.mtime,
           outside: e.outside,
           excluded: e.excluded,
+          hidden: e.hidden,
         })));
       },
       (err) => live && setError(errorOf(err)),
@@ -125,7 +127,7 @@ export function DetailsTab({ project, path, exclude, showHidden = false, sort, o
           const file = fileIconOf(r.name);
           const icon = r.dir ? (r.kind === 'link' ? 'folder-link' : folderIconOf(r.name)) : file.icon;
           return (
-            <span className={`xp-details-name${r.excluded ? ' dim' : ''}`}>
+            <span className={`xp-details-name${r.excluded || r.hidden ? ' dim' : ''}`}>
               <span className={!r.dir && file.tone ? `tone-${file.tone}` : undefined}><Icon name={icon} size={14} /></span>
               <span className="xp-details-label">{r.name}</span>
             </span>

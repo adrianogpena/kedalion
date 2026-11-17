@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createNotifications, type Notifications, type Toast } from '@kedalion/platform';
 import { editorRoutes, gitRoutes, pickedPaths, rootedFs } from '@kedalion/server-mods';
-import { defineServerView, invalid, ndjson, socketTickets, validGroup, type SocketData, type SocketRoutes } from '@kedalion/server-core';
+import { coalescer, defineServerView, invalid, ndjson, socketTickets, validGroup, type SocketData, type SocketRoutes } from '@kedalion/server-core';
 import type { ServerWebSocket } from 'bun';
 import type { AgentAccountUsage, AgentLocal, AgentSkill, AgentActiveAccountResult, AgentActiveAccountSet, AgentLaunch, AgentRunning, AgentSessionView, AgentsCapWarn, AgentsFrame, AgentStopResult } from './protocol.ts';
 import type { AgentsSettings, AgentsUsagePosition } from './settings-types.ts';
@@ -383,7 +383,8 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
     for (const ws of clients) ws.send(text);
   };
 
-  const refresh = async (force = false) => {
+  // One refresh at a time: watcher bursts, timers and actions arriving meanwhile fold into one more run (forced if any was).
+  const runRefresh = coalescer<boolean>(async (force) => {
     if (clients.size === 0) return;
     const { sessions, status, usage } = await compute();
     const usageKey = JSON.stringify(usage);
@@ -400,7 +401,8 @@ export function agentsServerView(opts: AgentsServerViewOptions = {}) {
       last.status = statusKey;
       broadcast({ type: 'status', status });
     }
-  };
+  }, (queued, next) => queued || next);
+  const refresh = (force = false) => runRefresh(force);
 
   const schedule = () => {
     clearTimeout(debounce);

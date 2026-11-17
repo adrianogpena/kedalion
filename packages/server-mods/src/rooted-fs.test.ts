@@ -314,6 +314,17 @@ test('search streams name and content hits, never through links', async () => {
   expect(await lines(await call('GET /api/fs/search', 'root=r&q=secret&content=1'))).toEqual([{ $end: true }]);
 });
 
+test('search applies the query filters to names and content', async () => {
+  const { call } = await setup();
+  const hits = async (q: string) => (await lines(await call('GET /api/fs/search', `root=r&${q}`))).filter((l) => !l.$end);
+  expect(await hits('q=type:dir')).toEqual([{ path: 'a', kind: 'dir' }]);
+  expect(await hits(`q=${encodeURIComponent('newer:1d type:file')}`)).toEqual([{ path: 'top.txt', kind: 'file' }]);
+  expect(await hits('q=larger:10b')).toEqual([{ path: 'a/b.txt', kind: 'file' }]);
+  expect(await hits(`q=${encodeURIComponent('top|b.txt')}`)).toEqual([{ path: 'top.txt', kind: 'file' }, { path: 'a/b.txt', kind: 'file' }]);
+  expect(await hits(`q=${encodeURIComponent('SECOND case:exact')}&content=1`)).toEqual([]);
+  expect(await hits(`q=${encodeURIComponent('"second line" smaller:1kb')}&content=1`)).toEqual([{ path: 'a/b.txt', kind: 'file', line: 2, text: 'second line' }]);
+});
+
 test('search stops once aborted', async () => {
   const { root } = await setup();
   for (let i = 0; i < 10; i++) await writeFile(join(root, `hit${i}.txt`), 'x');
@@ -452,6 +463,13 @@ test('upload stays inside a writable root and refuses a body over the cap', asyn
   expect(await upload('root=ro&path=x.txt')).toMatchObject({ code: 'rootReadOnly' });
   expect(await upload('root=r&path=x.txt&onExisting=bogus')).toMatchObject({ code: 'badRequest' });
   expect(await upload('root=r&path=big.txt', 'x', { 'content-length': '200000001' })).toMatchObject({ code: 'uploadTooLarge' });
+  expect(await upload('root=r&path=odd.txt', 'x', { 'content-length': 'abc' })).toMatchObject({ code: 'badRequest' });
+});
+
+test('upload refuses a body shorter than its declared length', async () => {
+  const t = await setup();
+  expect(await uploader(t)('root=r&path=cut.txt', 'abc', { 'content-length': '10' })).toMatchObject({ code: 'uploadTruncated' });
+  expect(await readFile(join(t.root, 'cut.txt')).catch(() => null)).toBeNull();
 });
 
 test('download serves a file once, for the ticket from download-ticket', async () => {
@@ -506,6 +524,8 @@ test('info describes a file, a folder and the root; refuses escapes', async () =
   expect(file.created === null || typeof file.created === 'number').toBe(true);
   expect(await call('GET /api/fs/info', 'root=r&path=a')).toMatchObject({ type: 'dir', size: 0 });
   expect(await call('GET /api/fs/info', 'root=ro&path=')).toMatchObject({ fullPath: realRoot, readOnly: true });
+  const { volume } = file as { volume: { free: number; total: number } | null };
+  expect(volume === null || (volume.total > 0 && volume.free <= volume.total)).toBe(true);
   expect(await fail('GET /api/fs/info', 'root=r&path=../x')).toMatchObject({ code: 'badPath' });
   expect(await call('GET /api/fs/info', 'root=r&path=link/secret.txt')).toMatchObject({ name: 'secret.txt', readOnly: true });
 });
