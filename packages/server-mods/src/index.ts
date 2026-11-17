@@ -1,6 +1,7 @@
 // Opt-in route modules: an app spreads the ones it wants into its routes.
 export * from './app-stores.ts';
 export * from './backup.ts';
+export * from './custom-themes.ts';
 export * from './dialogs.ts';
 export * from './editors.ts';
 export * from './encoding.ts';
@@ -15,6 +16,8 @@ export * from './rest-history.ts';
 export * from './rest-tabs.ts';
 export * from './rooted-fs.ts';
 export * from './settings.ts';
+export * from './settings-migrate.ts';
+export * from './theme-merge.ts';
 export type { SqliteContent } from './sqlite.ts';
 export * from './theme-head.ts';
 export * from './ui-broker.ts';

@@ -80,7 +80,7 @@ const MOD_ALIASES: Record<string, Modifier> = {
 };
 
 const KEY_ALIASES: Record<string, string> = {
-  esc: 'Escape', del: 'Delete', up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', plus: '+',
+  minus: '-', hyphen: '-', esc: 'Escape', del: 'Delete', up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', plus: '+',
   ...Object.fromEntries(NAMED.map((k) => [k.toLowerCase(), k])),
 };
 
@@ -114,37 +114,69 @@ export function normalizeChord(text: string): string | null {
   return out.join(' ');
 }
 
+export type ChordResult = { chord: string } | { error: string };
+
+/** Like `normalizeChord`, but says why a binding is rejected. */
+export function normalizeChordReason(text: string): ChordResult {
+  const steps = text.trim().split(STEP_SPLIT);
+  if (steps.length > MAX_STEPS) return { error: `more than ${MAX_STEPS} chords in "${text.trim()}"` };
+  const out: string[] = [];
+  for (const step of steps) {
+    const n = stepResult(step);
+    if ('error' in n) return n;
+    out.push(n.chord);
+  }
+  return { chord: out.join(' ') };
+}
+
 /** Canonical form of one typed chord (any case, spaces, aliases); null when it isn't one. */
 function normalizeStep(text: string): string | null {
+  const r = stepResult(text);
+  return 'chord' in r ? r.chord : null;
+}
+
+function stepResult(text: string): ChordResult {
   let body = text.replace(/\s+/g, '');
   let key: string | null = null;
   // A '+' key comes last: "+", "Ctrl++".
-  if (body === '+') return '+';
+  if (body === '+') return { chord: '+' };
   if (body.endsWith('++')) {
     key = '+';
     body = body.slice(0, -2);
   }
-  if (!body) return null;
+  if (!body) return { error: 'empty chord' };
   const parts = body.split('+');
   const mods = new Set<Modifier>();
   for (const part of parts) {
-    if (!part) return null;
+    if (!part) return { error: `empty part in "${body}"` };
     const mod = MOD_ALIASES[part.toLowerCase()];
     if (mod) {
       mods.add(mod);
       continue;
     }
-    if (key) return null;
+    if (key) return { error: `more than one key in "${body}"` };
     key = normalizeKey(part);
-    if (!key) return null;
+    if (!key) return { error: `unknown key "${part}"` };
   }
-  return key ? chord(mods, key) : null;
+  return key ? { chord: chord(mods, key) } : { error: `no key in "${body}"` };
+}
+
+/** One readable line for a conflict from `conflictsOf`: the chord and both (all) command ids. */
+export function conflictMessage(c: { chord: string; ids: string[] }): string {
+  return `${c.chord} is bound to ${c.ids.join(' and ')}`;
 }
 
 /** The chords each command has: its keymap entry when there is one (even []), else its defaults. */
 export function effectiveKeys(defs: CommandDef[], keymap: Keymap): Map<string, string[]> {
-  return new Map(defs.map((d) => [d.id, Object.hasOwn(keymap, d.id) ? keymap[d.id] : d.keys]));
+  let byDefs = keysCache.get(keymap);
+  if (!byDefs) keysCache.set(keymap, (byDefs = new WeakMap()));
+  let keys = byDefs.get(defs);
+  if (!keys) byDefs.set(defs, (keys = new Map(defs.map((d) => [d.id, Object.hasOwn(keymap, d.id) ? keymap[d.id] : d.keys]))));
+  return keys;
 }
+
+/** Memo per keymap object then defs array; both are treated as immutable once passed in. */
+const keysCache = new WeakMap<Keymap, WeakMap<CommandDef[], Map<string, string[]>>>();
 
 /** Chords bound twice in one scope, or in global and a view; each chord once, with all ids. */
 export function conflictsOf(defs: CommandDef[], keymap: Keymap): Array<{ chord: string; ids: string[] }> {

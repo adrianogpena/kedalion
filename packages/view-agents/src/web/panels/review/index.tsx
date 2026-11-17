@@ -103,7 +103,7 @@ function FileBlock({
         ) : (
           <div className="agents-review-diff">
             {lines.data.map((l, i) => {
-              if (l.kind === 'hunk') return <div key={i} className="agents-review-line" data-kind="hunk"><span className="agents-review-text">{l.text}</span></div>;
+              if (l.kind === 'hunk' || l.kind === 'note') return <div key={i} className="agents-review-line" data-kind="hunk"><span className="agents-review-text">{l.text}</span></div>;
               const key = lineKey(l);
               const here = byLine.get(key) ?? [];
               return (

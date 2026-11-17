@@ -20,3 +20,9 @@ test('askPrompt and linesOf', () => {
   expect(linesOf('a\nb', 'b')).toBe('2');
   expect(linesOf('a', 'zz')).toBeUndefined();
 });
+
+test('parseDiff resets per file, keeps binary notes and hunk counts', () => {
+  const lines = parseDiff('diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1,2 @@\n-x\n+y\n+z\ndiff --git a/b b/b\n--- a/b\n+++ b/b\nBinary files a/b and b/b differ\n');
+  expect(lines[0]).toMatchObject({ kind: 'hunk', oldCount: 1, newCount: 2 });
+  expect(lines.map((l) => l.kind)).toEqual(['hunk', 'del', 'add', 'add', 'note']);
+});

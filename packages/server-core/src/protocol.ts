@@ -358,6 +358,8 @@ export interface GitStatus {
   ahead: number;
   behind: number;
   files: GitFile[];
+  /** An operation left unfinished in the repo (set only on the full status). */
+  inProgress?: 'rebase' | 'merge' | 'cherry-pick' | 'revert' | 'bisect';
   /** With `ignored=1`: the ignored files and folders (a folder ends in `/` and its contents are not listed). */
   ignored?: string[];
 }
@@ -398,6 +400,37 @@ export interface GitCommitFile {
   path: string;
   origPath?: string;
   status: GitCode;
+}
+
+/** One entry of `GET /api/git/worktrees`. */
+export interface GitWorktree {
+  path: string;
+  head: string;
+  branch?: string;
+  bare: boolean;
+  detached: boolean;
+  locked: boolean;
+  /** The worktree the folder belongs to. */
+  current: boolean;
+}
+
+/** One line of `GET /api/git/blame?root&path[&commit]`. */
+export interface GitBlameLine {
+  line: number;
+  sha: string;
+  author: string;
+  /** Unix seconds. */
+  time: number;
+  summary: string;
+  text: string;
+}
+
+/** Body of `POST /api/git/apply-hunk`: stages (or, with `staged`, unstages) one hunk of a file's diff. */
+export interface GitApplyHunkRequest {
+  root: string;
+  path: string;
+  hunk: number;
+  staged?: boolean;
 }
 
 /** `GET /api/git/diff`. */

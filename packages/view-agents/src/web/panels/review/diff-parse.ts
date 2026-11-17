@@ -1,7 +1,10 @@
 export interface DiffLine {
-  kind: 'hunk' | 'add' | 'del' | 'ctx';
+  kind: 'hunk' | 'note' | 'add' | 'del' | 'ctx';
   oldNo?: number;
   newNo?: number;
+  /** Line counts of a hunk header (1 when git omits them). */
+  oldCount?: number;
+  newCount?: number;
   text: string;
 }
 
@@ -12,12 +15,20 @@ export function parseDiff(text: string): DiffLine[] {
   let newNo = 0;
   let inHunk = false;
   for (const raw of text.split('\n')) {
-    const h = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
+    if (raw.startsWith('diff --git ')) {
+      inHunk = false;
+      continue;
+    }
+    if (!inHunk && /^Binary files .* differ$/.test(raw)) {
+      out.push({ kind: 'note', text: raw });
+      continue;
+    }
+    const h = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(raw);
     if (h) {
       oldNo = Number(h[1]);
-      newNo = Number(h[2]);
+      newNo = Number(h[3]);
       inHunk = true;
-      out.push({ kind: 'hunk', text: raw });
+      out.push({ kind: 'hunk', oldCount: h[2] === undefined ? 1 : Number(h[2]), newCount: h[4] === undefined ? 1 : Number(h[4]), text: raw });
       continue;
     }
     if (!inHunk || raw.startsWith('\\')) continue;

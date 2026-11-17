@@ -13,6 +13,15 @@ describe('langOfFile', () => {
     expect(langOfFile('data.json')).toBe('json');
   });
 
+  test('maps aliases and dotfiles', () => {
+    for (const n of ['a.mts', 'a.cts']) expect(langOfFile(n)).toBe('typescript');
+    for (const n of ['a.mjs', 'a.cjs']) expect(langOfFile(n)).toBe('javascript');
+    for (const n of ['a.pgsql', 'a.mssql', 'a.tsql']) expect(langOfFile(n)).toBe('sql');
+    expect(langOfFile('prod.tfvars')).toBe('properties');
+    expect(langOfFile('.envrc')).toBe('shell');
+    expect(langOfFile('.env')).toBe('properties');
+  });
+
   test('falls back to text', () => {
     expect(langOfFile('x.bin')).toBe('text');
     expect(langOfFile('Makefile')).toBe('text');

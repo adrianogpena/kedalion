@@ -20,3 +20,4 @@
 .git-more .tree-label { padding-left: 20px; color: var(--accent); }
 .git-compact { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .git-compact > .xp-pane { flex: 1; min-height: 0; }
+.git-in-progress { padding: 0 6px; border-radius: 8px; background: var(--warn-bg, rgba(200,150,0,.2)); font-size: 11px; text-transform: uppercase; }

@@ -392,6 +392,7 @@ export function GitScreen({ settings, onSave }: { settings: GitViewSettings; onS
           <span className="git-branch-name">{status.branch}</span>
           {!!status.ahead && <span title={t('git.ahead')}>↑{status.ahead}</span>}
           {!!status.behind && <span title={t('git.behind')}>↓{status.behind}</span>}
+          {status.inProgress && <span className="git-in-progress" title={t('git.inProgress')}>{status.inProgress}</span>}
         </div>
   );
   const changes = (

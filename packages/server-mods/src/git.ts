@@ -1,9 +1,12 @@
-import { lstat } from 'node:fs/promises';
+import { lstat, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join } from 'node:path';
 import { runWithTimeout, type Runner } from '@kedalion/platform';
 import {
   AppError,
   invalid,
   notFound,
+  type GitApplyHunkRequest,
   type GitCode,
   type GitCommit,
   type GitCommitFile,
@@ -15,6 +18,10 @@ import {
   type Routes,
 } from '@kedalion/server-core';
 import { isBinary } from './bytes.ts';
+import { parseBlame } from './git-blame.ts';
+import { hunkToPatch } from './git-patch.ts';
+import { parseWorktrees } from './git-worktree.ts';
+import { humanizeGitError, IN_PROGRESS_MARKERS } from './git-errors.ts';
 import { badPath, segmentsOf, type FsRoot } from './rooted-fs.ts';
 
 export interface GitRoutesOptions {
@@ -41,7 +48,7 @@ const gitFailed = (stderr: string) => {
   if (/dubious ownership/i.test(stderr)) {
     return new AppError('internal', 'gitDubiousOwnership', 'Git refuses this folder: its owner differs. Add it to safe.directory.', { detail: stderr.trim() });
   }
-  return new AppError('internal', 'gitFailed', stderr.trim().split(/\r?\n/)[0] || 'Git failed.', { detail: stderr.trim() });
+  return new AppError('internal', 'gitFailed', humanizeGitError(stderr), { detail: stderr.trim() });
 };
 
 export interface PorcelainStatus {
@@ -232,10 +239,27 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
     return segments.join('/');
   }
 
+  /** The operation under way (rebase, merge, ...), read from marker files in the real git dir. */
+  async function inProgressOf(root: FsRoot): Promise<GitStatus['inProgress']> {
+    try {
+      const r = await git(root, ['rev-parse', '--git-dir']);
+      if (r.code !== 0) return undefined;
+      const raw = r.stdout.trim();
+      const dir = isAbsolute(raw) ? raw : join(root.path, raw);
+      for (const [kind, marker] of IN_PROGRESS_MARKERS) {
+        if (await stat(join(dir, marker)).then(() => true, () => false)) return kind;
+      }
+    } catch {
+      return undefined;
+    }
+    return undefined;
+  }
+
   async function status(root: FsRoot, untracked: boolean, ignored = false): Promise<GitStatus> {
     const args = [...(await filterOverrides(root)), 'status', '--porcelain=v2', '-z', '--branch', untracked ? '--untracked-files=all' : '--untracked-files=no', ...(ignored ? ['--ignored=matching'] : []), '--', '.'];
     const parsed = parsePorcelainV2(await gitOut(root, args, STATUS_TIMEOUT_MS));
     if (!untracked) return { ...parsed, files: [] };
+    const inProgress = await inProgressOf(root);
     const prefix = await prefixOf(root);
     const strip = (p: string) => (prefix && p.startsWith(prefix) ? p.slice(prefix.length) : p);
     const numstat = async (cached: boolean) => {
@@ -273,7 +297,7 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
         return base;
       }),
     );
-    return { ...parsed, files, ...(ignored && { ignored: (parsed.ignored ?? []).map(strip) }) };
+    return { ...parsed, files, ...(inProgress && { inProgress }), ...(ignored && { ignored: (parsed.ignored ?? []).map(strip) }) };
   }
 
   return {
@@ -346,6 +370,41 @@ export function gitRoutes(opts: GitRoutesOptions): Routes {
         : [...(await filterOverrides(root)), 'diff', ...(query.get('staged') === '1' ? ['--cached'] : []), '--no-color', '--no-ext-diff', '--no-textconv', '--', path];
       const text = await gitOut(root, args);
       return (text.length > MAX_DIFF_CHARS ? { text: text.slice(0, MAX_DIFF_CHARS), truncated: true } : { text, truncated: false }) satisfies GitDiff;
+    },
+
+    'GET /api/git/worktrees': async ({ query }) => {
+      const root = await findRoot(query.get('root'));
+      const top = (await gitOut(root, ['rev-parse', '--show-toplevel'])).trim();
+      return parseWorktrees(await gitOut(root, ['worktree', 'list', '--porcelain']), top);
+    },
+
+    'GET /api/git/blame': async ({ query }) => {
+      const root = await findRoot(query.get('root'));
+      const path = filePath(query);
+      const commit = query.get('commit');
+      const rev = commit ? [commitOf(query)] : [];
+      return parseBlame(await gitOut(root, ['blame', '--porcelain', ...rev, '--', path], STATUS_TIMEOUT_MS));
+    },
+
+    'POST /api/git/apply-hunk': async ({ json }) => {
+      const body = (json ?? {}) as Partial<GitApplyHunkRequest>;
+      const root = await findRoot(body.root);
+      const segments = segmentsOf(typeof body.path === 'string' ? body.path : '');
+      if (!segments.length || typeof body.hunk !== 'number' || !Number.isInteger(body.hunk) || body.hunk < 0) throw segments.length ? invalid('badRequest', 'Invalid request.') : badPath();
+      const path = segments.join('/');
+      const staged = body.staged === true;
+      const diff = await gitOut(root, [...(await filterOverrides(root)), 'diff', ...(staged ? ['--cached'] : []), '--no-color', '--no-ext-diff', '--no-textconv', '--', path]);
+      const patch = hunkToPatch(diff, body.hunk);
+      if (patch === undefined) throw invalid('badRequest', 'That hunk no longer exists.');
+      const dir = await mkdtemp(join(tmpdir(), 'kedalion-hunk-'));
+      try {
+        const file = join(dir, 'hunk.patch');
+        await writeFile(file, patch);
+        await gitOut(root, ['apply', '--cached', ...(staged ? ['--reverse'] : []), '--recount', file], STATUS_TIMEOUT_MS);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+      return { ok: true };
     },
   };
 }

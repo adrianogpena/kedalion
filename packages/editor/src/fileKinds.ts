@@ -15,6 +15,7 @@ const LANG_BY_EXT: Record<string, Lang> = {
   css: 'css', py: 'python', yaml: 'yaml', yml: 'yaml', toml: 'toml', properties: 'properties', ini: 'properties', cfg: 'properties', conf: 'properties',
   rs: 'rust', go: 'go', c: 'c', h: 'c', cpp: 'cpp', cc: 'cpp', hpp: 'cpp', cs: 'csharp', kt: 'kotlin', kts: 'kotlin',
   diff: 'diff', patch: 'diff', dockerfile: 'dockerfile',
+  pgsql: 'sql', mssql: 'sql', tsql: 'sql', tfvars: 'properties', envrc: 'shell',
 };
 
 /** The editor language for a file name, by extension. */
