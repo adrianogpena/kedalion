@@ -1,7 +1,9 @@
+import { invalid } from '@kedalion/server-core';
 import { notifyChanges, notifyScope } from '../../notify-changes';
-import { defineSource, SourceError, type DataSource, type GridPanelSpec } from '../../server';
+import { defineSource, SourceError, type DataSource, type GridPanelSpec, type SourceContext } from '../../server';
 import { agile, count, fieldIds, search } from './client';
 import { BOARD_FIELDS, COUNT_FIELDS, fields, ISSUES_FIELDS } from './fields';
+import { infoFields, mapInfo, type JiraInfo } from '../tickets/jira-info';
 import { breakdown, mapIssue, mapSprint, requestFields, type JiraIssue, type SprintData, type Slice } from './map';
 
 export interface IssuesData {
@@ -20,9 +22,23 @@ const BREAKDOWN_CAP = 1000;
 /** Most issues read for a sprint board (pages of 100). */
 const SPRINT_CAP = 1000;
 
+const KEY_RE = /^[A-Za-z][A-Za-z0-9_]*-\d+$/;
+
+/** The `info` action of the panels that list issues: one issue's full detail. */
+async function issueInfo(payload: unknown, config: { connection: string }, ctx: SourceContext): Promise<JiraInfo> {
+  const key = String(((payload ?? {}) as Record<string, unknown>).key ?? '');
+  if (!KEY_RE.test(key)) throw invalid('jira-invalid-key', 'Not an issue key.');
+  const conn = await ctx.connection(config.connection, 'jira');
+  const ids = await fieldIds(conn, ctx.signal);
+  const [raw] = await search(conn, `key = ${key}`, infoFields(ids.points, ids.sprint), 1, ctx.signal);
+  if (!raw) throw invalid('jira-issue-not-found', 'The issue was not found.', { key });
+  return mapInfo(raw, ids.points, ids.sprint);
+}
+
 const issuesSource = defineSource<{ connection: string; jql: string; max: number; columns: string[]; notify: boolean }>({
   id: 'jira-issues',
   fields: ISSUES_FIELDS,
+  actions: { info: issueInfo },
   async fetch({ connection, jql, max, columns, notify }, ctx): Promise<IssuesData> {
     const conn = await ctx.connection(connection, 'jira');
     const ids = columns.includes('sprint') ? await fieldIds(conn, ctx.signal) : {};
@@ -64,6 +80,7 @@ const countSource = defineSource<{ connection: string; jql: string; display: str
 const sprintSource = defineSource<{ connection: string; boardId: number; columns: string[]; notify: boolean }>({
   id: 'jira-sprint',
   fields: BOARD_FIELDS,
+  actions: { info: issueInfo },
   async fetch({ connection, boardId, columns, notify }, ctx): Promise<SprintData | null> {
     const conn = await ctx.connection(connection, 'jira');
     if (!boardId) throw SourceError('not-configured', 'No board is set.');

@@ -18,7 +18,7 @@ const issuesPanel = definePanel<IssuesConfig, IssuesData>({
   config: { fields: ISSUES_FIELDS },
   load: (config, ctx) => fetchSource<IssuesData>('jira-issues', config, ctx.signal),
   refreshMs: (config) => refreshMs(config.refreshMin),
-  render: ({ config, data }) => createElement(IssuesPanel, { config, data }),
+  render: ({ id, config, data, side }) => createElement(IssuesPanel, { id, side, config, data }),
 });
 
 const countPanel = definePanel<CountConfig, CountData>({
@@ -44,7 +44,7 @@ const sprintPanel = definePanel<BoardConfig, SprintData | null>({
   config: { fields: BOARD_FIELDS },
   load: (config, ctx) => (config.boardId ? fetchSource<SprintData | null>('jira-sprint', config, ctx.signal) : Promise.resolve(null)),
   refreshMs: (config) => refreshMs(config.refreshMin),
-  render: ({ config, data, configure }) => createElement(SprintBoardPanel, { config, data, configure }),
+  render: ({ id, config, data, configure, side }) => createElement(SprintBoardPanel, { id, side, config, data, configure }),
 });
 
 /** The jira panel kinds. */

@@ -1,5 +1,7 @@
 import { copyNotify } from '@kedalion/ui';
 import { tKey } from '../../i18n';
+import type { PanelSide } from '../../panel';
+import { issueSideContent } from './IssueSide';
 import { Chip, ListRows, relTime, type ListRow } from '../../kit';
 import './jira.css';
 import { boardLanes, groupIssues, type GroupBy, type JiraIssue } from './map';
@@ -29,10 +31,16 @@ export function metaOf(issue: JiraIssue, config: IssuesConfig, now: number = Dat
   return parts.filter((p): p is string => !!p);
 }
 
-const rowOf = (issue: JiraIssue, config: IssuesConfig): ListRow => ({
+interface Open {
+  isSelected(issue: JiraIssue): boolean;
+  toggle(issue: JiraIssue): void;
+}
+
+const rowOf = (issue: JiraIssue, config: IssuesConfig, open?: Open): ListRow => ({
   id: issue.key,
   title: `${issue.key}  ${issue.summary}`,
-  href: issue.url,
+  href: open ? undefined : issue.url,
+  ...(open ? { selected: open.isSelected(issue), onClick: () => open.toggle(issue) } : {}),
   chip: <Chip tone={issue.tone}>{issue.status}</Chip>,
   meta: metaOf(issue, config),
   menu: () => [
@@ -43,7 +51,7 @@ const rowOf = (issue: JiraIssue, config: IssuesConfig): ListRow => ({
   ],
 });
 
-function Board({ issues, config }: { issues: readonly JiraIssue[]; config: IssuesConfig }) {
+function Board({ issues, config, open }: { issues: readonly JiraIssue[]; config: IssuesConfig; open?: Open }) {
   const lanes = boardLanes(issues, config.groupBy);
   return (
     <div className="jira-lanes jira-board" style={{ gridTemplateColumns: `repeat(${lanes.length}, minmax(160px, 1fr))` }}>
@@ -52,7 +60,7 @@ function Board({ issues, config }: { issues: readonly JiraIssue[]; config: Issue
           <h4 className="jira-group-title">{lane.key || tKey('dash.jira.none')} <span className="muted">{lane.issues.length}</span></h4>
           <ul className="jira-cards">
             {lane.issues.map((i) => (
-              <Card key={i.key} issue={i} extra={metaOf(i, config)} />
+              <Card key={i.key} issue={i} extra={metaOf(i, config)} selected={open?.isSelected(i)} onSelect={open ? () => open.toggle(i) : undefined} />
             ))}
           </ul>
         </section>
@@ -61,13 +69,23 @@ function Board({ issues, config }: { issues: readonly JiraIssue[]; config: Issue
   );
 }
 
-export function IssuesPanel({ config, data }: { config: IssuesConfig; data: IssuesData | undefined }) {
+export function IssuesPanel({ id, side, config, data }: { id: string; side?: PanelSide; config: IssuesConfig; data: IssuesData | undefined }) {
   const issues = data?.issues ?? [];
+  const open: Open | undefined = side
+    ? {
+        isSelected: (i) => side.isOpen(`${id}:${i.key}`),
+        toggle: (i) => {
+          const c = issueSideContent({ instanceId: id, issue: i, source: 'jira-issues', config });
+          if (side.isOpen(c.id)) side.close();
+          else side.open(c);
+        },
+      }
+    : undefined;
   if (config.view === 'board' && issues.length > 0) {
     return (
       <div className="jira">
         <div className="jira-head">{tKey(issues.length === 1 ? 'dash.jira.count.one' : 'dash.jira.count.other', { n: issues.length })}</div>
-        <Board issues={issues} config={config} />
+        <Board issues={issues} config={config} open={open} />
       </div>
     );
   }
@@ -77,14 +95,14 @@ export function IssuesPanel({ config, data }: { config: IssuesConfig; data: Issu
       <div className="jira-head">{tKey(issues.length === 1 ? 'dash.jira.count.one' : 'dash.jira.count.other', { n: issues.length })}</div>
       <div className="jira-body">
         {config.groupBy === 'none' ? (
-          <ListRows rows={issues.map((i) => rowOf(i, config))} empty={tKey('dash.jira.empty')} />
+          <ListRows rows={issues.map((i) => rowOf(i, config, open))} empty={tKey('dash.jira.empty')} />
         ) : issues.length === 0 ? (
           <ListRows rows={[]} empty={tKey('dash.jira.empty')} />
         ) : (
           groups.map((g) => (
             <section key={g.key || '-'} className="jira-group">
               <h4 className="jira-group-title">{g.key || tKey('dash.jira.none')} <span className="muted">{g.issues.length}</span></h4>
-              <ListRows rows={g.issues.map((i) => rowOf(i, config))} empty="" />
+              <ListRows rows={g.issues.map((i) => rowOf(i, config, open))} empty="" />
             </section>
           ))
         )}

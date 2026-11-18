@@ -12,7 +12,7 @@ export const en = {
   'dash.jira.jql': 'JQL',
   'dash.jira.jql.hint': 'The Jira query that selects the issues.',
   'dash.jira.max': 'Issues to show',
-  'dash.jira.columns': 'Columns',
+  'dash.jira.columns': 'Columns (panel view only)',
   'dash.jira.col.type': 'Type',
   'dash.jira.col.priority': 'Priority',
   'dash.jira.col.status': 'Status',
@@ -63,6 +63,9 @@ export const en = {
   'dash.jira.lane.doing': 'In progress',
   'dash.jira.lane.done': 'Done',
   'dash.jira.points': '{n} pts',
+  'dash.jira.addTicket': 'Add to Tickets',
+  'dash.jira.addTicket.done': 'Added to Tickets',
+  'dash.jira.addTicket.noPanel': 'Add a Tickets panel to the dashboard to track this issue.',
 };
 
 export const ptBR: Messages<typeof en> = {
@@ -77,7 +80,7 @@ export const ptBR: Messages<typeof en> = {
   'dash.jira.jql': 'JQL',
   'dash.jira.jql.hint': 'A consulta do Jira que seleciona as issues.',
   'dash.jira.max': 'Issues a mostrar',
-  'dash.jira.columns': 'Colunas',
+  'dash.jira.columns': 'Colunas (só na visão do painel)',
   'dash.jira.col.type': 'Tipo',
   'dash.jira.col.priority': 'Prioridade',
   'dash.jira.col.status': 'Status',
@@ -128,4 +131,7 @@ export const ptBR: Messages<typeof en> = {
   'dash.jira.lane.doing': 'Em andamento',
   'dash.jira.lane.done': 'Feito',
   'dash.jira.points': '{n} pts',
+  'dash.jira.addTicket': 'Adicionar aos Tickets',
+  'dash.jira.addTicket.done': 'Adicionado aos Tickets',
+  'dash.jira.addTicket.noPanel': 'Adicione um painel Tickets ao dashboard para acompanhar esta issue.',
 };

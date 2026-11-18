@@ -6,7 +6,8 @@ import { runAction } from '../../source';
 import type { TrackedPr } from '../github/tracked';
 import type { Pod } from '../pods/model';
 import { AdfView } from './AdfView';
-import { formatDuration, isOverdue, type JiraInfo } from './jira-info';
+import { JiraMore, jiraExtraRows } from './JiraMore';
+import { formatAge, formatDuration, isOverdue, type JiraInfo } from './jira-info';
 import { normPodId, parsePcr, podId, workloadName, type Ticket } from './model';
 import { showTicketsNow } from './TicketsPanel';
 import type { TicketLink } from './types';
@@ -215,6 +216,8 @@ export function TicketOverview({ ticket, link, jira, allPods, config, onChanged,
         [tKey('dash.tickets.detail.labels'), jira.labels.join(', ')],
         [tKey('dash.tickets.detail.due'), jira.due && <span className={isOverdue(jira.due, jira.tone) ? 'tickets-overdue' : undefined}>{date(jira.due)}</span>],
         [tKey('dash.tickets.detail.updated'), jira.updated && date(jira.updated)],
+        [tKey('dash.tickets.detail.age'), jira.created && `${formatAge(jira.created)} · ${tKey('dash.tickets.detail.created', { date: date(jira.created) })}`],
+        ...jiraExtraRows(jira),
       ]
     : [];
   const shownDetails = details.filter(([, v]) => v);
@@ -296,6 +299,12 @@ export function TicketOverview({ ticket, link, jira, allPods, config, onChanged,
           )}
         </div>
       </div>
+      {jira?.description ? (
+        <div className="tickets-card">
+          <h4>{tKey('dash.tickets.detail.jiraDescription')}</h4>
+          <AdfView body={jira.description} />
+        </div>
+      ) : null}
       {shownDetails.length > 0 && (
         <div className="tickets-card">
           <dl className="tickets-ov-details">
@@ -308,6 +317,7 @@ export function TicketOverview({ ticket, link, jira, allPods, config, onChanged,
           </dl>
         </div>
       )}
+      {jira && <JiraMore jira={jira} />}
       {jira && jira.links.length > 0 && (
         <section>
           <h4>{tKey('dash.tickets.detail.links')}</h4>

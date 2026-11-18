@@ -1,4 +1,4 @@
-import { statusTone, type StatusTone } from '../jira/map';
+import { sprintName, statusTone, type StatusTone } from '../jira/map';
 
 type Raw = Record<string, any>;
 
@@ -9,6 +9,13 @@ export interface JiraLinkedIssue {
   summary: string;
   status: string;
   blocker: boolean;
+}
+
+export interface JiraSubtask {
+  key: string;
+  summary: string;
+  status: string;
+  tone: StatusTone;
 }
 
 export interface JiraComment {
@@ -36,14 +43,24 @@ export interface JiraInfo {
   remainingEstimate: number | null;
   timeSpent: number | null;
   updated: string;
+  created: string;
   due: string;
   lastComment: JiraComment | null;
+  reporter: string;
+  sprint: string;
+  /** An Atlassian document (API v3) or a string (API v2); empty when unset. */
+  description: unknown;
+  components: string[];
+  subtasks: JiraSubtask[];
+  /** When the status category last changed. */
+  statusSince: string;
 }
 
 /** The Jira fields the side panel reads (`pointsId` is the story points custom field of the server). */
-export function infoFields(pointsId?: string): string[] {
-  const out = ['summary', 'status', 'issuetype', 'priority', 'assignee', 'parent', 'labels', 'fixVersions', 'issuelinks', 'comment', 'updated', 'duedate', 'timeoriginalestimate', 'timeestimate', 'timespent'];
+export function infoFields(pointsId?: string, sprintId?: string): string[] {
+  const out = ['reporter', 'description', 'components', 'subtasks', 'statuscategorychangedate', 'summary', 'status', 'issuetype', 'priority', 'assignee', 'parent', 'labels', 'fixVersions', 'issuelinks', 'comment', 'created', 'updated', 'duedate', 'timeoriginalestimate', 'timeestimate', 'timespent'];
   if (pointsId) out.push(pointsId);
+  if (sprintId) out.push(sprintId);
   return out;
 }
 
@@ -86,7 +103,7 @@ export function pcrOf(raw: Raw): string {
 }
 
 /** One search result (either API version) as the side panel shows it. */
-export function mapInfo(raw: Raw, pointsId?: string): JiraInfo {
+export function mapInfo(raw: Raw, pointsId?: string, sprintId?: string): JiraInfo {
   const f: Raw = raw.fields ?? {};
   const parent = f.parent;
   const comments: Raw[] = Array.isArray(f.comment?.comments) ? f.comment.comments : [];
@@ -109,7 +126,19 @@ export function mapInfo(raw: Raw, pointsId?: string): JiraInfo {
     remainingEstimate: seconds(f.timeestimate),
     timeSpent: seconds(f.timespent),
     updated: String(f.updated ?? ''),
+    created: String(f.created ?? ''),
     due: String(f.duedate ?? ''),
+    reporter: name(f.reporter),
+    sprint: sprintId ? sprintName(f[sprintId]) : '',
+    description: f.description ?? '',
+    components: Array.isArray(f.components) ? (f.components as Raw[]).map((c) => String(c?.name ?? '')).filter(Boolean) : [],
+    subtasks: (Array.isArray(f.subtasks) ? (f.subtasks as Raw[]) : []).map((t) => ({
+      key: String(t?.key ?? ''),
+      summary: String(t?.fields?.summary ?? ''),
+      status: String(t?.fields?.status?.name ?? ''),
+      tone: statusTone(t?.fields?.status?.statusCategory?.key),
+    })),
+    statusSince: String(f.statuscategorychangedate ?? ''),
     lastComment: last ? { author: name(last.author), created: String(last.created ?? ''), body: last.body ?? '' } : null,
   };
 }
@@ -124,6 +153,17 @@ export function formatDuration(totalSeconds: number): string {
     minutes -= n * size;
   }
   return parts.join(' ') || '0m';
+}
+
+/** How long ago `iso` was, as `5h`, `12d`, `3mo` or `2y`; empty when `iso` is not a date. */
+export function formatAge(iso: string, now: number = Date.now()): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const hours = Math.max(0, Math.floor((now - t) / 3_600_000));
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 60) return `${days}d`;
+  return days < 730 ? `${Math.floor(days / 30)}mo` : `${Math.floor(days / 365)}y`;
 }
 
 /** Whether a due date (YYYY-MM-DD) is before today and the ticket is not done. */

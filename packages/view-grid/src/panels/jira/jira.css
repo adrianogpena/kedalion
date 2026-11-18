@@ -22,3 +22,6 @@
 .jira-card a:hover { color: var(--accent-2); text-decoration: underline; }
 .jira-card-key { font-family: var(--font-mono); color: var(--text-3); }
 .jira-card-meta { display: flex; justify-content: space-between; gap: var(--space-4); color: var(--text-3); }
+.jira-card-btn { cursor: pointer; }
+.jira-card-btn:hover, .jira-card-selected { border-color: var(--accent-2); }
+.jira-side-add { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-4); }

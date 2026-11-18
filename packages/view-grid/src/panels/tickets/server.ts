@@ -274,9 +274,9 @@ export const ticketsSource = defineSource<TicketsConfig>({
         try {
           const conn = await ctx.connection(config.jiraConnection, 'jira');
           const keys = tickets.map((t) => t.key).filter((k) => /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(k));
-          const pointsId = (await fieldIds(conn, ctx.signal)).points;
-          const raw = keys.length ? await searchKeys(conn, keys, infoFields(pointsId), ctx.signal) : [];
-          for (const r of raw) jira[String(r.key)] = mapInfo(r, pointsId);
+          const ids = await fieldIds(conn, ctx.signal);
+          const raw = keys.length ? await searchKeys(conn, keys, infoFields(ids.points, ids.sprint), ctx.signal) : [];
+          for (const r of raw) jira[String(r.key)] = mapInfo(r, ids.points, ids.sprint);
         } catch {
           jiraError = true;
         }

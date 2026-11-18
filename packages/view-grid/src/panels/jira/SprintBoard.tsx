@@ -2,6 +2,8 @@ import { Button } from '@kedalion/ui';
 import { tKey } from '../../i18n';
 import { Chip } from '../../kit';
 import './jira.css';
+import type { PanelSide } from '../../panel';
+import { issueSideContent } from './IssueSide';
 import type { JiraIssue, SprintData } from './map';
 
 export interface BoardConfig {
@@ -11,10 +13,10 @@ export interface BoardConfig {
 }
 
 /** A board card; `extra` is the meta line, `points` shows a points chip. */
-export function Card({ issue, extra, points }: { issue: JiraIssue; extra: readonly string[]; points?: boolean }) {
+export function Card({ issue, extra, points, selected, onSelect }: { issue: JiraIssue; extra: readonly string[]; points?: boolean; selected?: boolean; onSelect?(): void }) {
   return (
-    <li className="jira-card">
-      <a href={issue.url} target="_blank" rel="noreferrer" title={issue.summary}>
+    <li className={`jira-card${onSelect ? ' jira-card-btn' : ''}${selected ? ' jira-card-selected' : ''}`} onClick={onSelect}>
+      <a href={issue.url} target="_blank" rel="noreferrer" title={issue.summary} onClick={onSelect ? (e) => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey) e.preventDefault(); } : undefined}>
         <span className="jira-card-key">{issue.key}</span> {issue.summary}
       </a>
       {(extra.length > 0 || (points && issue.points !== null)) && (
@@ -34,7 +36,13 @@ function sprintMeta(issue: JiraIssue, columns: readonly string[]): string[] {
   return extra;
 }
 
-export function SprintBoardPanel({ config, data, configure }: { config: BoardConfig; data: SprintData | null | undefined; configure: () => void }) {
+export function SprintBoardPanel({ id, side, config, data, configure }: { id: string; side?: PanelSide; config: BoardConfig; data: SprintData | null | undefined; configure: () => void }) {
+  const toggle = (issue: JiraIssue) => {
+    if (!side) return;
+    const c = issueSideContent({ instanceId: id, issue, source: 'jira-sprint', config });
+    if (side.isOpen(c.id)) side.close();
+    else side.open(c);
+  };
   if (!config.boardId) {
     return (
       <div className="kit-empty">
@@ -63,7 +71,7 @@ export function SprintBoardPanel({ config, data, configure }: { config: BoardCon
           <section key={lane} className="jira-lane">
             <h4 className="jira-group-title">{tKey(`dash.jira.lane.${lane}`)} <span className="muted">{issues.length}</span></h4>
             <ul className="jira-cards">
-              {issues.map((i) => <Card key={i.key} issue={i} extra={sprintMeta(i, config.columns)} points={config.columns.includes('points')} />)}
+              {issues.map((i) => <Card key={i.key} issue={i} extra={sprintMeta(i, config.columns)} points={config.columns.includes('points')} selected={!!side && side.isOpen(`${id}:${i.key}`)} onSelect={side ? () => toggle(i) : undefined} />)}
             </ul>
           </section>
         ))}
