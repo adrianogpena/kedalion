@@ -1,5 +1,5 @@
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
-import { addItem, Button, ContextMenu, Empty, PageHead, PanelGrid, t, useCommand, useDialogs, useViewSidePanel, validConfig, ViewSidePanel,type ContextMenuItem, type GridItem, type PanelConfig } from '@kedalion/ui';
+import { addItem, Button, ContextMenu, Empty, findFreeSpot, MAX_GRID_ITEMS, newItemId, PageHead, PanelGrid, t, useCommand, useDialogs, useViewSidePanel, validConfig, ViewSidePanel,type ContextMenuItem, type GridItem, type PanelConfig } from '@kedalion/ui';
 import { ConfigDialog } from '../ConfigForm';
 import { ConnectionsDialog } from '../connections/ConnectionsDialog';
 import { tKey } from '../i18n';
@@ -167,6 +167,23 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
     if (ok) storePresets(presets.filter((p) => p.id !== preset.id));
   };
 
+  /** Moves a panel to another layout: the target is saved at once with the panel on the first free spot; the panel leaves this layout's saved and live items. */
+  const moveItem = (item: GridItem, targetId: string) => {
+    const target = state.layouts.find((l) => l.id === targetId);
+    if (!target) return;
+    const placed: GridItem = { ...item, id: target.items.some((i) => i.id === item.id) ? newItemId(target.items, item.kind) : item.id, ...findFreeSpot(target.items, item.w, item.h) };
+    const remaining = items.filter((i) => i.id !== item.id);
+    persist({
+      ...state,
+      layouts: state.layouts.map((l) =>
+        l.id === targetId ? { ...l, items: [...l.items, placed] } : l.id === current.id ? { ...l, items: l.items.filter((i) => i.id !== item.id) } : l,
+      ),
+    });
+    itemsRef.current = remaining;
+    setItems(remaining);
+    const savedRest = current.items.filter((i) => i.id !== item.id);
+    unsaved = sameLayout(remaining, savedRest) ? null : { layoutId: current.id, items: remaining };
+  };
   const kindOf = (kind: string) => panels.find((k) => k.kind === kind);
   const itemMenu = (item: GridItem): ContextMenuItem[] => {
     const kind = kindOf(item.kind);
@@ -175,6 +192,14 @@ export function DashboardScreen({ settings, onSave, panels }: DashboardScreenPro
     const out: ContextMenuItem[] = [];
     if (fieldsOf(kind).length > 0) out.push({ id: 'configure', label: t('panel.configure'), icon: 'settings', run: () => setConfiguring(item.id) });
     out.push({ id: 'preset', label: tKey('dash.preset.save'), icon: 'plus', disabled: full, hint: full ? tKey('dash.preset.tooMany') : undefined, run: () => void savePreset(item) });
+    const others = state.layouts.filter((l) => l.id !== current.id);
+    const moves: ContextMenuItem[] = others.map((l) => {
+      const blocked = kind.allowMultiple === false && l.items.some((i) => i.kind === item.kind);
+      const label = others.length >= 2 ? l.name : tKey('dash.moveTo', { name: l.name });
+      return { id: `move-${l.id}`, label, icon: 'link', disabled: blocked || l.items.length >= MAX_GRID_ITEMS, hint: blocked ? tKey('dash.moveHas') : undefined, run: () => moveItem(item, l.id) };
+    });
+    if (moves.length >= 2) out.push({ id: 'move', label: tKey('dash.move'), icon: 'link', run: () => {}, submenu: moves });
+    else out.push(...moves);
     return out;
   };
   const itemsRef = useRef(items);

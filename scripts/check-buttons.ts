@@ -39,7 +39,7 @@ const RAW_BUTTONS: Record<string, number> = {
   'packages/ui/src/components/AppearanceFields.tsx': 3,
   'packages/ui/src/components/Breadcrumbs.tsx': 6,
   'packages/ui/src/components/CommandPalette.tsx': 2,
-  'packages/ui/src/components/ContextMenu.tsx': 1,
+  'packages/ui/src/components/ContextMenu.tsx': 3,
   'packages/ui/src/components/FileDialog.tsx': 4,
   'packages/ui/src/components/HeaderNav.tsx': 2,
   'packages/ui/src/components/IconPicker.tsx': 1,

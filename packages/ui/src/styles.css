@@ -664,6 +664,11 @@ html[data-status-bar="false"] .status-bar { display: none; }
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-2xl); box-shadow: var(--shadow);
 }
 
+.menu-sub-wrap { position: relative; }
+.menu-more { color: var(--text-3); }
+.context-menu.menu-submenu { position: absolute; left: calc(100% - 2px); top: calc(-1 * var(--space-4) - 1px); }
+.context-menu.menu-submenu.flip { left: auto; right: calc(100% - 2px); }
+
 /* ---- breadcrumbs */
 .breadcrumbs {
   display: flex; align-items: center; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap;
