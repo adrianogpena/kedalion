@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { continuationOf, pasteNeedsWarning, pasteSummary, sanitizePaste, trimCopied } from './paste.ts';
+import { continuationOf, pasteNeedsWarning, pasteSummary, placeholderAt, sanitizePaste, trimCopied } from './paste.ts';
 
 const plain = { bracketed: false, shell: 'bash' };
 
@@ -50,4 +50,16 @@ test('summary counts lines without the trailing break', () => {
 
 test('copied lines lose trailing spaces', () => {
   expect(trimCopied('a   \nb \n  c')).toBe('a\nb\n  c');
+});
+
+const holders = 'x [Pasted text #1 +20 lines] y [Pasted text #2 +5 lines]';
+
+test('placeholderAt picks the placeholder under or before the column', () => {
+  expect(placeholderAt(holders, 5)).toEqual({ n: 1, lines: 20 });
+  expect(placeholderAt(holders, 40)).toEqual({ n: 2, lines: 5 });
+  expect(placeholderAt(holders, 0)).toEqual({ n: 1, lines: 20 });
+});
+
+test('placeholderAt is null without a placeholder', () => {
+  expect(placeholderAt('plain', 2)).toBeNull();
 });

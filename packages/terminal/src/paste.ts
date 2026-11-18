@@ -62,3 +62,14 @@ export function sanitizePaste(text: string, opts: { bracketed: boolean; shell?: 
 
 /** Copied text without the trailing spaces of each line. */
 export const trimCopied = (text: string): string => text.replace(/ +$/gm, '');
+
+/** The `[Pasted text #N +M lines]` placeholder a program shows for a paste: the one under the column, else the last one before it, else the first. */
+export function placeholderAt(text: string, col: number): { n: number; lines: number } | null {
+  const found = [...text.matchAll(/\[Pasted text #(\d+)(?: \+(\d+) lines)?\]/g)];
+  if (!found.length) return null;
+  const at = (m: RegExpMatchArray) => m.index ?? 0;
+  const under = found.find((m) => col >= at(m) && col <= at(m) + m[0].length);
+  const before = found.filter((m) => at(m) <= col).pop();
+  const m = under ?? before ?? found[0]!;
+  return { n: Number(m[1]), lines: Number(m[2] ?? 0) };
+}

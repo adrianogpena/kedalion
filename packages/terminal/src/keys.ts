@@ -16,6 +16,7 @@ export const PANE_COMMANDS = {
   'terminal.scrollBottom': ['Ctrl+Shift+End'],
   'terminal.clear': ['Ctrl+Shift+K'],
   'terminal.hints': ['Ctrl+Shift+E'],
+  'terminal.pasteEdit': ['Ctrl+Alt+V'],
 } as const satisfies Record<string, readonly string[]>;
 export type PaneCommand = keyof typeof PANE_COMMANDS;
 

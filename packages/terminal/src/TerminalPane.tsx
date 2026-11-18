@@ -3,7 +3,9 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type Keyboard
 import { attachSession, closeSession, isSessionGone, openSession, socketUrl, type TerminalCwd, type TerminalLaunch } from './client.ts';
 import { withAppearance, type ProfileAppearance } from './appearance.ts';
 import { PANE_COMMANDS, terminalKeyAction, type PaneCommand } from './keys.ts';
-import { pasteNeedsWarning, pasteSummary, sanitizePaste } from './paste.ts';
+import { pasteNeedsWarning, pasteSummary, placeholderAt, sanitizePaste } from './paste.ts';
+
+const MAX_PASTES = 10;
 import { compileTriggers, type TerminalTrigger } from './output-scan.ts';
 import { decodeServerMessage, encodeControl, type CaptureRecord, type CommandRecord, type EarlierHit, type ResultRecord, type TerminalAlerts } from './protocol.ts';
 import { useTerminalOptions } from './terminalOptions.ts';
@@ -183,6 +185,7 @@ export function TerminalPane(props: TerminalPaneProps) {
   hintsRef.current = hints ? { list: hints, typed } : null;
   const sessionRef = useRef<string | undefined>(undefined);
   const sendRef = useRef<(data: string | Uint8Array) => void>(() => {});
+  const pastesRef = useRef<Array<{ n: number; text: string }>>([]);
 
   const kb = useKeybindings();
   const appKeys = useMemo(() => props.appKeys ?? [paletteCommand()], [props.appKeys]);
@@ -306,24 +309,69 @@ export function TerminalPane(props: TerminalPaneProps) {
     });
 
     async function askPaste(text: string) {
-      const { lines, chars, preview: sample } = pasteSummary(text);
+      const { lines, chars } = pasteSummary(text);
+      let edited = text;
       const choice = await dialogsRef.current.choose({
         title: lines > 1 ? t('terminal.paste.title', { lines }) : t('terminal.paste.titleLarge', { chars }),
         body: (
           <>
             <p>{t('terminal.paste.body', { lines, chars })}</p>
-            <pre className="terminal-paste-preview">{sample}</pre>
+            <textarea
+              className="terminal-paste-preview"
+              defaultValue={text}
+              rows={Math.min(Math.max(lines, 8), 20)}
+              spellCheck={false}
+              wrap="off"
+              aria-label={t('terminal.paste.title', { lines })}
+              onChange={(e) => { edited = e.target.value; }}
+            />
             <p className="muted">{t('terminal.paste.sanitizeHint')}</p>
           </>
         ),
+        wide: true,
         choices: [
           { id: 'sanitize', label: t('terminal.paste.sanitize') },
           { id: 'paste', label: t('terminal.paste.paste') },
         ],
       });
       if (disposed || !choice) return;
-      view.paste(choice === 'paste' ? text : sanitizePaste(text, { bracketed: view.bracketedPaste(), shell: latest.current.shell }));
+      const list = pastesRef.current;
+      list.push({ n: (list[list.length - 1]?.n ?? 0) + 1, text: edited });
+      if (list.length > MAX_PASTES) list.shift();
+      view.paste(choice === 'paste' ? edited : sanitizePaste(edited, { bracketed: view.bracketedPaste(), shell: latest.current.shell }));
       view.focus();
+    }
+
+    async function reviewPaste() {
+      const entries = pastesRef.current;
+      if (!entries.length) return toastRef.current({ message: t('terminal.paste.none') });
+      const { text: row, col } = view.cursorLine();
+      const holder = placeholderAt(view.hasSelection() ? view.getSelection() : row, view.hasSelection() ? 0 : col);
+      const entry = entries.find((e) => e.n === holder?.n) ?? entries[entries.length - 1]!;
+      let edited = entry.text;
+      const { lines, chars } = pasteSummary(edited);
+      const choice = await dialogsRef.current.choose({
+        title: t('terminal.paste.reviewTitle', { n: entry.n }),
+        body: (
+          <>
+            <p>{t('terminal.paste.body', { lines, chars })}</p>
+            <textarea
+              className="terminal-paste-preview"
+              defaultValue={edited}
+              rows={Math.min(Math.max(lines, 8), 20)}
+              spellCheck={false}
+              wrap="off"
+              aria-label={t('terminal.paste.reviewTitle', { n: entry.n })}
+              onChange={(e) => { edited = e.target.value; }}
+            />
+            <p className="muted">{t('terminal.paste.reviewHint')}</p>
+          </>
+        ),
+        wide: true,
+        choices: [{ id: 'update', label: t('terminal.paste.update') }],
+      });
+      if (disposed || !choice) return;
+      entry.text = edited;
     }
 
     async function resolvePaths(paths: string[]): Promise<Array<string | null>> {
@@ -377,6 +425,8 @@ export function TerminalPane(props: TerminalPaneProps) {
       switch (command) {
         case 'terminal.hints':
           return showHints();
+        case 'terminal.pasteEdit':
+          return void reviewPaste();
         case 'terminal.zoomIn':
           return setZoom((z) => z + 1);
         case 'terminal.zoomOut':

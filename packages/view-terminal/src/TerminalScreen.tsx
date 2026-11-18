@@ -426,6 +426,7 @@ export function TerminalScreen({ settings, onSave }: { settings: Settings; onSav
     { id: 'duplicate', label: t('terminalScreen.duplicate'), icon: 'copy', run: () => duplicate(tab) },
     'sep',
     { id: 'clear', label: t('terminalScreen.clear'), run: paneRun(tab, 'terminal.clear') },
+    { id: 'pasteEdit', label: t('terminalScreen.pasteEdit'), run: paneRun(tab, 'terminal.pasteEdit') },
     { id: 'zoomIn', label: t('terminalScreen.zoomIn'), run: paneRun(tab, 'terminal.zoomIn') },
     { id: 'zoomOut', label: t('terminalScreen.zoomOut'), run: paneRun(tab, 'terminal.zoomOut') },
     { id: 'zoomReset', label: t('terminalScreen.zoomReset'), run: paneRun(tab, 'terminal.zoomReset') },

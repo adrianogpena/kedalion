@@ -146,6 +146,8 @@ export interface XtermView extends TerminalView {
   setOptions(options: TerminalOptions): void;
   hasSelection(): boolean;
   getSelection(): string;
+  /** The text of the cursor's row and the cursor's column in it. */
+  cursorLine(): { text: string; col: number };
   /** The current size in cells. */
   size(): { cols: number; rows: number };
   /** Clears the screen and scrollback before a replay. */
@@ -605,6 +607,10 @@ export function createXtermView(el: HTMLElement, opts: XtermViewOptions = {}): X
     setOptions,
     hasSelection: () => term.hasSelection(),
     getSelection: selection,
+    cursorLine: () => {
+      const b = term.buffer.active;
+      return { text: b.getLine(b.baseY + b.cursorY)?.translateToString(true) ?? '', col: b.cursorX };
+    },
     size: () => ({ cols: term.cols, rows: term.rows }),
     reset: () => {
       for (const p of prompts.splice(0)) {

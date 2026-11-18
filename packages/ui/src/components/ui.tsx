@@ -121,7 +121,7 @@ const FOCUSABLE = 'button:not(:disabled), [href], input:not(:disabled), select:n
  * `large` is VS Code's modal editor (how it opens Settings): 80% of the window, up to 1400x900, a slim title bar
  * whose button or double-click maximizes it, and a body the content lays out itself.
  */
-export function Modal({ title, onClose, children, footer, large }: { title: string; onClose: () => void; children?: ReactNode; footer?: ReactNode; large?: boolean }) {
+export function Modal({ title, onClose, children, footer, large, wide }: { title: string; onClose: () => void; children?: ReactNode; footer?: ReactNode; large?: boolean; wide?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const [maximized, setMaximized] = useState(false);
   const isTop = useModalOpen();
@@ -172,7 +172,7 @@ export function Modal({ title, onClose, children, footer, large }: { title: stri
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={box}
-        className={`modal${large ? ' modal-large' : ''}${large && maximized ? ' maximized' : ''}`}
+        className={`modal${wide ? ' modal-wide' : ''}${large ? ' modal-large' : ''}${large && maximized ? ' maximized' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -223,6 +223,8 @@ export interface ChoiceOptions {
   choices: Array<{ id: string; label: string; danger?: boolean }>;
   /** A checkbox under the body; `onChange` gets its state each time it is toggled. */
   checkbox?: { label: string; onChange: (checked: boolean) => void };
+  /** A wider dialog, for a body with text to edit. */
+  wide?: boolean;
 }
 
 type DialogRequest =
@@ -254,6 +256,7 @@ function ChoiceDialog({ opts, onDone }: { opts: ChoiceOptions; onDone: (id: stri
   return (
     <Modal
       title={opts.title}
+      wide={opts.wide}
       onClose={() => onDone(null)}
       footer={
         <>
