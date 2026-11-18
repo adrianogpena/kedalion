@@ -1,17 +1,19 @@
 import { type DbStores, parseOracleUrl } from '@kedalion/db';
 import { defineServerView } from '@kedalion/server-core';
 import { type AppStores, httpExecutor, httpSender } from '@kedalion/server-mods';
+import { kubectlTools, spawnKubectl } from './kubectl.ts';
 import { createConfigFile, loadSecret, mcpRoutes, type McpTool } from './mcp.ts';
 import { restTools } from './rest.ts';
 import { sqlTools } from './sql.ts';
 
 export { handleRpc, MCP_PATH, SERVER_KEY } from './mcp.ts';
 export type { McpTool, ToolResult } from './mcp.ts';
+export { kubectlTools, spawnKubectl, type KubectlDeps } from './kubectl.ts';
 export { restTools, type RestDeps } from './rest.ts';
 export { sqlTools, type SqlDeps } from './sql.ts';
 
 /** Sent to every MCP client in the `initialize` reply. */
-export const INSTRUCTIONS = `Kedalion's data tools: run SQL on the user's saved Oracle connections and send HTTP requests from the Kedalion server, for debugging and tests. Output is compact text, capped; narrow it instead of asking for everything.
+export const INSTRUCTIONS = `Kedalion's data tools: run SQL on the user's saved Oracle connections, send HTTP requests from the Kedalion server and read Kubernetes data with kubectl, for debugging and tests. Output is compact text, capped; narrow it instead of asking for everything.
 
 SQL (sql_*)
 - sql_connections lists the saved connections; pass a name as \`connection\`. Never pick a connection yourself, not even when only one is saved: use the one the user or the session context named, otherwise ask the user first. Passwords are never shown.
@@ -23,6 +25,10 @@ REST (rest_*)
 - rest_environments lists environments; rest_send takes method, url, headers, body, query, form, environment and vars. {{name}} is replaced from the environment (secrets are used, never shown); when a request uses {{variables}} never pick the environment yourself: use the one the user or the session context named, otherwise ask the user first; {{$uuid}} {{$timestamp}} {{$isoTimestamp}} {{$randomInt}} are built in.
 - Make rest_send a test with expectStatus, expectBody and expectJson: the result ends with ASSERT PASS or ASSERT FAIL (failure is an error).
 - Long bodies are cut: use select (JSON path), grep, offset/limit, or rest_body with the printed id.
+
+Kubernetes (kube_*, read-only)
+- kube_contexts lists contexts. Never pick the context or namespace yourself: use the ones the user or the session context named, otherwise ask the user first.
+- kube_get lists or reads objects (select/grep narrow the output), kube_logs tails pod logs, kube_secret returns a Secret's decoded keys for test credentials; use the values, never repeat them in summaries or commits.
 
 Rules: clean up what you changed (roll back test writes); never print secrets you happen to see.`;
 
@@ -50,6 +56,7 @@ export function agentDataServerView(opts: { dataDir: string; origin: () => strin
           },
           sessions: stores.sessions,
         }),
+        ...kubectlTools({ run: spawnKubectl }),
         ...restTools({
           send: httpSender(executor, { environmentVars: stores.environmentVars, secretVars: stores.secretVars }),
           body: (id) => executor.body(id),

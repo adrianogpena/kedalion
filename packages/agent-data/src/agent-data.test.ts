@@ -3,6 +3,7 @@ import type { DbSessions } from '@kedalion/db';
 import type { HttpResponseInfo } from '@kedalion/server-core/protocol';
 import { grepLines, jsonPick, tsv, writeReason } from './format.ts';
 import { handleRpc, type McpTool } from './mcp.ts';
+import { kubectlTools } from './kubectl.ts';
 import { restTools } from './rest.ts';
 import { sqlTools } from './sql.ts';
 
@@ -169,5 +170,45 @@ describe('rpc', () => {
     expect((await call(tools, 'rest_send', {})).text).toBe('Missing argument: url');
     expect((await call(tools, 'rest_send', { url: 1 })).text).toBe('Argument url must be a string');
     expect((await call(tools, 'nope', {})).rpcError).toBe(true);
+  });
+});
+
+describe('kubectl tools', () => {
+  const runs: string[][] = [];
+  const secret = { data: { user: Buffer.from('svc').toString('base64'), pass: Buffer.from('p w').toString('base64'), bin: Buffer.from([0xff, 0xfe]).toString('base64') } };
+  const tools = kubectlTools({
+    run: async (args) => {
+      runs.push(args);
+      if (args.includes('secret')) return { code: 0, stdout: JSON.stringify(secret), stderr: '' };
+      if (args.includes('get-contexts')) return { code: 0, stdout: 'a\nb\n', stderr: '' };
+      if (args.includes('current-context')) return { code: 0, stdout: 'b\n', stderr: '' };
+      return { code: 0, stdout: JSON.stringify({ metadata: { managedFields: [1], name: 'p' }, status: { phase: 'Running' } }), stderr: '' };
+    },
+  });
+  const where = { context: 'ctx', namespace: 'ns' };
+
+  test('contexts mark the current one', async () => {
+    expect((await call(tools, 'kube_contexts', {})).text).toBe('  a\n* b');
+  });
+
+  test('secret is decoded, filtered and needs context and namespace', async () => {
+    expect((await call(tools, 'kube_secret', { ...where, name: 'my-secret' })).text).toBe('user=svc\npass=p w\nbin=<binary 2 bytes>');
+    expect((await call(tools, 'kube_secret', { ...where, name: 'my-secret', keys: ['pass', 'nope'] })).text).toContain('pass=p w\nnope: missing');
+    expect(runs.at(-1)).toEqual(['--context', 'ctx', '-n', 'ns', 'get', 'secret', 'my-secret', '-o', 'json']);
+    const noCtx = await call(tools, 'kube_secret', { namespace: 'ns', name: 'x' });
+    expect(noCtx.isError).toBe(true);
+    expect(noCtx.text).toContain('Missing argument: context');
+  });
+
+  test('get trims the object, selects, and refuses secrets and bad names', async () => {
+    expect((await call(tools, 'kube_get', { ...where, kind: 'pods', name: 'p', select: '$.status.phase' })).text).toBe('Running');
+    expect((await call(tools, 'kube_get', { ...where, kind: 'pods', name: 'p' })).text).not.toContain('managedFields');
+    expect((await call(tools, 'kube_get', { ...where, kind: 'secrets' })).isError).toBe(true);
+    expect((await call(tools, 'kube_get', { ...where, kind: 'pods', name: 'p;rm' })).isError).toBe(true);
+  });
+
+  test('logs build the argument list', async () => {
+    await call(tools, 'kube_logs', { ...where, pod: 'p-1', tail: 5, previous: true });
+    expect(runs.at(-1)).toEqual(['--context', 'ctx', '-n', 'ns', 'logs', 'p-1', '--tail=5', '--all-containers=true', '--previous']);
   });
 });
