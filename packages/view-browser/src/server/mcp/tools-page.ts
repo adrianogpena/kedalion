@@ -1,7 +1,7 @@
 import { normalizeWebAddress } from '../../address.ts';
 import { compactUrl, decodeOperations, prettyBody, STATIC_TYPES, summarizeRequest } from '../../ops.ts';
 import { stepLogFor } from './steps.ts';
-import { bool, num, pageSession, resolveTab, runtimeEval, str, withTimeout } from './page-util.ts';
+import { bool, FRAME, jsonPick, num, pageSession, resolveTab, runtimeEval, shortFrameUrl, str, withTimeout } from './page-util.ts';
 import { PAGE_LIB } from './page-lib.ts';
 import { challengeNote, DEFAULT_SNAPSHOT_CHARS, type PageSnapshot, renderSnapshot, SNAPSHOT_SECTIONS, type SnapshotSection } from './snapshot.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -67,7 +67,7 @@ const lastNetworkId = (ctx: ToolContext, tab: string): number => ctx.service.log
  * Waits (up to `timeoutMs`) until the tab has loaded, then reports the final URL, title, HTTP status of
  * the main document and a bot check covering the page.
  */
-export async function loadReport(ctx: ToolContext, tab: string, since: number, timeoutMs = 15_000): Promise<string> {
+export async function loadReport(ctx: ToolContext, tab: string, since: number, timeoutMs = 15_000, waitFrame?: string): Promise<string> {
   const session = ctx.service.tabs().session(tab);
   const deadline = Date.now() + timeoutMs;
   await new Promise((res) => setTimeout(res, 200));
@@ -90,22 +90,65 @@ export async function loadReport(ctx: ToolContext, tab: string, since: number, t
   const lines = [`URL: ${v?.url ?? '?'}`, `Title: ${v?.title || '(none)'}`];
   if (main?.status) lines.push(`Status: ${main.status}`);
   if (!done) lines.push(`Still loading after ${Math.round(timeoutMs / 1000)}s.`);
+  if (waitFrame) {
+    const needle = waitFrame.toLowerCase();
+    const find = () => ctx.service.tabs().frames(tab).findIndex((f) => f.url.toLowerCase().includes(needle));
+    const frameDeadline = Date.now() + Math.max(deadline - Date.now(), 5000);
+    while (find() < 0 && Date.now() < frameDeadline) await new Promise((res) => setTimeout(res, 200));
+    const i = find();
+    lines.push(i >= 0 ? `Iframe ${i + 1} ready: ${shortFrameUrl(ctx.service.tabs().frames(tab)[i]!.url)}` : `No iframe matching "${waitFrame}" appeared.`);
+  }
   if (v?.challenge) lines.push(challengeNote(v.challenge));
   return lines.join('\n');
 }
 
-const tabLine =(t: { id: string; title: string; url: string; loading: boolean }, active: boolean) => `${active ? '*' : ' '} ${t.id}  ${t.title || '(untitled)'}  ${t.url}${t.loading ? '  (loading)' : ''}`;
+const tabLine = (t: { id: string; title: string; url: string; loading: boolean }, active: boolean, pinned = false) => `${active ? '*' : ' '} ${t.id}${pinned ? ' [pinned]' : ''}  ${t.title || '(untitled)'}  ${t.url}${t.loading ? '  (loading)' : ''}`;
+
+const SECRET_HEADER = /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-auth-token|x-csrf-token)$/i;
+
+/** Browser boilerplate that is the same on every request; hidden unless allHeaders=true. */
+const BORING_HEADER = /^(sec-ch-ua.*|sec-fetch-.*|user-agent|accept-encoding|accept-language|accept|priority|connection|pragma|:authority|:method|:path|:scheme|referer|cache-control|x-amzn-trace-id|date|vary|strict-transport-security)$/i;
+
+/** One `name: value` line per header; credentials are replaced by their length, boilerplate is counted instead of listed. */
+const headerLines = (h: Record<string, string>, all = false): string => {
+  const entries = Object.entries(h);
+  const shown = all ? entries : entries.filter(([k]) => !BORING_HEADER.test(k));
+  const lines = shown.map(([k, v]) => `${k}: ${SECRET_HEADER.test(k) ? `[hidden, ${v.length} chars]` : v}`);
+  if (shown.length < entries.length) lines.push(`(${entries.length - shown.length} browser boilerplate headers hidden; allHeaders=true shows them)`);
+  return lines.join('\n');
+};
+
+/** `iframe <long url>` as `iframe <short label>`. */
+const frameLabel = (label: string): string => (label.startsWith('iframe ') ? `iframe ${shortFrameUrl(label.slice(7))}` : label);
 
 export const pageTools: McpTool[] = [
   {
     name: 'browser_tabs',
-    description: 'List the open tabs of the Browser view (the active one is marked with *). Starts the browser when it is not running.',
-    inputSchema: { type: 'object', properties: {} },
-    async run(_a, ctx) {
+    description:
+      'List the open tabs of the Browser view (the active one is marked with *). Starts the browser when it is not running. frames=true also lists the cross-origin iframes (numbered, with a short label; pass the number or a URL part as `frame` to browser_snapshot, browser_extract, browser_eval, browser_wait_for or browser_network to read inside one). tab limits the list to one tab. pin=<id> marks a tab as in use for a test (it is never reused or navigated by the tab limit); unpin=<id> frees it. At the tab limit (setting) browser_open newTab reuses the least recently used unpinned tab, so pin the tabs a test needs and unpin them when done.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        frames: { type: 'boolean', description: 'List the cross-origin iframes of each tab.' },
+        tab: { type: 'string', description: 'Only this tab id.' },
+        pin: { type: 'string', description: 'Tab id to pin.' },
+        unpin: { type: 'string', description: 'Tab id to unpin.' },
+      },
+    },
+    async run(a, ctx) {
       await ctx.ready();
+      for (const [key, on] of [['pin', true], ['unpin', false]] as const) {
+        const id = str(a, key);
+        if (!id) continue;
+        if (!ctx.service.tabs().list().some((t) => t.id === id)) return failResult(`Unknown tab: ${id}.`);
+        ctx.service.pin(id, on);
+      }
       const active = ctx.service.activeTab();
-      const list = ctx.service.tabs().list();
-      return textResult(list.length ? list.map((t) => tabLine(t, t.id === active)).join('\n') : 'No tabs are open.');
+      const only = str(a, 'tab');
+      const list = ctx.service.tabs().list().filter((t) => !only || t.id === only);
+      const withFrames = bool(a, 'frames');
+      const lines = list.flatMap((t) => [tabLine(t, t.id === active, ctx.service.isPinned(t.id)), ...(withFrames ? ctx.service.tabs().frames(t.id).map((f, i) => `    frame ${i + 1}: ${shortFrameUrl(f.url)}`) : [])]);
+      return textResult(list.length ? lines.join('\n') : 'No tabs are open.');
     },
   },
   {
@@ -118,6 +161,7 @@ export const pageTools: McpTool[] = [
         newTab: { type: 'boolean', description: 'Open in a new tab.' },
         wait: { type: 'boolean', description: 'Wait for the load and report the result, default true.' },
         timeoutMs: { type: 'integer', description: 'Longest wait for the load, default 15000, at most 60000.' },
+        waitFrame: { type: 'string', description: 'After the load, also wait until a cross-origin iframe whose URL contains this text exists (embedded apps load late); reports its number.' },
       },
       ['url'],
     ),
@@ -133,24 +177,30 @@ export const pageTools: McpTool[] = [
       const target = wanted ?? ctx.service.activeTab();
       const wait = a.wait !== false;
       const timeout = Math.min(Math.max(num(a, 'timeoutMs') ?? 15_000, 1000), 60_000);
+      const waitFrame = str(a, 'waitFrame');
       if (bool(a, 'newTab') || !target) {
-        const t = await ctx.service.open(url);
+        const { tab: t, reused } = await ctx.service.openManaged(url);
+        const note = reused ? ' (tab limit reached: reused the least recently used unpinned tab)' : '';
         const failed = await navFailure(ctx, t.id, 0);
         if (failed) return failResult(`Navigation failed: ${failed} (tab ${t.id}, ${url})`);
-        return textResult(wait ? `Opened in tab ${t.id}\n${await loadReport(ctx, t.id, 0, timeout)}` : `Opened ${t.url} in tab ${t.id}`);
+        return textResult(wait ? `Opened in tab ${t.id}${note}\n${await loadReport(ctx, t.id, 0, timeout, waitFrame)}` : `Opened ${t.url} in tab ${t.id}${note}`);
       }
       const tab = await resolveTab(ctx, { tab: target });
       const since = lastNetworkId(ctx, tab);
       const navError = (await ctx.service.navigate(tab, url)) ?? (await navFailure(ctx, tab, since));
       if (navError) return failResult(`Navigation failed: ${navError}`);
-      return textResult(wait ? `Loaded in tab ${tab}\n${await loadReport(ctx, tab, since, timeout)}` : `Navigating tab ${tab} to ${url}`);
+      return textResult(wait ? `Loaded in tab ${tab}\n${await loadReport(ctx, tab, since, timeout, waitFrame)}` : `Navigating tab ${tab} to ${url}`);
     },
   },
   {
     name: 'browser_navigate',
-    description: 'Go back, go forward, reload or stop loading.',
-    inputSchema: schema({ action: { type: 'string', enum: ['back', 'forward', 'reload', 'stop'] } }, ['action']),
+    description: 'Go back, go forward, reload or stop loading; goto loads `url` in the tab (like browser_open without newTab).',
+    inputSchema: schema({ action: { type: 'string', enum: ['back', 'forward', 'reload', 'stop', 'goto'] }, url: { type: 'string', description: 'Address for goto.' } }, ['action']),
     async run(a, ctx) {
+      if (a.action === 'goto') {
+        if (!str(a, 'url')) return failResult('goto needs url.');
+        return pageTools.find((t) => t.name === 'browser_open')!.run({ url: a.url, ...(str(a, 'tab') ? { tab: a.tab } : {}) }, ctx);
+      }
       const tab = await resolveTab(ctx, a);
       const since = lastNetworkId(ctx, tab);
       await ctx.service.action(tab, a.action as 'back' | 'forward' | 'reload' | 'stop');
@@ -197,18 +247,19 @@ export const pageTools: McpTool[] = [
     inputSchema: schema({
       maxChars: { type: 'integer', description: `Budget of the snapshot, default ${DEFAULT_SNAPSHOT_CHARS}.` },
       scope: { type: 'string', description: 'CSS selector or text of a container.' },
-      main: { type: 'boolean', description: 'Only the main content (article, main, wiki body), without navigation and sidebars.' },
+      main: { type: 'boolean', description: 'Only the main content (article, main, wiki body), without navigation and sidebars. Inside a frame the whole frame is read unless main=true.' },
       section: { type: 'string', enum: SNAPSHOT_SECTIONS, description: 'Only this section.' },
       limit: { type: 'integer', description: 'Items of Clickable, Links and Images, default 60, 30 and 30.' },
       offset: { type: 'integer', description: 'Items of Clickable, Links and Images to skip.' },
       loadLazy: { type: 'boolean', description: 'Scroll through the page first so lazy-loaded images load (up to a few seconds).' },
+      frame: FRAME,
     }),
     async run(a, ctx) {
       const { session } = await pageSession(ctx, a);
       const section = str(a, 'section') as SnapshotSection | undefined;
       const sections = section ? [section] : undefined;
       if (bool(a, 'loadLazy')) await runtimeEval(session, `(() => { const kd = ${PAGE_LIB}; return kd.loadLazy(); })()`, { returnByValue: true, awaitPromise: true, timeoutMs: 20_000 });
-      const args = [JSON.stringify(str(a, 'scope') ?? null), !sections || section === 'clickable', bool(a, 'main'), !sections || section === 'images'];
+      const args = [JSON.stringify(str(a, 'scope') ?? null), !sections || section === 'clickable', str(a, 'frame') ? a.main === true : bool(a, 'main'), !sections || section === 'images'];
       const r = await runtimeEval(session, `(() => { const kd = ${PAGE_LIB}; return kd.snapshot(${args.join(', ')}); })()`, { returnByValue: true, awaitPromise: false, timeoutMs: 15_000 });
       if (!r.ok) return failResult(r.text);
       if ((r.value as { error?: string }).error) return failResult((r.value as { error: string }).error);
@@ -255,11 +306,20 @@ export const pageTools: McpTool[] = [
       body: { type: 'string', description: 'Only requests whose decoded request body or recorded response body contains this text (case-insensitive).' },
       sinceMark: { type: 'string', description: 'Only requests after the named browser_network_mark.' },
       pendingOver: { type: 'integer', description: 'Only requests still pending after more than this many ms; shows their age.' },
+      method: { type: 'string', description: 'Only this HTTP method, e.g. POST or OPTIONS (preflights).' },
+      frame: { type: 'string', description: 'Only requests made by this cross-origin iframe: its number (see browser_tabs frames=true) or part of its URL.' },
     }),
     async run(a, ctx) {
       const tab = await resolveTab(ctx, a);
       const logs = ctx.service.logs(tab);
       if (!logs) return failResult(`Unknown tab: ${tab}`);
+      const method = str(a, 'method')?.toUpperCase();
+      const frameRef = str(a, 'frame');
+      let frameNeedle: string | undefined;
+      if (frameRef) {
+        const frames = ctx.service.tabs().frames(tab);
+        frameNeedle = (/^\d+$/.test(frameRef) ? frames[Number(frameRef) - 1]?.url : undefined) ?? frameRef;
+      }
       const url = str(a, 'url');
       const type = str(a, 'type');
       const markName = str(a, 'sinceMark');
@@ -277,6 +337,8 @@ export const pageTools: McpTool[] = [
         filter: { ...(url ? { text: url } : {}), ...(type ? { type } : {}), ...(num(a, 'status') !== undefined ? { status: num(a, 'status')! } : {}), ...(bool(a, 'failedOnly') ? { failed: true } : {}) },
       });
       if (pendingOver !== undefined) all = all.filter((e) => !e.done && now - (e.startedAt ?? now) > pendingOver);
+      if (method) all = all.filter((e) => e.method.toUpperCase() === method);
+      if (frameNeedle) all = all.filter((e) => e.frame?.toLowerCase().includes(frameNeedle!.toLowerCase()));
       if (bodyText) {
         all = all.filter((e) => {
           const r = rec(e.id);
@@ -289,29 +351,32 @@ export const pageTools: McpTool[] = [
       let hidden = 0;
       if (compact) {
         const before = all.length;
-        all = all.filter((e) => e.failed || (e.status ?? 0) >= 400 || !e.type || !STATIC_TYPES.has(e.type.toLowerCase()));
+        all = all.filter((e) => e.failed || (e.status ?? 0) >= 400 || (e.method !== 'OPTIONS' && (!e.type || !STATIC_TYPES.has(e.type.toLowerCase()))));
         hidden = before - all.length;
       }
-      if (!all.length) return textResult(hidden ? `No matching requests (${hidden} static hidden).` : 'No matching requests.');
+      if (!all.length) return textResult(hidden ? `No matching requests (${hidden} static or preflight hidden).` : 'No matching requests.');
       const offset = Math.max(num(a, 'offset') ?? 0, 0);
       const limit = Math.max(num(a, 'limit') ?? 50, 1);
       const page = all.slice(offset, offset + limit);
       const lines = page.map((e) => {
         const ops = summarizeRequest({ url: e.url, postData: rec(e.id)?.postData });
         const age = !e.done && e.startedAt !== undefined ? `  pending ${Math.round((now - e.startedAt) / 1000)}s` : '';
-        return `#${e.id} ${e.method} ${e.status ?? (e.failed ? 'FAILED' : '...')} ${e.type ?? ''} ${compact ? compactUrl(e.url) : e.url}${e.failed ? `  (${e.failed})` : ''}${e.fromCache ? '  (cache)' : ''}${e.frame ? `  {${e.frame}}` : ''}${e.timing !== undefined ? `  ${Math.round(e.timing)}ms` : ''}${age}${ops ? `  | ${ops}` : ''}`;
+        return `#${e.id} ${e.method} ${e.status ?? (e.failed ? 'FAILED' : '...')} ${e.type ?? ''} ${compact ? compactUrl(e.url) : e.url}${e.failed ? `  (${e.failed})` : ''}${e.fromCache ? '  (cache)' : ''}${e.frame ? `  {${frameLabel(e.frame)}}` : ''}${e.timing !== undefined ? `  ${Math.round(e.timing)}ms` : ''}${age}${ops ? `  | ${ops}` : ''}`;
       });
-      const more = offset + page.length < all.length ? `\n... ${all.length - offset - page.length} more; pass offset=${offset + page.length}` : '';
-      const note = hidden ? `\n(${hidden} static requests hidden by compact)` : '';
+      const more = offset + page.length < all.length ? `\n... ${all.length - offset - page.length} more (${all.length} matching); pass offset=${offset + page.length}` : '';
+      const note = hidden ? `\n(${hidden} static or preflight requests hidden by compact)` : '';
       return textResult(`${lines.join('\n')}${more}${note}`, `Pass a smaller limit or offset=${offset + page.length}.`);
     },
   },
   {
     name: 'browser_network_detail',
-    description: 'Headers, request body and response body of one request from browser_network. Bodies of requests from before a navigation are kept (preserve logs on), capped per body.',
+    description: 'Headers, request body and response body of one request from browser_network. Credential headers (authorization, cookie, set-cookie) show only their length; browser boilerplate headers (sec-*, user-agent, ...) are counted, not listed, unless allHeaders=true. select returns only a JSON path of the body. Bodies of requests from before a navigation are kept (preserve logs on), capped per body.',
     inputSchema: schema(
       {
         id: { type: 'integer', description: 'Request id from browser_network.' },
+        headers: { type: 'boolean', description: 'Default true; false leaves out the request and response headers.' },
+        allHeaders: { type: 'boolean', description: 'Also list the browser boilerplate headers (sec-*, user-agent, accept-*, ...).' },
+        select: { type: 'string', description: 'Response body: JSON path to return instead of the body, e.g. $.testRunItems[0].id (body must be JSON).' },
         decoded: { type: 'boolean', description: 'Default true: url-decoded, indented request body and the list of RPC operations.' },
         bodyOffset: { type: 'integer', description: 'Response body: first character to show, default 0.' },
         bodyLimit: { type: 'integer', description: `Response body: characters to show, default ${BODY_SLICE}, max ${BODY_SLICE_MAX}.` },
@@ -337,8 +402,7 @@ export const pageTools: McpTool[] = [
         await writeFile(file, data);
         return textResult(`Saved response body of #${a.id} (${d.mime ?? 'unknown type'}, ${typeof data === 'string' ? Buffer.byteLength(data) : data.length} bytes) to ${file}`);
       }
-      const headers = (h: Record<string, string>) => Object.entries(h).map(([k, v]) => `${k}: ${v}`).join('\n');
-      const parts = [`Request headers:\n${headers(d.requestHeaders)}`, `Response headers:\n${headers(d.responseHeaders)}`];
+      const parts = a.headers === false ? [] : [`Request headers:\n${headerLines(d.requestHeaders, bool(a, 'allHeaders'))}`, `Response headers:\n${headerLines(d.responseHeaders, bool(a, 'allHeaders'))}`];
       if (d.postData) {
         if (a.decoded === false) parts.push(`Request body:\n${d.postData}`);
         else {
@@ -352,7 +416,21 @@ export const pageTools: McpTool[] = [
       }
       if (d.body !== undefined) {
         if (d.base64) parts.push(`Response body: binary ${d.mime ?? 'unknown type'}, ${d.bodyBytes ?? Math.floor((d.body.length * 3) / 4)} bytes${d.truncated ? ' (cut)' : ''}; not shown, pass saveBody=true to write it to a file`);
-        else parts.push(sliceBody(d.body, d.truncated ? ' (truncated by the app)' : '', num(a, 'bodyOffset') ?? 0, num(a, 'bodyLimit') ?? BODY_SLICE, str(a, 'grep')));
+        else {
+          let body = d.body;
+          let note = d.truncated ? ' (truncated by the app)' : '';
+          const select = str(a, 'select');
+          if (select) {
+            try {
+              const picked = jsonPick(JSON.parse(body), select);
+              body = picked === undefined ? `(no value at ${select})` : typeof picked === 'string' ? picked : JSON.stringify(picked, null, 2);
+              note += ` at ${select}`;
+            } catch {
+              parts.push('(body is not valid JSON; select ignored)');
+            }
+          }
+          parts.push(sliceBody(body, note, num(a, 'bodyOffset') ?? 0, num(a, 'bodyLimit') ?? BODY_SLICE, str(a, 'grep')));
+        }
       }
       if (d.blockedCookies?.length) parts.push(`Blocked cookies:\n${d.blockedCookies.join('\n')}`);
       if (d.frames) {
@@ -411,6 +489,7 @@ export const pageTools: McpTool[] = [
       awaitPromise: { type: 'boolean', description: 'Wait for a returned promise, default true.' },
       timeoutMs: { type: 'integer', description: 'Default 10000.' },
       saveTo: { type: 'string', description: 'Absolute file path: write the whole result there and return only its path and size.' },
+      frame: FRAME,
     }, ['expression']),
     async run(a, ctx) {
       const { session } = await pageSession(ctx, a);
@@ -433,7 +512,9 @@ export const pageTools: McpTool[] = [
       text: { type: 'string' },
       gone: { type: 'boolean', description: 'Wait until the text or selector is no longer visible.' },
       idle: { type: 'boolean', description: 'Wait until no XHR/fetch is pending for 500ms.' },
+      ignore: { type: 'string', description: 'With idle: URL text of requests that do not count as pending (pollers, long polls); comma separated.' },
       timeoutMs: { type: 'integer', description: 'Default 10000, at most 60000.' },
+      frame: FRAME,
     }),
     async run(a, ctx) {
       const { tab, session } = await pageSession(ctx, a);
@@ -447,7 +528,9 @@ export const pageTools: McpTool[] = [
         ? `(() => { try { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; if (!${gone}) return true; const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; } catch (e) { return false; } })()`
         : `(document.body?.innerText ?? '').includes(${JSON.stringify(text)})`;
       const logs = ctx.service.logs(tab);
-      const pending = () => (logs ? logs.network.entries().filter((e) => !e.done && !e.failed && /^(xhr|fetch)$/i.test(e.type ?? '') && Date.now() - (e.startedAt ?? Date.now()) < 30_000).length : 0);
+      const ignore = (str(a, 'ignore') ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+      const pendingList = () => (logs ? logs.network.entries().filter((e) => !e.done && !e.failed && /^(xhr|fetch)$/i.test(e.type ?? '') && Date.now() - (e.startedAt ?? Date.now()) < 30_000 && !ignore.some((x) => e.url.toLowerCase().includes(x))) : []);
+      const pending = () => pendingList().length;
       const timeout = Math.min(num(a, 'timeoutMs') ?? 10_000, 60_000);
       const deadline = Date.now() + timeout;
       let quietSince = 0;
@@ -464,7 +547,10 @@ export const pageTools: McpTool[] = [
             if (Date.now() - quietSince >= 500) return textResult(`${selector || text ? `${what} ${gone ? 'gone' : 'found'}; ` : ''}network idle`);
           } else quietSince = 0;
         } else if (conditionMet) return textResult(gone ? `Gone: ${what}` : `Found ${what}`);
-        if (Date.now() >= deadline) return failResult(`Timed out after ${timeout}ms waiting for ${conditionMet ? 'network idle' : `${what}${gone ? ' to disappear' : ''}`}`);
+        if (Date.now() >= deadline) {
+          const still = conditionMet && idle ? pendingList().slice(0, 3).map((e) => `${e.method} ${compactUrl(e.url).slice(0, 100)}`) : [];
+          return failResult(`Timed out after ${timeout}ms waiting for ${conditionMet ? 'network idle' : `${what}${gone ? ' to disappear' : ''}`}${still.length ? `. Still pending: ${still.join(' | ')}; pass ignore=<url text> to skip pollers` : ''}`);
+        }
         await new Promise((res) => setTimeout(res, 150));
       }
     },

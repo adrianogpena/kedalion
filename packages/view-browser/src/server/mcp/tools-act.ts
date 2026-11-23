@@ -130,13 +130,17 @@ async function withEffect(session: CdpSession, tab: string, ctx: ToolContext, ac
   const before = await texts();
   const net0 = logs ? lastId(logs.network.entries()) : 0;
   const con0 = logs ? lastId(logs.console.entries()) : 0;
+  const tabs0 = new Set(ctx.service.tabs().list().map((t) => t.id));
   const head = await action();
   await sleep(350);
+  const opened = ctx.service.tabs().list().filter((t) => !tabs0.has(t.id));
+  const active = ctx.service.activeTab();
   const after = await texts();
   const focus = ((await page(session, 'kd.focusInfo()').catch(() => '')) as string) || '';
   const requests = logs ? logs.network.entries().filter((e) => e.id > net0).length : 0;
   const errors = logs ? logs.console.entries().filter((e) => e.id > con0 && e.level === 'error').map((e) => e.text) : [];
-  return `${head}\n${formatEffect({ focus, diff: diffTexts(before, after), requests, errors })}`;
+  const newTabs = opened.map((t) => `New tab ${t.id}${t.id === active ? ' (now the active tab)' : ''}: ${t.url || '(loading)'}`);
+  return [head, formatEffect({ focus, diff: diffTexts(before, after), requests, errors }), ...newTabs].join('\n');
 }
 
 const guard = (fn: McpTool['run']): McpTool['run'] => async (a, ctx) => {
@@ -172,8 +176,8 @@ export const actTools: McpTool[] = [
         const ref = await resolve(session, loc, 'click');
         const href = (await page(session, `(() => { const el = kd.byRef(${JSON.stringify(ref)}); const l = el && (el.closest('a[href]') || el.querySelector('a[href]')); return l ? l.href : null; })()`)) as string | null;
         if (!href || href.startsWith('javascript:')) return failResult(`${await nameOf(session, ref)} is not a link; click it without newTab.`);
-        const t = await ctx.service.open(href, { activate: false });
-        return textResult(`Opened ${href} in background tab ${t.id} (pass tab=${t.id} to work in it)`);
+        const { tab: t, reused } = await ctx.service.openManaged(href, { activate: false });
+        return textResult(`Opened ${href} in background tab ${t.id}${reused ? ' (tab limit reached: reused the least recently used unpinned tab)' : ''} (pass tab=${t.id} to work in it)`);
       }
       return textResult(
         await withEffect(session, tab, ctx, async () => {

@@ -100,7 +100,8 @@ export function renderSnapshot(s: PageSnapshot, options: number | RenderOptions 
     }
     const rest = all.length - from - lines.length;
     const next = from + lines.length;
-    sections.set(title, { lines, more: rest > 0 ? `... +${rest} more not shown; ${moreHint ?? `pass offset=${next}${cap === undefined ? '' : ' (limit sets the page size)'}`}` : '' });
+    const hint = lines.length === 0 && slice.length > 0 ? `the budget is used up, raise maxChars (now ${maxChars}) or pass section=${key}` : (moreHint ?? `pass offset=${next}${cap === undefined ? '' : ' (limit sets the page size)'}`);
+    sections.set(title, { lines, more: rest > 0 ? `... +${rest} more not shown; ${hint}` : '' });
   };
   add('headings', 'Headings', s.headings, heading);
   add('fields', 'Form fields', s.fields, field);

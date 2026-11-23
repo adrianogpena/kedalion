@@ -11,6 +11,8 @@ export interface BrowserSettings {
   agentTools: boolean;
   /** Address of a new tab. */
   home: string;
+  /** Most tabs the Claude browser tools keep open; at the limit they reuse an unpinned tab. */
+  maxTabs: number;
 }
 
 /** The part of the server settings the Browser view owns; the app's `Settings` extends it. */
@@ -18,7 +20,7 @@ export interface BrowserServerSettings {
   browser?: Partial<BrowserSettings>;
 }
 
-export const BROWSER_DEFAULTS: BrowserSettings = { executable: '', ignoreLocalCertErrors: false, hideAutomation: true, agentTools: true, home: 'about:blank' };
+export const BROWSER_DEFAULTS: BrowserSettings = { executable: '', ignoreLocalCertErrors: false, hideAutomation: true, agentTools: true, home: 'about:blank', maxTabs: 6 };
 
 export const BROWSER_SPEC: Record<string, FieldSpec> = {
   executable: 'string',
@@ -26,6 +28,7 @@ export const BROWSER_SPEC: Record<string, FieldSpec> = {
   hideAutomation: 'boolean',
   agentTools: 'boolean',
   home: 'string',
+  maxTabs: [1, 50],
 };
 
 /** A copy of `raw` when it is a well-formed `browser` group, else null. */
@@ -42,5 +45,6 @@ export function browserSettingsOf(s: BrowserServerSettings | undefined): Browser
     hideAutomation: typeof b.hideAutomation === 'boolean' ? b.hideAutomation : BROWSER_DEFAULTS.hideAutomation,
     agentTools: typeof b.agentTools === 'boolean' ? b.agentTools : BROWSER_DEFAULTS.agentTools,
     home: typeof b.home === 'string' && b.home ? b.home : BROWSER_DEFAULTS.home,
+    maxTabs: typeof b.maxTabs === 'number' && Number.isInteger(b.maxTabs) && b.maxTabs >= 1 ? b.maxTabs : BROWSER_DEFAULTS.maxTabs,
   };
 }

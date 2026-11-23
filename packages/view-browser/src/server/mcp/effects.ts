@@ -33,6 +33,13 @@ const list = (label: string, items: string[], cap: number) => {
   return `${label}: ${shown.join(', ')}${items.length > cap ? ` (+${items.length - cap} more)` : ''}`;
 };
 
+/** Identical messages folded into [text, count], first occurrence order. */
+const dedupe = (items: string[]): Array<[string, number]> => {
+  const counts = new Map<string, number>();
+  for (const t of items) counts.set(t, (counts.get(t) ?? 0) + 1);
+  return [...counts];
+};
+
 /** Short text of what an action changed; each part is capped. */
 export function formatEffect(e: Effect, cap = 6): string {
   const lines = [
@@ -40,7 +47,7 @@ export function formatEffect(e: Effect, cap = 6): string {
     list('Appeared', e.diff.appeared, cap),
     list('Disappeared', e.diff.disappeared, cap),
     `Requests started: ${e.requests}`,
-    e.errors.length ? `Console errors (${e.errors.length}): ${e.errors.slice(0, 3).map((t) => (t.length > 120 ? `${t.slice(0, 119)}...` : t)).join(' | ')}` : null,
+    e.errors.length ? `Console errors (${e.errors.length}): ${dedupe(e.errors).slice(0, 3).map(([t, n]) => `${t.length > 120 ? `${t.slice(0, 119)}...` : t}${n > 1 ? ` x${n}` : ''}`).join(' | ')}` : null,
   ];
   return lines.filter(Boolean).join('\n');
 }

@@ -29,6 +29,10 @@ export interface BrowserTabs {
   reload(id: string): Promise<void>;
   stop(id: string): Promise<void>;
   session(id: string): CdpSession;
+  /** Cross-origin iframes of the tab (each runs in its own target); `id` is the child session id. */
+  frames(id: string): { id: string; url: string }[];
+  /** Session of one iframe from `frames`; Runtime calls on it run inside that iframe. */
+  frameSession(id: string, frameId: string): CdpSession;
   active(): string | undefined;
   on(event: 'tab', cb: (tab: TabInfo) => void): () => void;
   on(event: 'closed' | 'activated', cb: (id: string) => void): () => void;
@@ -104,6 +108,7 @@ export async function createTabs(client: CdpClient, opts: TabsOptions = {}): Pro
       tabs.set(id, tab);
       bySession.set(sessionId, tab);
       const children = new Map<string, string>();
+      const childTargets = new Map<string, string>();
       const quiet = (m: string, params: object, sid: string) => client.send(m, params, sid).catch(() => undefined);
       const autoAttach = (sid: string) => quiet('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, sid);
       tab.cleanup = [
@@ -112,10 +117,19 @@ export async function createTabs(client: CdpClient, opts: TabsOptions = {}): Pro
           const child: string | undefined = p?.sessionId;
           if (!child || children.has(child)) return;
           children.set(child, `${p.targetInfo?.type ?? 'target'} ${p.targetInfo?.url ?? ''}`.trim());
+          if (p.targetInfo?.targetId) childTargets.set(child, p.targetInfo.targetId);
           void Promise.all([...CHILD_ENABLE.map((m) => quiet(m, {}, child)), autoAttach(child), p.waitingForDebugger ? quiet('Runtime.runIfWaitingForDebugger', {}, child) : undefined]);
         }),
         client.on('Target.detachedFromTarget', (p) => {
-          if (p?.sessionId) children.delete(p.sessionId);
+          if (p?.sessionId) {
+            children.delete(p.sessionId);
+            childTargets.delete(p.sessionId);
+          }
+        }),
+        // An iframe target is attached before it has its address; keep the label current.
+        client.on('Target.targetInfoChanged', (p) => {
+          const info = p?.targetInfo;
+          for (const [sid, tid] of childTargets) if (tid === info?.targetId && children.has(sid)) children.set(sid, `${info.type ?? 'target'} ${info.url ?? ''}`.trim());
         }),
       ];
       tab.children = children;
@@ -233,6 +247,11 @@ export async function createTabs(client: CdpClient, opts: TabsOptions = {}): Pro
       await client.send('Page.stopLoading', {}, get(id).sessionId);
     },
     session: (id) => client.session(get(id).sessionId),
+    frames: (id) => [...(get(id).children ?? [])].filter(([, label]) => label === 'iframe' || label.startsWith('iframe ')).map(([sid, label]) => ({ id: sid, url: label.slice('iframe '.length) })),
+    frameSession(id, frameId) {
+      if (!get(id).children?.has(frameId)) throw new Error(`Unknown iframe ${frameId} in tab ${id}`);
+      return client.session(frameId);
+    },
     on(event: TabsEvent, cb: (arg: any) => void) {
       handlers[event]!.add(cb);
       return () => {

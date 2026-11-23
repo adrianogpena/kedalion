@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { copyFile, link, readFile, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join, resolve, sep } from 'node:path';
@@ -115,6 +115,16 @@ export interface BrowserService {
   activeTab(): string | undefined;
   /** Opens a tab; `activate: false` keeps the current tab in front. */
   open(url?: string, opts?: { activate?: boolean }): Promise<TabInfo>;
+  /**
+   * Opens a tab for the Claude tools within the `maxTabs` limit: at the limit the least recently used unpinned tab
+   * loads the address instead (`reused`); throws when every tab is pinned.
+   */
+  openManaged(url?: string, opts?: { activate?: boolean }): Promise<{ tab: TabInfo; reused: boolean }>;
+  /** A pinned tab is in use by a test: `openManaged` never reuses it. */
+  pin(id: string, on: boolean): void;
+  isPinned(id: string): boolean;
+  /** Marks a tab as used now (for the least-recently-used choice). */
+  touch(id: string): void;
   close(id: string): Promise<void>;
   activate(id: string): Promise<void>;
   navigate(id: string, url: string): Promise<string | undefined>;
@@ -183,6 +193,8 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     for (const l of listeners) l(msg);
   };
   const tabsFile = join(opts.dataDir, 'tabs.json');
+  // Tabs do not outlive the app: the file only restores them after a browser crash within one run, and a hard exit (shutdown) leaves it behind.
+  rmSync(tabsFile, { force: true });
   const downloadsDir = join(homedir(), 'Downloads');
 
   let launched: LaunchedBrowser | undefined;
@@ -191,6 +203,9 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
   let starting: Promise<void> | undefined;
   let stopping = false;
   let offs: Array<() => void> = [];
+  const pinned = new Set<string>();
+  const lastUsed = new Map<string, number>();
+  let useClock = 0;
   const perTab = new Map<string, TabLogs & { offPage: () => void; interceptor: Interceptor }>();
   const emulations = new Map<string, Emulation>();
   let rules: InterceptRule[] = [];
@@ -277,6 +292,8 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     t.offPage();
     t.interceptor.dispose();
     perTab.delete(id);
+    pinned.delete(id);
+    lastUsed.delete(id);
     emulations.delete(id);
     for (const [k, v] of choosers) if (v.tab === id) choosers.delete(k);
     for (const [k, v] of selects) if (v.tab === id) selects.delete(k);
@@ -407,7 +424,38 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     activeTab: () => tabs?.active(),
     async open(url, o) {
       const target = url ?? opts.settings().home;
-      return openTab(requireTabs(), target, o?.activate ?? true);
+      const tab = await openTab(requireTabs(), target, o?.activate ?? true);
+      lastUsed.set(tab.id, ++useClock);
+      return tab;
+    },
+    async openManaged(url, o) {
+      const t = requireTabs();
+      const target = url ?? opts.settings().home;
+      const activate = o?.activate ?? true;
+      const list = t.list();
+      const max = opts.settings().maxTabs;
+      if (list.length < max) {
+        const tab = await openTab(t, target, activate);
+        lastUsed.set(tab.id, ++useClock);
+        return { tab, reused: false };
+      }
+      const free = list.filter((x) => !pinned.has(x.id)).sort((a, b) => (lastUsed.get(a.id) ?? 0) - (lastUsed.get(b.id) ?? 0));
+      const pick = free[0];
+      if (!pick) throw invalid('tabsPinned', `All ${list.length} tabs are pinned (limit ${max}). Unpin or close one with browser_tabs, then try again.`);
+      lastUsed.set(pick.id, ++useClock);
+      const error = await t.navigate(pick.id, target);
+      if (activate) await t.activate(pick.id);
+      if (error) throw invalid('badRequest', `Navigation failed in reused tab ${pick.id}: ${error}`);
+      return { tab: t.list().find((x) => x.id === pick.id) ?? pick, reused: true };
+    },
+    pin(id, on) {
+      requireTabs();
+      if (on) pinned.add(id);
+      else pinned.delete(id);
+    },
+    isPinned: (id) => pinned.has(id),
+    touch(id) {
+      if (tabs?.list().some((x) => x.id === id)) lastUsed.set(id, ++useClock);
     },
     close: (id) => requireTabs().close(id),
     async activate(id) {
@@ -568,12 +616,15 @@ export function createBrowserService(opts: BrowserServiceOptions): BrowserServic
     async stop() {
       stopping = true;
       clearTimeout(saveTimer);
-      await saveNow();
       const b = launched;
       const c = client;
+      const t = tabs;
+      if (t) await Promise.all(t.list().map((x) => t.close(x.id).catch(() => undefined)));
+      await unlink(tabsFile).catch(() => undefined);
       reset();
       c?.close();
       b?.kill();
+      if (b) await Promise.race([b.exited, Bun.sleep(2000)]);
     },
   };
   return service;

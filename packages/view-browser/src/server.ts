@@ -9,6 +9,8 @@ import { actTools } from './server/mcp/tools-act.ts';
 import { contentTools } from './server/mcp/tools-content.ts';
 import { pageTools } from './server/mcp/tools-page.ts';
 import { stateTools } from './server/mcp/tools-state.ts';
+import { jiraTools } from './server/mcp/tools-jira.ts';
+import { zephyrTools } from './server/mcp/tools-zephyr.ts';
 import { browserRoutes } from './server/routes.ts';
 import { type BrowserService, createBrowserService } from './server/service.ts';
 import { BROWSER_DEFAULTS, type BrowserServerSettings, type BrowserSettings, BROWSER_SPEC, browserSettingsOf, validBrowser } from './server/settings.ts';
@@ -40,7 +42,7 @@ export function browserServerView(opts: BrowserServerViewOptions) {
   const currentSecret = () => secret;
   const mcpFile = createMcpConfigFile({ dataDir: opts.dataDir, secret: currentSecret, origin: opts.origin });
   const debug = createDebugState();
-  const tools = [...pageTools, ...contentTools, ...actTools, ...stateTools, ...debugTools, ...stepTools];
+  const tools = [...pageTools, ...contentTools, ...actTools, ...stateTools, ...debugTools, ...stepTools, ...zephyrTools, ...jiraTools];
   const refresh = async () => {
     if (load) current = browserSettingsOf(await load().catch(() => ({})));
     if (current.agentTools) mcpFile.write();

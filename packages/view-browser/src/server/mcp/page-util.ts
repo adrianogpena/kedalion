@@ -1,5 +1,5 @@
 import type { CdpSession } from '@kedalion/cdp';
-import type { ToolArgs, ToolContext } from './types.ts';
+import type { ToolArgs, ToolContext, ToolProp } from './types.ts';
 
 export const EVAL_TIMEOUT_MS = 10_000;
 export const PAUSED_MESSAGE = 'page is paused at a breakpoint; use browser_debugger_eval or browser_debugger_step';
@@ -23,17 +23,59 @@ export async function resolveTab(ctx: ToolContext, args: ToolArgs): Promise<stri
   const tabs = ctx.service.tabs().list();
   if (wanted) {
     if (!tabs.some((t) => t.id === wanted)) throw new Error(`Unknown tab: ${wanted}. Use browser_tabs to list the tabs.`);
+    ctx.service.touch(wanted);
     return wanted;
   }
   const active = ctx.service.activeTab();
   if (!active) throw new Error('No tab is open. Use browser_open to open one.');
+  ctx.service.touch(active);
   return active;
 }
 
-/** A page tab ready for a Runtime call: throws while the page is paused at a breakpoint. */
+export const FRAME: ToolProp = {
+  type: 'string',
+  description: 'Read inside a cross-origin iframe of the tab instead of the page: its number (1, 2, ..., see browser_tabs frames=true) or part of its URL.',
+};
+
+/** Short label of an iframe address: host prefix and last path segment without the long `_ctx_` token, e.g. `1449cqy…/test-library-1`. */
+export function shortFrameUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const seg = u.pathname.split('/').filter((x) => x && !x.startsWith('_ctx_'));
+    const host = u.host.split('.')[0]!.split('-')[0]!;
+    return `${host.slice(0, 10)}…/${seg.at(-1) ?? ''}${u.hash ? u.hash.slice(0, 30) : ''}`;
+  } catch {
+    return url.length > 60 ? `${url.slice(0, 59)}…` : url;
+  }
+}
+
+/** A value of `value` at a JSON path like `$.a.b[0].c`; undefined when absent. */
+export function jsonPick(value: unknown, path: string): unknown {
+  const parts = [...path.replace(/^\$\.?/, '').matchAll(/([^.[\]]+)|\[(\d+)\]/g)].map((m) => (m[2] !== undefined ? Number(m[2]) : m[1]!));
+  let cur: unknown = value;
+  for (const part of parts) {
+    if (cur === null || typeof cur !== 'object') return undefined;
+    cur = (cur as Record<string | number, unknown>)[part];
+  }
+  return cur;
+}
+
+/** The cross-origin iframe of `tab` named by `ref` (1-based number or URL part). */
+export function resolveFrame(ctx: ToolContext, tab: string, ref: string): { id: string; url: string } {
+  const frames = ctx.service.tabs().frames(tab);
+  const list = frames.length ? frames.map((f, i) => `${i + 1}. ${shortFrameUrl(f.url)}`).join('\n') : 'none';
+  const byNumber = /^\d+$/.test(ref) ? frames[Number(ref) - 1] : undefined;
+  const hits = byNumber ? [byNumber] : frames.filter((f) => f.url.toLowerCase().includes(ref.toLowerCase()));
+  if (hits.length !== 1) throw new Error(`${hits.length ? 'Several iframes match' : 'No iframe matches'} "${ref}". Cross-origin iframes of tab ${tab}:\n${list}`);
+  return hits[0]!;
+}
+
+/** A page tab ready for a Runtime call (inside the iframe given as `frame`): throws while the page is paused at a breakpoint. */
 export async function pageSession(ctx: ToolContext, args: ToolArgs): Promise<{ tab: string; session: CdpSession }> {
   const tab = await resolveTab(ctx, args);
   if (ctx.debug.paused(tab)) throw new Error(PAUSED_MESSAGE);
+  const frame = str(args, 'frame');
+  if (frame) return { tab, session: ctx.service.tabs().frameSession(tab, resolveFrame(ctx, tab, frame).id) };
   return { tab, session: ctx.service.tabs().session(tab) };
 }
 

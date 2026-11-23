@@ -26,7 +26,7 @@ function setup() {
   const fake = fakeSession();
   const debug = createDebugState();
   const ctx = {
-    service: { tabs: () => ({ list: () => [{ id: 't1' }], session: () => fake.session }), activeTab: () => 't1' },
+    service: { tabs: () => ({ list: () => [{ id: 't1' }], session: () => fake.session }), activeTab: () => 't1', touch: () => undefined },
     ready: async () => undefined,
     dataDir: '.',
     debug,

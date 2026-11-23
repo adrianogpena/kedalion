@@ -1,9 +1,9 @@
 import type { CdpSession } from '@kedalion/cdp';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { PAGE_LIB } from './page-lib.ts';
-import { bool, num, pageSession, resolveTab, runtimeEval, str, withTimeout } from './page-util.ts';
+import { bool, FRAME, num, pageSession, resolveTab, runtimeEval, str, withTimeout } from './page-util.ts';
 import { fileNameFor, loadResource, toPng, uniqueFile, writeOutput } from './resource.ts';
 import { challengeNote, type PageImages } from './snapshot.ts';
 import { loadReport } from './tools-page.ts';
@@ -16,7 +16,7 @@ const schema = (properties: Record<string, ToolProp>, required: string[] = []): 
   ...(required.length ? { required } : {}),
 });
 const CONTENT: Record<string, ToolProp> = {
-  main: { type: 'boolean', description: 'Only the main content (article, main, wiki body), default true.' },
+  main: { type: 'boolean', description: 'Only the main content (article, main, wiki body), default true (inside a frame: false, the whole frame).' },
   scope: { type: 'string', description: 'CSS selector or text of the container to use instead of the main content.' },
 };
 
@@ -32,7 +32,8 @@ async function kdCall<T>(session: CdpSession, expr: string, timeoutMs = 15_000):
 
 const rootArgs = (a: ToolArgs) => {
   const scope = str(a, 'scope');
-  return `${JSON.stringify(scope ?? null)}, ${scope ? false : a.main !== false}`;
+  const main = str(a, 'frame') ? a.main === true : a.main !== false;
+  return `${JSON.stringify(scope ?? null)}, ${scope ? false : main}`;
 };
 
 const guard = (fn: McpTool['run']): McpTool['run'] => async (a, ctx) => {
@@ -135,6 +136,7 @@ export const contentTools: McpTool[] = [
       'The page content as Markdown: headings, paragraphs, lists, tables (as Markdown tables), links and images (![alt](real source)). Default the main content only (article, wiki body), without navigation. Long pages are paged with offset; saveTo writes the whole Markdown to a file.',
     inputSchema: schema({
       ...CONTENT,
+      frame: FRAME,
       maxChars: { type: 'integer', description: 'Characters to return, default 12000, at most 19000.' },
       offset: { type: 'integer', description: 'First character to return, default 0.' },
       saveTo: { type: 'string', description: 'Absolute file path: write the whole Markdown there and return only its path and size.' },
@@ -246,13 +248,15 @@ export const contentTools: McpTool[] = [
   {
     name: 'browser_crawl',
     description:
-      'Follow the links of a site and save each page as Markdown (main content, tables kept) in a folder, with an index.md; images=true also saves each page\'s images and points the Markdown at the local files. Starts at url (default the current page), follows links matching pattern (default the start page\'s folder) up to depth and maxPages, waiting delayMs between pages, in its own background tab. Stops at a bot check and says so.',
+      'Follow the links of a site and save each page as Markdown (main content, tables kept) in a folder, with an index.md; images=true also saves each page\'s images and points the Markdown at the local files. Starts at url (default the current page), follows links matching pattern (default the start page\'s folder) up to depth and maxPages, waiting delayMs between pages, in its own background tab. Stops at a bot check, after maxSeconds or after maxMb, and says so; failures and skipped links are listed with a reason, and the saved files are checked on disk.',
     inputSchema: schema({
       url: { type: 'string', description: 'Start page, default the current page of the tab.' },
       pattern: { type: 'string', description: 'Links to follow: a URL or path prefix, * matches anything (e.g. /wiki/*). Default the folder of the start page.' },
       maxPages: { type: 'integer', description: 'Most pages to save, default 20, at most 300.' },
       depth: { type: 'integer', description: 'Link hops from the start page, default 2.' },
       delayMs: { type: 'integer', description: 'Pause between pages, default 800, at least 250.' },
+      maxSeconds: { type: 'integer', description: 'Wall-clock budget, default 300, at most 1800; the crawl stops after the page in progress.' },
+      maxMb: { type: 'integer', description: 'Size budget for the saved Markdown and images, default 50, at most 500.' },
       images: { type: 'boolean', description: 'Also save the images of each page (images/ folder).' },
       ...CONTENT,
       dir: { type: 'string', description: 'Absolute folder to save into; default Downloads/kedalion/<host>/crawl-<time>.' },
@@ -266,11 +270,27 @@ export const contentTools: McpTool[] = [
       const maxPages = Math.min(Math.max(num(a, 'maxPages') ?? 20, 1), 300);
       const depthMax = Math.min(Math.max(num(a, 'depth') ?? 2, 0), 10);
       const delay = Math.max(num(a, 'delayMs') ?? 800, 250);
+      const deadline = Date.now() + Math.min(Math.max(num(a, 'maxSeconds') ?? 300, 10), 1800) * 1000;
+      const byteBudget = Math.min(Math.max(num(a, 'maxMb') ?? 50, 1), 500) * 1_048_576;
+      let bytes = 0;
+      const saved: string[] = [];
+      const skipped = { outsidePattern: 0, notAPage: 0, alreadySeen: 0, depthLimit: 0 };
+      const why = (e: string): string => {
+        if (/timed? ?out|timeout/i.test(e)) return `timeout (${e})`;
+        if (/ERR_NAME_NOT_RESOLVED|ENOTFOUND/i.test(e)) return `host not found (${e})`;
+        if (/ERR_CONNECTION|ECONN|refused/i.test(e)) return `connection refused or reset (${e})`;
+        if (/ERR_CERT|SSL|certificate/i.test(e)) return `certificate error (${e})`;
+        return e;
+      };
+      const httpWhy = (code: number): string =>
+        code === 401 ? 'HTTP 401 login required' : code === 403 ? 'HTTP 403 forbidden (login, robots or bot protection)' : code === 404 ? 'HTTP 404 not found' : code === 429 ? 'HTTP 429 rate limited: raise delayMs' : code >= 500 ? `HTTP ${code} server error` : `HTTP ${code}`;
       const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
       const dir = str(a, 'dir') ?? defaultDir(start, `crawl-${stamp}`);
       const imgDir = join(dir, 'images');
       await mkdir(dir, { recursive: true });
-      const tab = (await ctx.service.open('about:blank', { activate: false })).id;
+      const opened = await ctx.service.openManaged('about:blank', { activate: false });
+      const tab = opened.tab.id;
+      ctx.service.pin(tab, true);
       const session = ctx.service.tabs().session(tab);
       const queue: Array<{ url: string; depth: number }> = [{ url: start, depth: 0 }];
       const seen = new Set([pageKey(start)]);
@@ -280,12 +300,20 @@ export const contentTools: McpTool[] = [
       let stopped = '';
       try {
         while (queue.length && index.length < maxPages) {
+          if (Date.now() > deadline) {
+            stopped = 'Stopped: the maxSeconds budget ran out; saved pages are kept.';
+            break;
+          }
+          if (bytes > byteBudget) {
+            stopped = 'Stopped: the maxMb budget was reached; saved pages are kept.';
+            break;
+          }
           const { url, depth } = queue.shift()!;
           if (index.length || failures.length) await sleep(delay);
           const since = ctx.service.logs(tab)?.network.entries({ limit: 1 }).at(-1)?.id ?? 0;
           const navError = await ctx.service.navigate(tab, url);
           if (navError) {
-            failures.push(`${url}: ${navError}`);
+            failures.push(`${url}: ${why(navError)}`);
             continue;
           }
           const report = await loadReport(ctx, tab, since, 30_000);
@@ -295,7 +323,7 @@ export const contentTools: McpTool[] = [
           }
           const status = /Status: (\d+)/.exec(report)?.[1];
           if (status && Number(status) >= 400) {
-            failures.push(`${url}: HTTP ${status}`);
+            failures.push(`${url}: ${httpWhy(Number(status))}`);
             continue;
           }
           const md = await kdCall<Markdown>(session, `kd.markdown(${rootArgs(a)})`);
@@ -307,28 +335,48 @@ export const contentTools: McpTool[] = [
           if (bool(a, 'images')) {
             const list = await kdCall<PageImages>(session, `kd.images(${rootArgs(a)})`).catch(() => ({ images: [], sprites: [] }) as PageImages);
             const wanted = [...new Set(list.images.map((i) => i.src))].filter((u) => /^https?:/i.test(u) && !imageFiles.has(u));
-            for (const s of await downloadAll(session, tab, wanted, imgDir, false)) if (s.path) imageFiles.set(s.url, relative(dir, s.path).replace(/\\/g, '/'));
+            for (const s of await downloadAll(session, tab, wanted, imgDir, false))
+              if (s.path) {
+                imageFiles.set(s.url, relative(dir, s.path).replace(/\\/g, '/'));
+                saved.push(s.path);
+                bytes += s.bytes ?? 0;
+              }
             text = text.replace(/\]\((https?:[^)\s]+)\)/g, (m, u: string) => (imageFiles.has(u) ? `](${imageFiles.get(u)})` : m));
           }
           const file = `${String(index.length + 1).padStart(3, '0')}-${slug(md.title.replace(/\s+[-|–]\s+[^-|–]+$/, ''))}.md`;
-          await writeFile(join(dir, file), `# ${md.title}\n\nSource: ${md.url}\n\n${text}\n`);
+          const body = `# ${md.title}\n\nSource: ${md.url}\n\n${text}\n`;
+          await writeFile(join(dir, file), body);
+          saved.push(join(dir, file));
+          bytes += Buffer.byteLength(body);
           index.push(`- [${md.title.replace(/[[\]]/g, '')}](${file}) — ${md.url}`);
-          if (depth >= depthMax) continue;
           const links = await kdCall<string[]>(session, `[...document.querySelectorAll('a[href]')].map((x) => x.href)`);
           for (const l of links) {
             const key = pageKey(l);
-            if (seen.has(key) || !/^https?:/i.test(key) || NOT_PAGE.test(new URL(key).pathname) || !matchesPattern(key, pattern)) continue;
-            seen.add(key);
-            queue.push({ url: key, depth: depth + 1 });
+            if (!/^https?:/i.test(key)) continue;
+            if (seen.has(key)) skipped.alreadySeen++;
+            else if (NOT_PAGE.test(new URL(key).pathname)) skipped.notAPage++;
+            else if (!matchesPattern(key, pattern)) skipped.outsidePattern++;
+            else if (depth >= depthMax) skipped.depthLimit++;
+            else {
+              seen.add(key);
+              queue.push({ url: key, depth: depth + 1 });
+            }
           }
         }
       } finally {
-        if (!stopped) await ctx.service.close(tab).catch(() => undefined);
+        if (!stopped) {
+          ctx.service.pin(tab, false);
+          if (!opened.reused) await ctx.service.close(tab).catch(() => undefined);
+        }
       }
       await writeFile(join(dir, 'index.md'), `# Crawl of ${start}\n\nPattern: ${pattern}\n\n${index.join('\n')}\n${failures.length ? `\n## Failed\n\n${failures.map((f) => `- ${f}`).join('\n')}\n` : ''}`);
+      let onDisk = 0;
+      let missing = 0;
+      for (const f of saved) (await stat(f).then((x) => x.size > 0, () => false)) ? onDisk++ : missing++;
+      const skippedNote = Object.entries(skipped).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(', ');
       const left = queue.length ? `; ${queue.length} matching links not visited (raise maxPages or depth)` : '';
       return textResult(
-        `${index.length} pages saved in ${dir} (index.md)${bool(a, 'images') ? `, ${imageFiles.size} images in images/` : ''}${left}. Pattern: ${pattern}${failures.length ? `\nFailed (${failures.length}):\n${failures.slice(0, 20).join('\n')}` : ''}${stopped ? `\n${stopped}` : ''}`,
+        `${index.length} pages saved in ${dir} (index.md)${bool(a, 'images') ? `, ${imageFiles.size} images in images/` : ''}${left}. Pattern: ${pattern}\nVerified on disk: ${onDisk} of ${saved.length} files (${(bytes / 1_048_576).toFixed(1)} MB)${missing ? `, ${missing} MISSING or empty` : ''}${skippedNote ? `\nLinks skipped: ${skippedNote}` : ''}${failures.length ? `\nFailed (${failures.length}):\n${failures.slice(0, 20).join('\n')}` : ''}${stopped ? `\n${stopped}` : ''}`,
       );
     }),
   },

@@ -20,6 +20,6 @@ test('validBrowser rejects wrong types and unknown keys', () => {
 });
 
 test('browserSettingsOf fills defaults', () => {
-  expect(browserSettingsOf(undefined)).toEqual({ executable: '', ignoreLocalCertErrors: false, hideAutomation: true, agentTools: true, home: 'about:blank' });
+  expect(browserSettingsOf(undefined)).toEqual({ executable: '', ignoreLocalCertErrors: false, hideAutomation: true, agentTools: true, home: 'about:blank', maxTabs: 6 });
   expect(browserSettingsOf({ browser: { home: '' } }).home).toBe('about:blank');
 });
