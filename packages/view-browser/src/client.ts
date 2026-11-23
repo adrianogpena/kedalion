@@ -19,6 +19,8 @@ export interface BrowserClient {
   removeStorageItem: (tab: string, kind: StoreKind, key: string) => Promise<unknown>;
   clearStorage: (tab: string, kind: StoreKind) => Promise<unknown>;
   clearSiteData: (tab: string, cache: boolean) => Promise<unknown>;
+  favorites: () => Promise<{ favorites: string[] | null }>;
+  setFavorites: (favorites: string[]) => Promise<unknown>;
   rules: () => Promise<{ rules: InterceptRule[] }>;
   setRules: (rules: InterceptRule[]) => Promise<{ rules: InterceptRule[] }>;
   emulation: (tab: string) => Promise<{ emulation: Emulation }>;
@@ -77,6 +79,8 @@ export const browserClient: BrowserClient = {
   removeStorageItem: (tab, kind, key) => request('POST', '/api/browser/storage/remove', {}, { tab, kind, key }),
   clearStorage: (tab, kind) => request('POST', '/api/browser/storage/clear', {}, { tab, kind }),
   clearSiteData: (tab, cache) => request('POST', '/api/browser/site-data/clear', {}, { tab, cache }),
+  favorites: () => request<{ favorites: string[] | null }>('GET', '/api/browser/favorites'),
+  setFavorites: (favorites) => request('POST', '/api/browser/favorites', {}, { favorites }),
   rules: () => request<{ rules: InterceptRule[] }>('GET', '/api/browser/rules'),
   setRules: (rules) => request<{ rules: InterceptRule[] }>('POST', '/api/browser/rules', {}, { rules }),
   emulation: (tab) => request<{ emulation: Emulation }>('GET', `/api/browser/emulation?tab=${encodeURIComponent(tab)}`),

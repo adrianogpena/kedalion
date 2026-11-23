@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Emulation, InterceptRule } from '@kedalion/cdp';
 import { openExternal } from '@kedalion/platform';
 import { invalid, type Routes } from '@kedalion/server-core';
@@ -24,9 +26,11 @@ export interface BrowserRouteOptions {
   mcpConfig(): unknown;
   /** Replaces the MCP bearer secret and rewrites `mcp.json`; the old secret stops working. */
   regenerateSecret(): void;
+  /** Folder of the view's own files; favorites live in `favorites.json` there. */
+  dataDir: string;
 }
 
-export function browserRoutes({ service, ready, issueTicket, mcpConfig, regenerateSecret }: BrowserRouteOptions): Routes {
+export function browserRoutes({ service, ready, issueTicket, mcpConfig, regenerateSecret, dataDir }: BrowserRouteOptions): Routes {
   const tabList = () => ({ tabs: service.tabs().list(), active: service.activeTab() ?? null });
   const logsOf = (tab: string) => {
     const l = service.logs(tab);
@@ -206,6 +210,22 @@ export function browserRoutes({ service, ready, issueTicket, mcpConfig, regenera
       const tab = str(b.tab);
       await ready();
       await service.clearSiteData(tab, b.cache === true);
+      return { ok: true };
+    },
+    'GET /api/browser/favorites': async () => {
+      const file = join(dataDir, 'favorites.json');
+      if (!existsSync(file)) return { favorites: null };
+      try {
+        const v: unknown = JSON.parse(readFileSync(file, 'utf8'));
+        return { favorites: Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [] };
+      } catch {
+        return { favorites: [] };
+      }
+    },
+    'POST /api/browser/favorites': async ({ json }) => {
+      const b = await json<{ favorites?: unknown }>();
+      if (!Array.isArray(b.favorites) || b.favorites.length > 500 || b.favorites.some((x) => typeof x !== 'string')) throw bad();
+      writeFileSync(join(dataDir, 'favorites.json'), JSON.stringify(b.favorites, null, 2));
       return { ok: true };
     },
     'GET /api/browser/rules': async () => {

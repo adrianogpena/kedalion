@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ContextMenu, copyNotify, IconButton } from '@kedalion/ui';
 import { normalizeAddress } from './address';
+import { browserApi } from './client';
 import { t } from './i18n';
 
 const KEY = 'kedalion.browser.favorites';
@@ -19,11 +20,7 @@ function load(): string[] {
 }
 
 function save(list: string[]) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(list));
-  } catch {
-    // Storage unavailable: the list lasts for this session only.
-  }
+  void browserApi.setFavorites(list).catch(() => {});
 }
 
 function hostOf(url: string): string {
@@ -36,7 +33,23 @@ function hostOf(url: string): string {
 
 /** Saved links shown on an empty tab; a click opens the link in that tab. */
 export function Favorites({ onOpen }: { onOpen: (url: string) => void }) {
-  const [list, setList] = useState(load);
+  const [list, setList] = useState<string[]>([]);
+  useEffect(() => {
+    let stale = false;
+    void browserApi
+      .favorites()
+      .then(({ favorites }) => {
+        if (stale) return;
+        if (favorites) return setList(favorites);
+        const old = load();
+        setList(old);
+        if (old.length) save(old);
+      })
+      .catch(() => !stale && setList(load()));
+    return () => {
+      stale = true;
+    };
+  }, []);
   const [draft, setDraft] = useState('');
 
   const update = (next: string[]) => {

@@ -28,6 +28,7 @@ export function BrowserScreen({ home }: { home: string }) {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [active, setActive] = useState<string | undefined>();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const urlInput = useRef<HTMLInputElement>(null);
   const pointer = useRef({ x: 0, y: 0 });
@@ -182,7 +183,15 @@ export function BrowserScreen({ home }: { home: string }) {
               title={x.url || label(x)}
               onClick={() => activate(x.id)}
               onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-              onAuxClick={(e) => e.button === 1 && close(x.id)}
+              onMouseUp={(e) => {
+                if (e.button !== 1) return;
+                e.preventDefault();
+                close(x.id);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setTabMenu({ x: e.clientX, y: e.clientY, id: x.id });
+              }}
             >
               <span className="tab-title">{label(x)}</span>
               <IconButton className="tab-close" icon="close" size="xs" label={t('browser.tab.close')} onClick={(e) => {
@@ -253,6 +262,24 @@ export function BrowserScreen({ home }: { home: string }) {
         {dockOpen && tab && devtoolsPosition === 'right' && dockPane}
       </div>
       <BrowserOverlays socket={socket} pointer={pointer} />
+      {tabMenu && (
+        <ContextMenu
+          at={tabMenu}
+          onClose={() => setTabMenu(null)}
+          items={(() => {
+            const i = tabs.findIndex((x) => x.id === tabMenu.id);
+            const target = tabs[i];
+            return [
+              { id: 'reload', label: t('browser.tab.reload'), icon: 'refresh', disabled: !target, run: () => void browserApi.navigate(tabMenu.id, { action: 'reload' }).catch(() => {}) },
+              { id: 'copy', label: t('browser.tab.copyUrl'), icon: 'copy', disabled: !target?.url, run: () => target && void copyNotify(target.url) },
+              'sep' as const,
+              { id: 'close', label: t('browser.tab.close'), icon: 'close', run: () => close(tabMenu.id) },
+              { id: 'others', label: t('browser.tab.closeOthers'), disabled: tabs.length < 2, run: () => tabs.filter((x) => x.id !== tabMenu.id).forEach((x) => close(x.id)) },
+              { id: 'right', label: t('browser.tab.closeRight'), disabled: i < 0 || i >= tabs.length - 1, run: () => tabs.slice(i + 1).forEach((x) => close(x.id)) },
+            ];
+          })()}
+        />
+      )}
       {menu && (
         <ContextMenu
           at={menu}

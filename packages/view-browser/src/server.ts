@@ -61,7 +61,7 @@ export function browserServerView(opts: BrowserServerViewOptions) {
     icon: 'globe',
     routes: (ctx) => {
       bind(ctx);
-      return browserRoutes({ service, ready, issueTicket: () => tickets.issue(true), mcpConfig: () => mcpFile.config(),
+      return browserRoutes({ dataDir: opts.dataDir, service, ready, issueTicket: () => tickets.issue(true), mcpConfig: () => mcpFile.config(),
         regenerateSecret: () => {
           secret = regenerateMcpSecret(opts.dataDir);
           if (current.agentTools) mcpFile.write();
