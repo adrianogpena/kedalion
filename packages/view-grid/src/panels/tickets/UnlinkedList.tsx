@@ -12,11 +12,15 @@ interface Props {
   unlinked: readonly UnlinkedKey[];
   tickets: readonly Ticket[];
   onAdd(key: string): void;
+  ignored: readonly string[];
+  onIgnore(key: string): void;
+  onRestore(key: string): void;
   onLink(key: string, ticketId: string): void;
 }
 
-export function UnlinkedList({ unlinked, tickets, onAdd, onLink }: Props) {
+export function UnlinkedList({ unlinked, tickets, ignored, onIgnore, onRestore, onAdd, onLink }: Props) {
   const [open, setOpen] = useState(true);
+  const [showIgnored, setShowIgnored] = useState(false);
   const [linking, setLinking] = useState<string | null>(null);
   const [choice, setChoice] = useState('');
   const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: ComponentProps<typeof ContextMenu>['items'] } | null>(null);
@@ -41,6 +45,7 @@ export function UnlinkedList({ unlinked, tickets, onAdd, onLink }: Props) {
                 items: [
                   { id: 'add', label: tKey('dash.tickets.unlinked.add'), icon: 'plus', run: () => onAdd(u.key) },
                   ...(tickets.length > 0 ? [{ id: 'link', label: tKey('dash.tickets.unlinked.link'), icon: 'link' as const, run: () => { setLinking(u.key); setChoice(''); } }] : []),
+                  { id: 'ignore', label: tKey('dash.tickets.unlinked.ignore'), icon: 'close' as const, run: () => onIgnore(u.key) },
                   'sep' as const,
                   { id: 'copy', label: tKey('dash.tickets.copyKey'), icon: 'copy' as const, run: () => void copyNotify(u.key) },
                 ],
@@ -52,6 +57,7 @@ export function UnlinkedList({ unlinked, tickets, onAdd, onLink }: Props) {
             <Button onClick={() => onAdd(u.key)}>
               <Icon name="plus" size={12} /> {tKey('dash.tickets.unlinked.add')}
             </Button>
+            <Button onClick={() => onIgnore(u.key)}>{tKey('dash.tickets.unlinked.ignore')}</Button>
             {tickets.length > 0 &&
               (linking === u.key ? (
                 <>
@@ -88,6 +94,20 @@ export function UnlinkedList({ unlinked, tickets, onAdd, onLink }: Props) {
               ))}
           </div>
         ))}
+      {open && ignored.length > 0 && (
+        <>
+          <Button variant="ghost" size="xs" aria-expanded={showIgnored} onClick={() => setShowIgnored(!showIgnored)}>
+            {tKey('dash.tickets.unlinked.ignored', { count: ignored.length })}
+          </Button>
+          {showIgnored &&
+            ignored.map((k) => (
+              <div key={k} className="tickets-unlinked-row">
+                <strong>{k}</strong>
+                <Button onClick={() => onRestore(k)}>{tKey('dash.tickets.unlinked.restore')}</Button>
+              </div>
+            ))}
+        </>
+      )}
     </section>
   );
 }

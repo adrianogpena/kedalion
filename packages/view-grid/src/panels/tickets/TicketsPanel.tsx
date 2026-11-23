@@ -142,6 +142,9 @@ export function TicketsPanel({ id, side, config, data, refresh }: Props) {
         <UnlinkedList
           unlinked={data.unlinked}
           tickets={tickets}
+          ignored={data.ignored ?? []}
+          onIgnore={(k) => void act('ignore', { key: k })}
+          onRestore={(k) => void act('unignore', { key: k })}
           onAdd={(k) => void act('add', { key: k })}
           onLink={(k, ticketId) => void act('link-key', { id: ticketId, key: k })}
         />

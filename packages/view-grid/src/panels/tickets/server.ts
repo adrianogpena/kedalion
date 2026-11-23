@@ -33,6 +33,8 @@ interface TicketStore {
   tickets: Ticket[];
   /** Auto-move rules seen per ticket key at the last fetch. */
   autoMoveMemory: Record<string, string[]>;
+  /** Unlinked keys the user hid; dropped once the key no longer shows up. */
+  ignored: string[];
 }
 
 const str = (v: unknown, max = 5000) => (typeof v === 'string' ? v.slice(0, max) : '');
@@ -177,7 +179,9 @@ function parseStore(raw: unknown): TicketStore {
       if (Array.isArray(v)) autoMoveMemory[k.slice(0, 100)] = v.filter((x): x is string => typeof x === 'string').slice(0, 10);
     }
   }
-  return { tickets, autoMoveMemory };
+  const ign = (raw as { ignored?: unknown })?.ignored;
+  const ignored = Array.isArray(ign) ? ign.filter((x): x is string => typeof x === 'string' && !!x).map((x) => x.slice(0, 100)).slice(0, 500) : [];
+  return { tickets, autoMoveMemory, ignored };
 }
 
 const stores = new Map<string, JsonStore<TicketStore>>();
@@ -185,7 +189,7 @@ const stores = new Map<string, JsonStore<TicketStore>>();
 export function ticketsStore(dataDir: string): JsonStore<TicketStore> {
   let s = stores.get(dataDir);
   if (!s) {
-    s = createJsonStore({ dataDir, name: 'tickets', parse: parseStore, empty: () => ({ tickets: [], autoMoveMemory: {} }) });
+    s = createJsonStore({ dataDir, name: 'tickets', parse: parseStore, empty: () => ({ tickets: [], autoMoveMemory: {}, ignored: [] }) });
     stores.set(dataDir, s);
   }
   return s;
@@ -299,7 +303,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
       );
     }
     const pods = latestPods();
-    const { links, unlinked } = linkTickets(
+    const { links, unlinked: allUnlinked } = linkTickets(
       tickets.map((t) => t.key),
       prs,
       pods,
@@ -308,6 +312,13 @@ export const ticketsSource = defineSource<TicketsConfig>({
       Object.fromEntries(tickets.filter((t) => t.aliases?.length).map((t) => [t.key, t.aliases!])),
     );
     const statuses = parseStatuses(config.statuses ?? '');
+    const ignoredNow = new Set(stored.ignored);
+    const unlinked = allUnlinked.filter((u) => !ignoredNow.has(u.key));
+    if (!prError && pods.length > 0 && stored.ignored.length) {
+      const seen = new Set(allUnlinked.map((u) => u.key));
+      const stale = stored.ignored.filter((k) => !seen.has(k));
+      if (stale.length) await store.update((s) => ({ ...s, ignored: s.ignored.filter((k) => !stale.includes(k) || seen.has(k)) }));
+    }
     if (config.connection && !prError) {
       const now = Date.now();
       const ready = config.readyLabel || 'ready to merge';
@@ -319,12 +330,12 @@ export const ticketsSource = defineSource<TicketsConfig>({
           for (const m of plan.moves) {
             list = move(list, m.id, m.status, Number.MAX_SAFE_INTEGER, now).map((t) => (t.id === m.id ? { ...t, autoMovedAt: now } : t));
           }
-          return { tickets: list, autoMoveMemory: plan.memory };
+          return { ...s, tickets: list, autoMoveMemory: plan.memory };
         });
         tickets = saved.tickets;
       }
     }
-    return { statuses, tickets, links, unlinked, pods, jira, ...(prError ? { prError } : {}) };
+    return { statuses, tickets, links, unlinked, ignored: stored.ignored.filter((k) => allUnlinked.some((u) => u.key === k)), pods, jira, ...(prError ? { prError } : {}) };
   },
   actions: {
     async pr(payload, config, ctx) {
@@ -359,6 +370,15 @@ export const ticketsSource = defineSource<TicketsConfig>({
         return { ...s, tickets: add(s.tickets, key, status, description, undefined, pcr, config.autoMove !== false) };
       });
       return saved.tickets;
+    },
+    async ignore(payload, config, ctx) {
+      const key = extractKey(str(payloadOf(payload).key, 200), config.keyPattern);
+      if (!key) throw invalid('ticket-invalid-key', 'Not a ticket key.');
+      return (await ticketsStore(ctx.dataDir).update((s) => (s.ignored.includes(key) ? s : { ...s, ignored: [...s.ignored, key] }))).tickets;
+    },
+    async unignore(payload, _config, ctx) {
+      const key = str(payloadOf(payload).key, 200);
+      return (await ticketsStore(ctx.dataDir).update((s) => ({ ...s, ignored: s.ignored.filter((k) => k !== key) }))).tickets;
     },
     async move(payload, _config, ctx) {
       const p = payloadOf(payload);

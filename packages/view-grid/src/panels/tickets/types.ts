@@ -28,6 +28,8 @@ export interface TicketsData {
   tickets: Ticket[];
   links?: Record<string, TicketLink>;
   unlinked?: UnlinkedKey[];
+  /** Hidden unlinked keys that still show up in PRs or pods. */
+  ignored?: string[];
   /** Every pod tracked in the Pods panels, for linking by hand. */
   pods?: Pod[];
   /** Jira info per ticket key; empty without a Jira connection or when the fetch failed. */
