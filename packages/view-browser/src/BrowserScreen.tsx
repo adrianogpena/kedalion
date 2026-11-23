@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Emulation, TabInfo } from '@kedalion/cdp';
-import { Button, ContextMenu, copyNotify, IconButton, Tabs, ToolbarSep, useCommand, useViewRequest } from '@kedalion/ui';
+import { Button, ContextMenu, copyNotify, IconButton, ToolbarSep, useCommand, useViewRequest } from '@kedalion/ui';
 import { browserApi } from './client';
 import { BROWSER_ACTIONS, type BrowserCommandAction, browserCommandDef } from './commands';
 import { ConsolePane, useBrowserLogs } from './ConsolePane';
 import { CookiesPane } from './CookiesPane';
 import { DevicePane } from './DevicePane';
-import { copyMcpConfig, DevToolsPane, type DevToolsPosition, openDevTools, Resizer, useStoredSize } from './DevToolsPane';
+import { copyMcpConfig, DevToolsPane, openDevTools, useStoredPosition } from './DevToolsPane';
 import { Favorites, isEmptyTabUrl } from './Favorites';
 import { NetworkPane } from './NetworkPane';
 import { RulesPane } from './RulesPane';
@@ -18,8 +18,9 @@ import { Viewport } from './Viewport';
 import { useBrowserSocket } from './web/useBrowserSocket';
 import './browser.css';
 
-type DockTab = 'console' | 'network' | 'cookies' | 'storage' | 'rules' | 'device';
-const DOCK_TABS: DockTab[] = ['console', 'network', 'cookies', 'storage', 'rules', 'device'];
+type DockTab = 'elements' | 'console' | 'sources' | 'network' | 'cookies' | 'storage' | 'rules' | 'device';
+const DOCK_TABS: DockTab[] = ['elements', 'console', 'sources', 'network', 'cookies', 'storage', 'rules', 'device'];
+const FRONTEND_TABS: DockTab[] = ['elements', 'sources'];
 
 /** The Browser view: tab strip, toolbar and the page of the active tab, driven through the server's socket. */
 export function BrowserScreen({ home }: { home: string }) {
@@ -34,14 +35,24 @@ export function BrowserScreen({ home }: { home: string }) {
   const { subscribe, send, status } = socket;
   const logs = useBrowserLogs(socket, tab?.id, tab?.url);
   const [dockOpen, setDockOpen] = useState(false);
-  const [dockTab, setDockTab] = useState<DockTab>('console');
-  const [dockHeight, setDockHeight] = useStoredSize('kedalion.browser.dockHeight', 240);
+  const [dockTab, setDockTab] = useState<DockTab>('elements');
   const [devtools, setDevtools] = useState<string | null>(null);
-  const [devtoolsPosition, setDevtoolsPosition] = useState<DevToolsPosition>('right');
+  const [devtoolsPosition, setDevtoolsPosition] = useStoredPosition();
 
   const [emulation, setEmulation] = useState<Emulation>({});
 
-  useEffect(() => setDevtools(null), [active]);
+  useEffect(() => {
+    setDevtools(null);
+    if (!dockOpen || !active) return;
+    let stale = false;
+    void openDevTools(active)
+      .then((r) => !stale && setDevtools(r.mode === 'iframe' ? r.url : null))
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, dockOpen]);
 
   useEffect(() => {
     setEmulation({});
@@ -93,19 +104,13 @@ export function BrowserScreen({ home }: { home: string }) {
     if (next) activate(next.id);
   };
 
-  const toggleDevtools = async (forceOpen = false, panel?: string) => {
+  const toggleDevtools = (forceOpen = false, panel?: DockTab) => {
     if (!tab) return;
-    if (devtools && !forceOpen) {
-      setDevtools(null);
-      return;
-    }
-    try {
-      const r = await openDevTools(tab.id, panel);
-      setDevtools(r.mode === 'iframe' ? r.url : null);
-    } catch {
-      // The request layer reports the failure.
-    }
+    if (panel) setDockTab(panel);
+    setDockOpen(forceOpen ? true : (v) => !v);
   };
+  const tabIds = devtools ? DOCK_TABS : DOCK_TABS.filter((id) => !FRONTEND_TABS.includes(id));
+  const shownTab = tabIds.includes(dockTab) ? dockTab : 'console';
 
   const run: Record<BrowserCommandAction, () => void> = {
     focusUrl: () => {
@@ -117,7 +122,7 @@ export function BrowserScreen({ home }: { home: string }) {
     nextTab: () => step(1),
     prevTab: () => step(-1),
     reload: () => go({ action: 'reload' }),
-    devtools: () => void toggleDevtools(),
+    devtools: () => toggleDevtools(),
     back: () => go({ action: 'back' }),
     forward: () => go({ action: 'forward' }),
   };
@@ -130,6 +135,36 @@ export function BrowserScreen({ home }: { home: string }) {
     void open(url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request]);
+
+  const dockPane = tab && (
+    <DevToolsPane
+      position={devtoolsPosition}
+      onPosition={setDevtoolsPosition}
+      onClose={() => setDockOpen(false)}
+      active={shownTab}
+      onChange={(id) => setDockTab(id as DockTab)}
+      tabs={tabIds.map((id) => ({
+        id,
+        label: id === 'console' && logs.errors ? `${t('browser.console')} (${logs.errors})` : t(`browser.dock.${id}` as const),
+      }))}
+    >
+      {FRONTEND_TABS.includes(shownTab) && devtools ? (
+        <iframe key={shownTab} className="browser-devtools-frame" title={t('browser.devtools')} src={`${devtools}&panel=${shownTab}`} />
+      ) : shownTab === 'console' ? (
+        <ConsolePane key={tab.id} tab={tab.id} logs={logs} onSource={() => toggleDevtools(true, 'sources')} />
+      ) : shownTab === 'network' ? (
+        <NetworkPane key={tab.id} tab={tab.id} logs={logs} />
+      ) : shownTab === 'cookies' ? (
+        <CookiesPane key={tab.id} tab={tab.id} url={tab.url} />
+      ) : shownTab === 'storage' ? (
+        <StoragePane key={tab.id} tab={tab.id} url={tab.url} />
+      ) : shownTab === 'rules' ? (
+        <RulesPane />
+      ) : (
+        <DevicePane key={tab.id} tab={tab.id} emulation={emulation} />
+      )}
+    </DevToolsPane>
+  );
 
   const shown = draft ?? tab?.url ?? '';
   const label = (x: TabInfo) => x.title || x.url || t('browser.tab.untitled');
@@ -192,8 +227,7 @@ export function BrowserScreen({ home }: { home: string }) {
           }}
         />
         <ToolbarSep />
-        <IconButton icon="code" label={t('browser.devtools')} disabled={!tab} pressed={!!devtools} onClick={() => void toggleDevtools()} />
-        <IconButton icon="log" label={t('browser.panes')} disabled={!tab} pressed={dockOpen} onClick={() => setDockOpen((v) => !v)} />
+        <IconButton icon="code" label={t('browser.devtools')} disabled={!tab} pressed={dockOpen} onClick={() => toggleDevtools()} />
         <IconButton icon="more" label={t('browser.menu')} onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setMenu({ x: r.right, y: r.bottom });
@@ -214,42 +248,9 @@ export function BrowserScreen({ home }: { home: string }) {
               {status === 'open' && isEmptyTabUrl(tab.url) && !tab.loading && <Favorites onOpen={(url) => go({ url })} />}
             </div>
           )}
-          {dockOpen && tab && (
-            <div className="browser-dock" style={{ height: dockHeight }}>
-              <Resizer axis="y" size={dockHeight} onSize={setDockHeight} min={100} />
-              <Tabs
-                idPrefix="browser-dock"
-                active={dockTab}
-                onChange={(id) => setDockTab(id as DockTab)}
-                tabs={DOCK_TABS.map((id) => ({
-                  id,
-                  label: id === 'console' && logs.errors ? `${t('browser.console')} (${logs.errors})` : t(`browser.dock.${id}` as const),
-                }))}
-              />
-              <div className="browser-dock-body" role="tabpanel" id={`browser-dock-panel-${dockTab}`} aria-labelledby={`browser-dock-tab-${dockTab}`}>
-                {dockTab === 'console' ? (
-                  <ConsolePane key={tab.id} tab={tab.id} logs={logs} onSource={() => void toggleDevtools(true, 'sources')} />
-                ) : dockTab === 'network' ? (
-                  <NetworkPane key={tab.id} tab={tab.id} logs={logs} />
-                ) : dockTab === 'cookies' ? (
-                  <CookiesPane key={tab.id} tab={tab.id} url={tab.url} />
-                ) : dockTab === 'storage' ? (
-                  <StoragePane key={tab.id} tab={tab.id} url={tab.url} />
-                ) : dockTab === 'rules' ? (
-                  <RulesPane />
-                ) : (
-                  <DevicePane key={tab.id} tab={tab.id} emulation={emulation} />
-                )}
-              </div>
-            </div>
-          )}
-          {devtools && devtoolsPosition === 'bottom' && (
-            <DevToolsPane url={devtools} position="bottom" onPosition={setDevtoolsPosition} onClose={() => setDevtools(null)} />
-          )}
+          {dockOpen && tab && devtoolsPosition === 'bottom' && dockPane}
         </div>
-        {devtools && devtoolsPosition === 'right' && (
-          <DevToolsPane url={devtools} position="right" onPosition={setDevtoolsPosition} onClose={() => setDevtools(null)} />
-        )}
+        {dockOpen && tab && devtoolsPosition === 'right' && dockPane}
       </div>
       <BrowserOverlays socket={socket} pointer={pointer} />
       {menu && (

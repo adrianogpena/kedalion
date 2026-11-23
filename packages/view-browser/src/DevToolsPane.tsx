@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
-import { copyNotify, IconButton, request } from '@kedalion/ui';
+import { type ReactNode, useCallback, useRef, useState } from 'react';
+import { copyNotify, IconButton, request, Tabs } from '@kedalion/ui';
 import { t } from './i18n';
 
 export type DevToolsResult = { mode: 'iframe'; url: string } | { mode: 'window' };
@@ -19,6 +19,26 @@ export async function copyMcpConfig(): Promise<void> {
   } catch {
     // The request layer reports the failure.
   }
+}
+
+/** The dock side kept in localStorage; Edge docks right by default. */
+export function useStoredPosition(): [DevToolsPosition, (p: DevToolsPosition) => void] {
+  const [pos, setPos] = useState<DevToolsPosition>(() => {
+    try {
+      return localStorage.getItem('kedalion.browser.devtoolsPosition') === 'bottom' ? 'bottom' : 'right';
+    } catch {
+      return 'right';
+    }
+  });
+  const set = useCallback((p: DevToolsPosition) => {
+    setPos(p);
+    try {
+      localStorage.setItem('kedalion.browser.devtoolsPosition', p);
+    } catch {
+      // Not remembered.
+    }
+  }, []);
+  return [pos, set];
 }
 
 /** A size kept in localStorage; storage errors fall back to the default. */
@@ -89,21 +109,27 @@ export function Resizer({ axis, size, onSize, min = 120, max = 900 }: ResizerPro
 }
 
 export interface DevToolsPaneProps {
-  url: string;
   position: DevToolsPosition;
   onPosition(p: DevToolsPosition): void;
   onClose(): void;
+  tabs: { id: string; label: string }[];
+  active: string;
+  onChange(id: string): void;
+  children: ReactNode;
 }
 
-/** The DevTools frontend of the active tab, docked right or bottom and resizable. */
-export function DevToolsPane({ url, position, onPosition, onClose }: DevToolsPaneProps) {
+/** The single DevTools panel, docked right (as in Edge) or bottom: tool tabs on the left, dock and close on the right. */
+export function DevToolsPane({ position, onPosition, onClose, tabs, active, onChange, children }: DevToolsPaneProps) {
   const [width, setWidth] = useStoredSize('kedalion.browser.devtoolsWidth', 480);
   const [height, setHeight] = useStoredSize('kedalion.browser.devtoolsHeight', 320);
   const right = position === 'right';
   return (
     <div className={`browser-devtools ${position}`} style={right ? { width } : { height }}>
-      <Resizer axis={right ? 'x' : 'y'} size={right ? width : height} onSize={right ? setWidth : setHeight} min={right ? 240 : 160} />
+      <Resizer axis={right ? 'x' : 'y'} size={right ? width : height} onSize={right ? setWidth : setHeight} min={right ? 280 : 120} />
       <div className="browser-devtools-bar">
+        <div className="browser-devtools-tabs">
+          <Tabs idPrefix="browser-dock" active={active} onChange={onChange} tabs={tabs} />
+        </div>
         <IconButton
           icon="popout"
           size="xs"
@@ -112,7 +138,9 @@ export function DevToolsPane({ url, position, onPosition, onClose }: DevToolsPan
         />
         <IconButton icon="close" size="xs" label={t('browser.devtools.close')} onClick={onClose} />
       </div>
-      <iframe className="browser-devtools-frame" title={t('browser.devtools')} src={url} />
+      <div className="browser-devtools-body" role="tabpanel" id={`browser-dock-panel-${active}`} aria-labelledby={`browser-dock-tab-${active}`}>
+        {children}
+      </div>
     </div>
   );
 }
