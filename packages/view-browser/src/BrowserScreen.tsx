@@ -96,6 +96,33 @@ export function BrowserScreen({ home }: { home: string }) {
     }
   };
   const close = (id: string) => void browserApi.closeTab(id).catch(() => {});
+  // Middle-click closes a tab. Listening on the window in the capture phase keeps it working when the host
+  // window or an ancestor swallows the event before React sees it.
+  useEffect(() => {
+    let lastDown: string | undefined;
+    const tabOf = (e: MouseEvent) => (e.target instanceof Element ? e.target.closest<HTMLElement>('[data-tab-id]')?.dataset.tabId : undefined);
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 1) return;
+      lastDown = tabOf(e);
+      if (lastDown) e.preventDefault();
+    };
+    const onUp = (e: MouseEvent) => {
+      if (e.button !== 1) return;
+      const id = tabOf(e);
+      const started = lastDown;
+      lastDown = undefined;
+      if (!id || id !== started) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void browserApi.closeTab(id).catch(() => {});
+    };
+    window.addEventListener('mousedown', onDown, true);
+    window.addEventListener('mouseup', onUp, true);
+    return () => {
+      window.removeEventListener('mousedown', onDown, true);
+      window.removeEventListener('mouseup', onUp, true);
+    };
+  }, []);
   const go = (input: { url: string } | { action: 'back' | 'forward' | 'reload' | 'stop' }) => {
     if (tab) void browserApi.navigate(tab.id, input).catch(() => {});
   };
@@ -182,12 +209,7 @@ export function BrowserScreen({ home }: { home: string }) {
               className={`tab-chip${x.id === active ? ' active' : ''}`}
               title={x.url || label(x)}
               onClick={() => activate(x.id)}
-              onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-              onMouseUp={(e) => {
-                if (e.button !== 1) return;
-                e.preventDefault();
-                close(x.id);
-              }}
+              data-tab-id={x.id}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setTabMenu({ x: e.clientX, y: e.clientY, id: x.id });
