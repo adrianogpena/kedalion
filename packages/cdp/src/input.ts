@@ -42,12 +42,36 @@ const NAMED_KEYS: Record<string, number> = {
   Delete: 46,
 };
 
-export function keyCode(key: string): number {
+const OEM_CODES: Record<string, number> = {
+  Semicolon: 186,
+  Equal: 187,
+  Comma: 188,
+  Minus: 189,
+  Period: 190,
+  Slash: 191,
+  Backquote: 192,
+  BracketLeft: 219,
+  Backslash: 220,
+  BracketRight: 221,
+  Quote: 222,
+  IntlBackslash: 226,
+  NumpadMultiply: 106,
+  NumpadAdd: 107,
+  NumpadSubtract: 109,
+  NumpadDecimal: 110,
+  NumpadDivide: 111,
+};
+
+export function keyCode(key: string, code?: string): number {
   const named = NAMED_KEYS[key];
   if (named !== undefined) return named;
   const f = /^F(\d{1,2})$/.exec(key);
   if (f && Number(f[1]) >= 1 && Number(f[1]) <= 12) return 111 + Number(f[1]);
-  if (key.length === 1) return key.toUpperCase().charCodeAt(0);
+  if (key.length === 1) {
+    if (/^[a-z0-9]$/i.test(key)) return key.toUpperCase().charCodeAt(0);
+    if (code && OEM_CODES[code] !== undefined) return OEM_CODES[code];
+    return 0;
+  }
   return 0;
 }
 
@@ -81,7 +105,7 @@ export function mapInput(ev: UiInputEvent): CdpCall[] {
       ];
     case 'key': {
       const modifiers = modifierMask(ev.modifiers);
-      const base = { key: ev.key, ...(ev.code ? { code: ev.code } : {}), windowsVirtualKeyCode: keyCode(ev.key), modifiers };
+      const base = { key: ev.key, ...(ev.code ? { code: ev.code } : {}), windowsVirtualKeyCode: keyCode(ev.key, ev.code), modifiers };
       if (ev.action === 'up') return [{ method: 'Input.dispatchKeyEvent', params: { type: 'keyUp', ...base } }];
       const shortcut = !!(ev.modifiers?.ctrl || ev.modifiers?.alt || ev.modifiers?.meta);
       const text = ev.key === 'Enter' ? '\r' : ev.key.length === 1 && !shortcut ? ev.key : undefined;
