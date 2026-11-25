@@ -1,7 +1,31 @@
 /* Browser screen: tab strip, toolbar, the page canvas and the dock g8 fills. */
 .browser { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
-.browser-toolbar { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-8); border-bottom: 1px solid var(--border-soft); }
+.browser-toolbar { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-8); background: var(--bg); border-bottom: 1px solid var(--border-soft); }
+.browser-toolbar .btn-icon { border-radius: 50%; }
 .browser-url { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--fs-xs-plus); }
+.browser-address { height: 30px; margin: 0 var(--space-4); padding: 0 var(--space-12); border-radius: 999px; font-family: inherit; font-size: var(--fs-sm-plus); background: var(--bg-sunken, var(--panel-2)); border: 1px solid transparent; }
+.browser-address:hover { background: var(--hover); }
+.browser-address:focus { background: var(--bg); border-color: var(--accent); outline: 0; box-shadow: 0 0 0 1px var(--accent); }
+/* Edge-style tab strip: tabs on a darker bar, the active tab joins the toolbar, + sits right after the last tab. */
+.br-tabbar { display: flex; align-items: flex-end; height: 40px; padding: 6px var(--space-8) 0; background: var(--bg-sunken, var(--panel-2)); flex: none; }
+.br-tabs { display: flex; align-items: stretch; align-self: stretch; gap: 2px; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.br-tabs::-webkit-scrollbar { display: none; }
+.br-tab { position: relative; display: flex; align-items: center; gap: var(--space-8); flex: 0 1 auto; width: 240px; min-width: 40px; padding: 0 var(--space-6) 0 var(--space-12); border-radius: 8px 8px 0 0; color: var(--text-3); cursor: pointer; user-select: none; }
+.br-tab:hover { background: var(--hover); color: var(--text); }
+.br-tab + .br-tab::before { content: ''; position: absolute; left: -2px; top: 8px; bottom: 8px; width: 1px; background: var(--border); }
+.br-tab.active + .br-tab::before, .br-tab:hover + .br-tab::before, .br-tab:hover::before { display: none; }
+.br-tab.active { background: var(--bg); color: var(--text); }
+.br-tab.active::before, .br-tab.active::after { display: block; content: ''; position: absolute; bottom: 0; top: auto; width: 8px; height: 8px; left: auto; background: none; pointer-events: none; }
+.br-tab.active::before { left: -8px; background: radial-gradient(circle at 0 0, transparent 7.5px, var(--bg) 8px); }
+.br-tab.active::after { right: -8px; background: radial-gradient(circle at 100% 0, transparent 7.5px, var(--bg) 8px); }
+.br-tab-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm-plus); }
+.br-tab-icon { flex: none; width: 16px; height: 16px; object-fit: contain; }
+.br-tab-globe { border: 1.5px solid var(--text-3); border-radius: 50%; box-sizing: border-box; width: 14px; height: 14px; margin: 1px; opacity: .7; }
+.br-tab-spinner { flex: none; width: 14px; height: 14px; margin: 1px; box-sizing: border-box; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: br-spin .8s linear infinite; }
+@keyframes br-spin { to { transform: rotate(360deg); } }
+.br-tab-close { flex: none; width: 20px; height: 20px; border-radius: 50%; opacity: 0; }
+.br-tab:hover .br-tab-close, .br-tab.active .br-tab-close { opacity: 1; }
+.br-tab-new { align-self: center; flex: none; width: 28px; height: 28px; margin-left: var(--space-4); border-radius: 50%; }
 .browser-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: row; }
 .browser-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .browser-status { padding: var(--space-8) var(--space-12); font-size: var(--fs-xs-plus); color: var(--text-3); }

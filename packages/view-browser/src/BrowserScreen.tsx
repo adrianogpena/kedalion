@@ -22,6 +22,21 @@ type DockTab = 'elements' | 'console' | 'sources' | 'network' | 'cookies' | 'sto
 const DOCK_TABS: DockTab[] = ['elements', 'console', 'sources', 'network', 'cookies', 'storage', 'rules', 'device'];
 const FRONTEND_TABS: DockTab[] = ['elements', 'sources'];
 
+/** Site icon in a tab: the origin's /favicon.ico, a globe when there is none. */
+function TabFavicon({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  let src = '';
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'http:' || u.protocol === 'https:') src = `${u.origin}/favicon.ico`;
+  } catch {
+    // not a URL
+  }
+  useEffect(() => setFailed(false), [src]);
+  if (!src || failed) return <span className="br-tab-icon br-tab-globe" aria-hidden="true" />;
+  return <img className="br-tab-icon" src={src} alt="" draggable={false} onError={() => setFailed(true)} />;
+}
+
 /** The Browser view: tab strip, toolbar and the page of the active tab, driven through the server's socket. */
 export function BrowserScreen({ home }: { home: string }) {
   const socket = useBrowserSocket();
@@ -199,14 +214,14 @@ export function BrowserScreen({ home }: { home: string }) {
 
   return (
     <div className="browser">
-      <div className="tabbar" role="tablist" aria-label={t('browser.tabs')}>
-        <div className="tabs-strip">
+      <div className="br-tabbar" role="tablist" aria-label={t('browser.tabs')}>
+        <div className="br-tabs">
           {tabs.map((x) => (
             <div
               key={x.id}
               role="tab"
               aria-selected={x.id === active}
-              className={`tab-chip${x.id === active ? ' active' : ''}`}
+              className={`br-tab${x.id === active ? ' active' : ''}`}
               title={x.url || label(x)}
               onClick={() => activate(x.id)}
               data-tab-id={x.id}
@@ -215,15 +230,16 @@ export function BrowserScreen({ home }: { home: string }) {
                 setTabMenu({ x: e.clientX, y: e.clientY, id: x.id });
               }}
             >
-              <span className="tab-title">{label(x)}</span>
-              <IconButton className="tab-close" icon="close" size="xs" label={t('browser.tab.close')} onClick={(e) => {
+              {x.loading ? <span className="br-tab-spinner" aria-hidden="true" /> : <TabFavicon url={x.url} />}
+              <span className="br-tab-title">{label(x)}</span>
+              <IconButton className="br-tab-close" icon="close" size="xs" label={t('browser.tab.close')} onClick={(e) => {
                 e.stopPropagation();
                 close(x.id);
               }} />
             </div>
           ))}
+          <IconButton className="br-tab-new" icon="plus" size="xs" label={t('browser.tab.new')} onClick={() => void open()} />
         </div>
-        <IconButton className="tab-new" icon="plus" label={t('browser.tab.new')} onClick={() => void open()} />
       </div>
       <div className="browser-toolbar">
         <IconButton icon="back" label={t('browser.back')} disabled={!tab?.canGoBack} onClick={() => go({ action: 'back' })} />
@@ -236,19 +252,19 @@ export function BrowserScreen({ home }: { home: string }) {
         />
         <input
           ref={urlInput}
-          className="browser-url"
+          className="browser-url browser-address"
           type="text"
           spellCheck={false}
           aria-label={t('browser.address')}
           placeholder={t('browser.address.placeholder')}
-          disabled={!tab}
           value={shown}
           onChange={(e) => setDraft(e.target.value)}
           onFocus={(e) => e.currentTarget.select()}
           onBlur={() => setDraft(null)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              go({ url: normalizeAddress(e.currentTarget.value) });
+              if (tab) go({ url: normalizeAddress(e.currentTarget.value) });
+              else if (e.currentTarget.value.trim()) void open(normalizeAddress(e.currentTarget.value));
               setDraft(null);
               e.currentTarget.blur();
             } else if (e.key === 'Escape') {
