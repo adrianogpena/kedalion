@@ -98,6 +98,10 @@ export function createConnectionStore(dataDir: string) {
     async get(id: string): Promise<Connection | undefined> {
       return (await read()).filter(valid).find((c) => c.id === id);
     },
+    /** The first connection of `type`, with the token, for server use only. */
+    async first(type: ConnectionType): Promise<Connection | undefined> {
+      return (await read()).filter(valid).find((c) => c.type === type);
+    },
     save(input: ConnectionInput): Promise<PublicConnection> {
       return locked(async () => {
         const stored = await read();

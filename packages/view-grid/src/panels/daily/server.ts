@@ -26,12 +26,18 @@ const dailySource = (id: string, actions: DataSource['actions']): DataSource =>
   defineSource({ id, fields: [], fetch: (_config, ctx) => storeOf(ctx.dataDir).read(), actions });
 
 type TodoConfig = {
-  connection: string;
   filter: string;
 };
 
-/** The Todoist credentials when the panel has a connection; undefined means the local list. */
-const remoteOf = (config: TodoConfig, ctx: SourceContext) => (config.connection ? ctx.connection(config.connection, 'todoist') : undefined);
+/** The Todoist credentials when a Todoist connection exists; undefined means the local list. */
+const remoteOf = async (_config: TodoConfig, ctx: SourceContext) => {
+  try {
+    return await ctx.connection('todoist');
+  } catch (err) {
+    if ((err as { code?: string }).code === 'source-not-configured') return undefined;
+    throw err;
+  }
+};
 
 export const todoSource = defineSource<TodoConfig>({
   id: 'todo',
@@ -67,7 +73,7 @@ export const todoSource = defineSource<TodoConfig>({
       if (!conn) return edit(ctx.dataDir, (d) => removeTodo(d, field(p, 'id')));
       await deleteTask(conn, field(p, 'id'));
     },
-    'clear-done': (_p, c, ctx) => (c.connection ? undefined : edit(ctx.dataDir, clearDone)),
+    'clear-done': async (_p, c, ctx) => ((await remoteOf(c, ctx)) ? undefined : edit(ctx.dataDir, clearDone)),
   },
 });
 

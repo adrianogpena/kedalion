@@ -2,7 +2,7 @@ import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { invalid } from '@kedalion/server-core';
 import { createJsonStore, type JsonStore } from '../../json-store';
-import { defineSource, type DataSource, type GridPanelSpec, type SourceContext } from '../../server';
+import { defineSource, type DataSource, type GridPanelSpec, type ResolvedConnection, type SourceContext } from '../../server';
 import { fieldIds, search, searchKeys } from '../jira/client';
 import { fetchPrExtra, fetchPrItem, fetchPrPool, trackedStore } from '../github/server';
 import type { TrackedPr } from '../github/tracked';
@@ -16,9 +16,17 @@ import type { NoteTemplate } from './note-templates';
 import { add, DEFAULT_STATUSES, extractKey, MAX_TICKETS, move, normPodId, parsePcr, remove, update, type Ticket } from './model';
 import type { TicketsData } from './types';
 
+/** The first connection of `type`, or undefined when none is set up. */
+async function optionalConnection(ctx: SourceContext, type: 'github' | 'jira'): Promise<ResolvedConnection | undefined> {
+  try {
+    return await ctx.connection(type);
+  } catch (err) {
+    if ((err as { code?: string }).code === 'source-not-configured') return undefined;
+    throw err;
+  }
+}
+
 interface TicketsConfig {
-  connection: string;
-  jiraConnection?: string;
   keyPattern: string;
   jiraBaseUrl: string;
   autoMove?: boolean;
@@ -260,10 +268,13 @@ export const ticketsSource = defineSource<TicketsConfig>({
     let { tickets } = stored;
     let prError = false;
     let jiraError = false;
+    let githubSet = false;
+    let jiraSet = false;
     const loadPrs = async (): Promise<TrackedPr[]> => {
-      if (!config.connection) return [];
       try {
-        const conn = await ctx.connection(config.connection, 'github');
+        const conn = await optionalConnection(ctx, 'github');
+        if (!conn) return [];
+        githubSet = true;
         const { refs } = await trackedStore(ctx.dataDir).read();
         return await fetchPrPool(conn, { tracked: refs, keys: tickets.flatMap((t) => [t.key, ...(t.aliases ?? [])]), signal: ctx.signal });
       } catch {
@@ -273,9 +284,11 @@ export const ticketsSource = defineSource<TicketsConfig>({
     };
     const loadJira = async (): Promise<Record<string, JiraInfo>> => {
       const jira: Record<string, JiraInfo> = {};
-      if (config.jiraConnection && tickets.length) {
+      if (tickets.length) {
         try {
-          const conn = await ctx.connection(config.jiraConnection, 'jira');
+          const conn = await optionalConnection(ctx, 'jira');
+          if (!conn) return jira;
+          jiraSet = true;
           const keys = tickets.map((t) => t.key).filter((k) => /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(k));
           const ids = await fieldIds(conn, ctx.signal);
           const raw = keys.length ? await searchKeys(conn, keys, infoFields(ids.points, ids.sprint), ctx.signal) : [];
@@ -287,7 +300,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
       return jira;
     };
     const [prs, jira] = await Promise.all([loadPrs(), loadJira()]);
-    if (config.notify !== false && config.jiraConnection && !jiraError) {
+    if (config.notify !== false && jiraSet && !jiraError) {
       notifyChanges(
         ctx,
         notifyScope('tickets', config),
@@ -318,7 +331,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
       const stale = stored.ignored.filter((k) => !seen.has(k));
       if (stale.length) await store.update((s) => ({ ...s, ignored: s.ignored.filter((k) => !stale.includes(k) || seen.has(k)) }));
     }
-    if (config.connection && !prError) {
+    if (githubSet && !prError) {
       const now = Date.now();
       const ready = config.readyLabel || 'ready to merge';
       const plan0 = planAutoMoves(stored.tickets, links, statuses, stored.autoMoveMemory, config.autoMove !== false, ready);
@@ -339,13 +352,13 @@ export const ticketsSource = defineSource<TicketsConfig>({
   actions: {
     async pr(payload, config, ctx) {
       const { repo, number } = prRef(payload);
-      const item = await fetchPrItem(await ctx.connection(config.connection, 'github'), repo, number, config.keyPattern, ctx.signal);
+      const item = await fetchPrItem(await ctx.connection('github'), repo, number, config.keyPattern, ctx.signal);
       if (!item) throw invalid('pr-not-found', 'The pull request was not found.');
       return item;
     },
-    async 'pr-extra'(payload, config, ctx) {
+    async 'pr-extra'(payload, _config, ctx) {
       const { repo, number } = prRef(payload);
-      return fetchPrExtra(await ctx.connection(config.connection, 'github'), repo, number, ctx.signal);
+      return fetchPrExtra(await ctx.connection('github'), repo, number, ctx.signal);
     },
     async add(payload, config, ctx) {
       const p = payloadOf(payload);
@@ -354,10 +367,10 @@ export const ticketsSource = defineSource<TicketsConfig>({
       const status = DEFAULT_STATUSES[0]!;
       const description = str(p.description);
       let pcr = parsePcr(str(p.pcr, 20));
-      if (!pcr && config.jiraConnection && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(key)) {
+      if (!pcr && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(key)) {
         try {
-          const conn = await ctx.connection(config.jiraConnection, 'jira');
-          const [raw] = await search(conn, `key = ${key}`, ['summary', 'parent', 'labels', 'issuelinks'], 1, ctx.signal);
+          const conn = await optionalConnection(ctx, 'jira');
+          const [raw] = conn ? await search(conn, `key = ${key}`, ['summary', 'parent', 'labels', 'issuelinks'], 1, ctx.signal) : [];
           if (raw) pcr = pcrOf(raw);
         } catch {
           // the PCR is optional; it can be typed in the side panel

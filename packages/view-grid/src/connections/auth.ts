@@ -48,9 +48,9 @@ export async function ghToken(baseUrl: string, spawn: Spawn = bunSpawn): Promise
   return token;
 }
 
-/** Resolves connection `id` of `type` for a source; unknown id or wrong type is `not-configured`. */
+/** Resolves connection `id` of `type` for a source (the first one of `type` when `id` is empty); none, or the wrong type, is `not-configured`. */
 export async function resolveConnection(store: ConnectionStore, id: string, type: ConnectionType, spawn: Spawn = bunSpawn): Promise<ResolvedConnection> {
-  const c = id ? await store.get(id) : undefined;
+  const c = id ? await store.get(id) : await store.first(type);
   if (!c || c.type !== type) throw SourceError('not-configured', 'The connection is not set up.');
   const token = c.token || (type === 'github' ? await ghToken(c.baseUrl, spawn) : '');
   if (!token) throw SourceError('not-configured', 'The connection has no token.');

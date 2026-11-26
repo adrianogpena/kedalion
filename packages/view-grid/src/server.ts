@@ -18,8 +18,8 @@ export type GridPanelSpec = PanelKindSpec & { kind: string };
 export interface SourceContext {
   dataDir: string;
   signal: AbortSignal;
-  /** The credentials of connection `id` (`not-configured` when unknown or of another type). */
-  connection(id: string, type: ConnectionType): Promise<ResolvedConnection>;
+  /** The credentials of the first connection of `type` (`not-configured` when there is none). */
+  connection(type: ConnectionType): Promise<ResolvedConnection>;
   /** An OS toast (absent when the app wires no notifications). */
   notify?(n: { title?: string; body: string }): Promise<void>;
   /** The last notifications the app sent, newest first (absent when the app wires no notifications). */

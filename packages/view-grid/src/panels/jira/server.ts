@@ -25,27 +25,27 @@ const SPRINT_CAP = 1000;
 const KEY_RE = /^[A-Za-z][A-Za-z0-9_]*-\d+$/;
 
 /** The `info` action of the panels that list issues: one issue's full detail. */
-async function issueInfo(payload: unknown, config: { connection: string }, ctx: SourceContext): Promise<JiraInfo> {
+async function issueInfo(payload: unknown, _config: object, ctx: SourceContext): Promise<JiraInfo> {
   const key = String(((payload ?? {}) as Record<string, unknown>).key ?? '');
   if (!KEY_RE.test(key)) throw invalid('jira-invalid-key', 'Not an issue key.');
-  const conn = await ctx.connection(config.connection, 'jira');
+  const conn = await ctx.connection('jira');
   const ids = await fieldIds(conn, ctx.signal);
   const [raw] = await search(conn, `key = ${key}`, infoFields(ids.points, ids.sprint), 1, ctx.signal);
   if (!raw) throw invalid('jira-issue-not-found', 'The issue was not found.', { key });
   return mapInfo(raw, ids.points, ids.sprint);
 }
 
-const issuesSource = defineSource<{ connection: string; jql: string; max: number; columns: string[]; notify: boolean }>({
+const issuesSource = defineSource<{ jql: string; max: number; columns: string[]; notify: boolean }>({
   id: 'jira-issues',
   fields: ISSUES_FIELDS,
   actions: { info: issueInfo },
-  async fetch({ connection, jql, max, columns, notify }, ctx): Promise<IssuesData> {
-    const conn = await ctx.connection(connection, 'jira');
+  async fetch({ jql, max, columns, notify }, ctx): Promise<IssuesData> {
+    const conn = await ctx.connection('jira');
     const ids = columns.includes('sprint') ? await fieldIds(conn, ctx.signal) : {};
     const raw = await search(conn, jql, requestFields(columns, ids), max, ctx.signal);
     const issues = raw.map((r) => mapIssue(r, conn.baseUrl, ids));
     if (notify !== false) {
-      notifyChanges(ctx, notifyScope('jira-issues', { connection, jql, max }), issues, {
+      notifyChanges(ctx, notifyScope('jira-issues', { jql, max }), issues, {
         key: (i) => i.key,
         sig: (i) => `${i.status}|${i.assignee}`,
         title: 'Jira issues',
@@ -56,14 +56,14 @@ const issuesSource = defineSource<{ connection: string; jql: string; max: number
   },
 });
 
-const countSource = defineSource<{ connection: string; jql: string; display: string; notify: boolean }>({
+const countSource = defineSource<{ jql: string; display: string; notify: boolean }>({
   id: 'jira-count',
   fields: COUNT_FIELDS,
-  async fetch({ connection, jql, display, notify }, ctx): Promise<CountData> {
-    const conn = await ctx.connection(connection, 'jira');
+  async fetch({ jql, display, notify }, ctx): Promise<CountData> {
+    const conn = await ctx.connection('jira');
     const total = await count(conn, jql, ctx.signal);
     if (notify === true) {
-      notifyChanges(ctx, notifyScope('jira-count', { connection, jql }), [total], {
+      notifyChanges(ctx, notifyScope('jira-count', { jql }), [total], {
         key: () => 'count',
         sig: (n) => String(n),
         title: 'Jira count',
@@ -77,12 +77,12 @@ const countSource = defineSource<{ connection: string; jql: string; display: str
   },
 });
 
-const sprintSource = defineSource<{ connection: string; boardId: number; columns: string[]; notify: boolean }>({
+const sprintSource = defineSource<{ boardId: number; columns: string[]; notify: boolean }>({
   id: 'jira-sprint',
   fields: BOARD_FIELDS,
   actions: { info: issueInfo },
-  async fetch({ connection, boardId, columns, notify }, ctx): Promise<SprintData | null> {
-    const conn = await ctx.connection(connection, 'jira');
+  async fetch({ boardId, columns, notify }, ctx): Promise<SprintData | null> {
+    const conn = await ctx.connection('jira');
     if (!boardId) throw SourceError('not-configured', 'No board is set.');
     const sprints = await agile(conn, `/board/${boardId}/sprint?state=active`, ctx.signal);
     const sprint = (sprints.values ?? [])[0];
@@ -102,7 +102,7 @@ const sprintSource = defineSource<{ connection: string; boardId: number; columns
     if (notify !== false) {
       const column = (list: JiraIssue[], name: string) => list.map((issue) => ({ issue, column: name }));
       const placed = [...column(data.todo, 'To do'), ...column(data.doing, 'In progress'), ...column(data.finished, 'Done')];
-      notifyChanges(ctx, notifyScope('jira-sprint', { connection, boardId }), placed, {
+      notifyChanges(ctx, notifyScope('jira-sprint', { boardId }), placed, {
         key: (p) => p.issue.key,
         sig: (p) => p.column,
         title: `Sprint ${data.name}`,

@@ -126,7 +126,6 @@ const ISSUE_QUERY = `query($q: String!, $n: Int!) {
 }`;
 
 interface SearchConfig {
-  connection: string;
   mode: string;
   repo: string;
   query: string;
@@ -159,7 +158,7 @@ function prStatus(state: string, ci: 'pass' | 'fail' | 'pending' | 'policy' | 'n
 async function search(kind: 'pr' | 'issue', config: SearchConfig, ctx: Parameters<DataSource['fetch']>[1]): Promise<{ res: SearchResponse; nextRefreshMs?: number }> {
   const q = buildQuery(kind, config.mode, config.repo, config.query);
   if (!q) throw SourceError('not-configured', kind === 'pr' ? 'The pull request search is not set up.' : 'The issue search is not set up.');
-  const conn = await ctx.connection(config.connection, 'github');
+  const conn = await ctx.connection('github');
   const res = await graphql<SearchResponse>(conn, kind === 'pr' ? PR_QUERY : ISSUE_QUERY, { q, n: config.max }, ctx.signal);
   const next = nextRefreshMs(res.rateLimit && { remaining: res.rateLimit.remaining ?? 0, limit: res.rateLimit.limit ?? 0 }, PR_REFRESH_MS, backoff.get(conn.baseUrl));
   if (next) backoff.set(conn.baseUrl, next);
@@ -170,7 +169,7 @@ async function search(kind: 'pr' | 'issue', config: SearchConfig, ctx: Parameter
 /** The PR list of a panel. */
 async function fetchPrList(scope: string, config: SearchConfig, ctx: Parameters<DataSource['fetch']>[1]) {
   const { res, nextRefreshMs } = await search('pr', config, ctx);
-  const conn = await ctx.connection(config.connection, 'github');
+  const conn = await ctx.connection('github');
   const data = mapPullRequests(res, config.ticketPattern ?? '', await requiredChecks(conn, res.search?.nodes ?? [], ctx.signal));
   let board: Set<string> | null = null;
   try {
@@ -208,16 +207,16 @@ export const githubPrsSource = defineSource<SearchConfig>({
       const ref = typeof p?.repo === 'string' ? parseRepo(p.repo) : null;
       const number = Number(p?.number);
       if (!ref || !Number.isInteger(number) || number <= 0) throw invalid('pr-ref', 'A pull request is required.');
-      const item = await fetchPrItem(await ctx.connection(config.connection, 'github'), ref, number, config.ticketPattern ?? '', ctx.signal);
+      const item = await fetchPrItem(await ctx.connection('github'), ref, number, config.ticketPattern ?? '', ctx.signal);
       if (!item) throw invalid('pr-not-found', 'The pull request was not found.');
       return item;
     },
-    async rc(payload, config, ctx) {
+    async rc(payload, _config, ctx) {
       const p = payload as { repo?: unknown; number?: unknown } | null;
       const ref = typeof p?.repo === 'string' ? parseRepo(p.repo) : null;
       const number = Number(p?.number);
       if (!ref || !Number.isInteger(number) || number <= 0) throw invalid('rc-pr-ref', 'A pull request is required.');
-      const conn = await ctx.connection(config.connection, 'github');
+      const conn = await ctx.connection('github');
       return fetchPrExtra(conn, ref, number, ctx.signal);
     },
   },
@@ -242,7 +241,6 @@ export const githubIssuesSource = defineSource<SearchConfig>({
 });
 
 interface RepoConfig {
-  connection: string;
   repo: string;
   max: number;
   [key: string]: unknown;
@@ -259,7 +257,7 @@ export const githubActionsSource = defineSource<RepoConfig & { branch: string; w
   fields: ACTIONS_SOURCE_FIELDS,
   async fetch(config, ctx) {
     const repo = needRepo(config.repo);
-    const conn = await ctx.connection(config.connection, 'github');
+    const conn = await ctx.connection('github');
     const raw = await rest<Parameters<typeof mapRuns>[0]>(conn, runsPath(repo, config.branch ?? '', config.workflow ?? '', config.max), ctx.signal);
     const data = mapRuns(raw, config.max);
     if (config.notify !== false) {
@@ -274,11 +272,11 @@ export const githubActionsSource = defineSource<RepoConfig & { branch: string; w
   },
 });
 
-export const githubNotificationsSource = defineSource<{ connection: string; participatingOnly: boolean; max: number; [key: string]: unknown }>({
+export const githubNotificationsSource = defineSource<{ participatingOnly: boolean; max: number; [key: string]: unknown }>({
   id: 'github-notifications',
   fields: NOTIFICATIONS_SOURCE_FIELDS,
   async fetch(config, ctx) {
-    const conn = await ctx.connection(config.connection, 'github');
+    const conn = await ctx.connection('github');
     const q = new URLSearchParams({ per_page: String(config.max) });
     if (config.participatingOnly) q.set('participating', 'true');
     const raw = await rest<Parameters<typeof mapNotifications>[0]>(conn, `/notifications?${q}`, ctx.signal);
@@ -300,7 +298,7 @@ export const githubReleasesSource = defineSource<RepoConfig & { includePrereleas
   fields: RELEASES_FIELDS,
   async fetch(config, ctx) {
     const repo = needRepo(config.repo);
-    const conn = await ctx.connection(config.connection, 'github');
+    const conn = await ctx.connection('github');
     const raw = await rest<Parameters<typeof mapReleases>[0]>(conn, `/repos/${repo}/releases?per_page=${Math.min(100, config.max * 2)}`, ctx.signal);
     const data = mapReleases(raw, config.max, !!config.includePrereleases);
     if (config.notify !== false) {
@@ -326,12 +324,12 @@ const OVERVIEW_QUERY = `query($owner: String!, $name: String!) {
   }
 }`;
 
-export const githubOverviewSource = defineSource<{ connection: string; repo: string; [key: string]: unknown }>({
+export const githubOverviewSource = defineSource<{ repo: string; [key: string]: unknown }>({
   id: 'github-overview',
   fields: OVERVIEW_SOURCE_FIELDS,
   async fetch(config, ctx) {
     const [owner, name] = needRepo(config.repo).split('/');
-    const conn = await ctx.connection(config.connection, 'github');
+    const conn = await ctx.connection('github');
     const res = await graphql<RepoResponse>(conn, OVERVIEW_QUERY, { owner, name }, ctx.signal);
     const stats = mapRepoStats(res);
     if (!stats) throw SourceError('upstream', 'Repository not found.');
@@ -494,7 +492,6 @@ export function trackedStore(dataDir: string): JsonStore<TrackedStore> {
 const sameRef = (a: PrRef, b: PrRef) => a.number === b.number && a.owner.toLowerCase() === b.owner.toLowerCase() && a.repo.toLowerCase() === b.repo.toLowerCase();
 
 interface TrackedConfig {
-  connection: string;
   readyLabel: string | string[];
   rcLabel: string | string[];
   [key: string]: unknown;
@@ -506,7 +503,7 @@ export const githubTrackedSource = defineSource<TrackedConfig>({
   async fetch(config, ctx) {
     const { refs } = await trackedStore(ctx.dataDir).read();
     if (!refs.length) return { items: [] as TrackedPr[] };
-    const conn = await ctx.connection(config.connection, 'github');
+    const conn = await ctx.connection('github');
     const items = await fetchPrs(conn, refs, ctx.signal, config);
     if (config.notify !== false) {
       notifyChanges(ctx, notifyScope('github-tracked', config), items, {
@@ -558,11 +555,11 @@ export async function fetchPrLabels(conn: ResolvedConnection, signal?: AbortSign
   return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
-export const githubLabelsSource = defineSource<{ connection: string; [key: string]: unknown }>({
+export const githubLabelsSource = defineSource<{ [key: string]: unknown }>({
   id: 'github-labels',
   fields: LABELS_SOURCE_FIELDS,
-  async fetch(config, ctx) {
-    const conn = await ctx.connection(config.connection, 'github');
+  async fetch(_config, ctx) {
+    const conn = await ctx.connection('github');
     return { labels: await fetchPrLabels(conn, ctx.signal) };
   },
 });

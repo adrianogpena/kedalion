@@ -16,8 +16,8 @@ export function connectionStoreOf(dataDir: string): ConnectionStore {
 /** `SourceContext.connection` of `dataDir`. */
 export const connectionResolverOf =
   (dataDir: string, spawn?: Spawn) =>
-  (id: string, type: ConnectionType): Promise<ResolvedConnection> =>
-    resolveConnection(connectionStoreOf(dataDir), id, type, spawn);
+  (type: ConnectionType): Promise<ResolvedConnection> =>
+    resolveConnection(connectionStoreOf(dataDir), '', type, spawn);
 
 /**
  * The connection routes. The router matches whole paths, so delete takes `?id=` and test takes

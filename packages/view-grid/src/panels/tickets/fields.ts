@@ -4,8 +4,6 @@ import { notifyField } from '../../notify-field';
 import { TICKET_LAYOUTS } from './model';
 
 export const TICKETS_FIELDS: readonly PanelField[] = [
-  { key: 'connection', kind: 'connection', connectionType: 'github', label: 'dash.tickets.connection', description: 'dash.tickets.connection.hint', default: '' },
-  { key: 'jiraConnection', kind: 'connection', connectionType: 'jira', label: 'dash.tickets.jiraConnection', description: 'dash.tickets.jiraConnection.hint', default: '' },
   { key: 'layout', kind: 'enum', label: 'dash.tickets.layout', description: 'dash.tickets.layout.hint', default: 'board', values: TICKET_LAYOUTS, optionLabel: 'dash.tickets.layout' },
   { key: 'keyPattern', kind: 'string', label: 'dash.tickets.keyPattern', description: 'dash.tickets.keyPattern.hint', default: DEFAULT_TICKET_PATTERN, maxLength: 200 },
   { key: 'autoMove', kind: 'boolean', label: 'dash.tickets.autoMove', description: 'dash.tickets.autoMove.hint', default: true },
