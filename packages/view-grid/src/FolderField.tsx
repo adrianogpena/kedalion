@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Icon, Modal, request } from '@kedalion/ui';
 import { tKey } from './i18n';
+import { fetchSource } from './source';
 
 interface Project {
   id: string;
@@ -111,6 +112,75 @@ export function ProjectFolderDialog({ onPick, onClose }: { onPick(path: string):
                 </button>
               </li>
             ))}
+        </ul>
+      </div>
+    </Modal>
+  );
+}
+
+/** Picks any folder of the computer: starts at the home folder, with an editable path, an up button and the subfolders. */
+export function AnyFolderDialog({ onPick, onClose }: { onPick(path: string): void; onClose(): void }) {
+  const [list, setList] = useState<{ path: string; parent: string; dirs: string[] } | null>(null);
+  const [target, setTarget] = useState('');
+  const [typed, setTyped] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let live = true;
+    fetchSource<{ path: string; parent: string; dirs: string[] }>('folders', { path: target }).then(
+      (r) => {
+        if (!live) return;
+        setList(r);
+        setTyped(r.path);
+        setError('');
+      },
+      (err) => {
+        if (live) setError(String((err as Error)?.message ?? err));
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [target]);
+
+  const child = (name: string) => `${list!.path}${/[\\/]$/.test(list!.path) ? '' : list!.path.includes('\\') ? '\\' : '/'}${name}`;
+
+  return (
+    <Modal
+      title={tKey('grid.field.folder.pickAny')}
+      onClose={onClose}
+      footer={
+        <>
+          <Button title={tKey('grid.cancel')} onClick={onClose}>{tKey('grid.cancel')}</Button>
+          <Button variant="primary" disabled={!list} title={tKey('grid.field.folder.select')} onClick={() => list && onPick(list.path)}>
+            {tKey('grid.field.folder.select')}
+          </Button>
+        </>
+      }
+    >
+      <div className="grid-config-folder-dialog">
+        <span className="grid-config-date">
+          <Button title={tKey('grid.back')} disabled={!list?.parent} onClick={() => list?.parent && setTarget(list.parent)}>{tKey('grid.back')}</Button>
+          <input
+            value={typed}
+            aria-label={tKey('grid.field.folder.path')}
+            spellCheck={false}
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') setTarget(typed);
+            }}
+          />
+        </span>
+        {error && <div role="alert">{error}</div>}
+        <ul className="grid-config-folder-list">
+          {(list?.dirs ?? []).map((d) => (
+            <li key={d}>
+              <button type="button" className="grid-config-folder-row" onClick={() => setTarget(child(d))}>
+                <Icon name="folder" size={14} />
+                <span>{d}</span>
+              </button>
+            </li>
+          ))}
         </ul>
       </div>
     </Modal>

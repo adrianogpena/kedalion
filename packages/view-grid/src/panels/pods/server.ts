@@ -311,4 +311,19 @@ export const podsSource =defineSource<PodsConfig>({
 
 export const specs: GridPanelSpec[] = [{ kind: 'pods', fields: PODS_FIELDS, allowMultiple: true }];
 
-export const sources: DataSource<any>[] = [podsSource];
+/** The kubectl contexts as suggestions for a context input. */
+export const kubeContextsSource = defineSource<Record<string, never>>({
+  id: 'kube-contexts',
+  fields: [],
+  async fetch(_config, ctx) {
+    try {
+      const r = await runCli(['kubectl', 'config', 'view', '-o', 'json'], { timeoutMs: TIMEOUT_MS, signal: ctx.signal });
+      if (r.code !== 0) return { options: [] };
+      return { options: readContexts(r.stdout).contexts.map((c) => ({ value: c.name })) };
+    } catch {
+      return { options: [] };
+    }
+  },
+});
+
+export const sources: DataSource<any>[] = [podsSource, kubeContextsSource];

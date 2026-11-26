@@ -1,6 +1,6 @@
 import type { PanelField } from '@kedalion/ui/grid';
 
-const icsUrl: PanelField = { key: 'icsUrl', kind: 'string', label: 'dash.calendar.icsUrl', description: 'dash.calendar.icsUrl.hint', placeholder: 'dash.calendar.icsUrl.placeholder', default: '', maxLength: 2000 };
+const icsUrl: PanelField = { key: 'icsUrl', kind: 'string', label: 'dash.calendar.icsUrl', description: 'dash.calendar.icsUrl.hint', placeholder: 'dash.calendar.icsUrl.placeholder', default: '', maxLength: 2000, validate: 'http-url' };
 
 const sprintFields: readonly PanelField[] = [
   { key: 'sprintStart', kind: 'date', label: 'dash.calendar.sprintStart', description: 'dash.calendar.sprintStart.hint', default: '' },

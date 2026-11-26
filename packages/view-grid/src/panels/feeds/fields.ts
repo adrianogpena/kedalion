@@ -29,9 +29,9 @@ export const RSS_FIELDS: readonly PanelField[] = [
 export const RSS_SOURCE_FIELDS: readonly PanelField[] = [RSS_FIELDS[0]!, RSS_FIELDS[1]!, RSS_FIELDS[4]!];
 
 export const FX_FIELDS: readonly PanelField[] = [
-  { key: 'base', kind: 'string', label: 'dash.feeds.fx.base', description: 'dash.feeds.fx.code.hint', default: 'EUR', maxLength: 3, suggest: CURRENCY_SUGGEST },
-  { key: 'quote', kind: 'string', label: 'dash.feeds.fx.quote', description: 'dash.feeds.fx.code.hint', default: 'BRL', maxLength: 3, suggest: CURRENCY_SUGGEST },
-  { key: 'track', kind: 'string', label: 'dash.feeds.fx.track', description: 'dash.feeds.fx.track.hint', placeholder: 'dash.feeds.fx.track.placeholder', default: '', maxLength: 120 },
+  { key: 'base', kind: 'string', label: 'dash.feeds.fx.base', description: 'dash.feeds.fx.code.hint', default: 'EUR', maxLength: 3, suggest: CURRENCY_SUGGEST, hidden: true },
+  { key: 'quote', kind: 'string', label: 'dash.feeds.fx.quote', description: 'dash.feeds.fx.code.hint', default: 'BRL', maxLength: 3, suggest: CURRENCY_SUGGEST, hidden: true },
+  { key: 'track', kind: 'text', label: 'dash.feeds.fx.track', description: 'dash.feeds.fx.track.hint', default: '', maxLength: 120, list: 'columns', withPair: ['base', 'quote'], join: '>', separator: ', ', columns: [{ label: 'dash.feeds.fx.base', suggest: CURRENCY_SUGGEST }, { label: 'dash.feeds.fx.quote', suggest: CURRENCY_SUGGEST }] },
   { key: 'days', kind: 'enum', label: 'dash.feeds.fx.days', default: 30, values: [7, 30, 90], optionLabel: 'dash.feeds.fx.days' },
   { key: 'apiKey', kind: 'string', label: 'dash.feeds.fx.apiKey', description: 'dash.feeds.fx.apiKey.hint', default: '', maxLength: 64, secret: true },
 ];

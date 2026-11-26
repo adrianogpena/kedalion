@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
-import { Button, IconButton, labelList, MAX_TEXT_FIELD, Modal, OnOffField, validConfig, type FieldSuggest, type PanelConfig, type PanelField, type SuggestOption } from '@kedalion/ui';
+import { Button, IconButton, labelList, MAX_TEXT_FIELD, Modal, OnOffField, validConfig, type FieldColumn, type FieldSuggest, type PanelConfig, type PanelField, type SuggestOption } from '@kedalion/ui';
 import { ConnectionDialog, listConnections, type ConnectionType, type PublicConnection } from './connections/ConnectionDialog';
-import { FolderField, ProjectFolderDialog } from './FolderField';
+import { AnyFolderDialog, FolderField, ProjectFolderDialog } from './FolderField';
+import { isHttpUrl, joinColumns, splitColumns } from './columns';
 import { tKey } from './i18n';
 import { fetchSource } from './source';
 import { opmlUrls } from './panels/feeds/opml';
 import { feedUrls } from './panels/feeds/rss';
 import { parseDated } from './panels/calendar/dates';
+import { parseTrack } from './panels/feeds/fx';
 
 function NumberInput({ field, value, onChange }: { field: Extract<PanelField, { kind: 'number' }>; value: number; onChange: (n: number) => void }) {
   const [text, setText] = useState(String(value));
@@ -68,6 +70,7 @@ function LineListField({ field, value, config, hint, onChange }: { field: Extrac
     onChange(next.map((r) => r.text.trim()).filter(Boolean).join('\n'));
   };
   const folder = field.list === 'folder';
+  const Dialog = field.anyFolder ? AnyFolderDialog : ProjectFolderDialog;
   const fileInput = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState('');
   const importOpml = async (file: File) => {
@@ -119,7 +122,7 @@ function LineListField({ field, value, config, hint, onChange }: { field: Extrac
       </span>
       {hint && <span className="muted">{hint}</span>}
       {picking && (
-        <ProjectFolderDialog
+        <Dialog
           onPick={(path) => {
             setPicking(false);
             if (!rows.some((r) => r.text === path)) commit([...rows, { id: nextId.current++, text: path }]);
@@ -127,6 +130,60 @@ function LineListField({ field, value, config, hint, onChange }: { field: Extrac
           onClose={() => setPicking(false)}
         />
       )}
+    </fieldset>
+  );
+}
+
+/** One input of a `columns` row, with the suggestions of its column. */
+function ColumnInput({ column, value, config, onChange }: { column: FieldColumn; value: string; config: PanelConfig; onChange: (value: string) => void }) {
+  const listId = useRef(`grid-suggest-${datalistIds++}`);
+  const options = useSuggestions(column.suggest, config);
+  return (
+    <>
+      <input
+        value={value}
+        list={options.length > 0 ? listId.current : undefined}
+        placeholder={column.placeholder ? tKey(column.placeholder) : tKey(column.label)}
+        aria-label={tKey(column.label)}
+        spellCheck={false}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {options.length > 0 && <Datalist id={listId.current} options={options} />}
+    </>
+  );
+}
+
+/** Rows of one input per column over the lines of a text field (cells joined by `join`, rows by `separator`). */
+function ColumnsListField({ field, value, config, hint, onChange }: { field: Extract<PanelField, { kind: 'text' }>; value: string; config: PanelConfig; hint?: string; onChange: (value: string) => void }) {
+  const columns = field.columns ?? [];
+  const format = { join: field.join, separator: field.separator };
+  const nextId = useRef(0);
+  const [rows, setRows] = useState(() => splitColumns(value, columns.length, format).map((cells) => ({ id: nextId.current++, cells })));
+  const commit = (next: typeof rows) => {
+    setRows(next);
+    onChange(joinColumns(next.map((r) => r.cells), format));
+  };
+  return (
+    <fieldset className="field">
+      <legend className="mono-label">{tKey(field.label)}</legend>
+      {rows.map((r) => (
+        <span key={r.id} className="grid-config-date">
+          {columns.map((c, i) => (
+            <ColumnInput
+              key={i}
+              column={c}
+              value={r.cells[i] ?? ''}
+              config={config}
+              onChange={(v) => commit(rows.map((x) => (x.id === r.id ? { ...x, cells: x.cells.map((cell, j) => (j === i ? v : cell)) } : x)))}
+            />
+          ))}
+          <IconButton icon="close" label={tKey('grid.field.list.remove')} onClick={() => commit(rows.filter((x) => x.id !== r.id))} />
+        </span>
+      ))}
+      <span className="grid-config-import">
+        <Button onClick={() => setRows([...rows, { id: nextId.current++, cells: columns.map(() => '') }])}>{tKey('grid.field.list.add')}</Button>
+      </span>
+      {hint && <span className="muted">{hint}</span>}
     </fieldset>
   );
 }
@@ -147,9 +204,16 @@ function SuggestInput({ field, value, config, hint, onChange }: { field: Extract
         onChange={(e) => onChange(e.target.value)}
       />
       {options.length > 0 && <Datalist id={listId.current} options={options} />}
+      <UrlError field={field} value={value} />
       {hint && <span className="muted">{hint}</span>}
     </label>
   );
+}
+
+/** The error line of a `validate: 'http-url'` string field with a value that is not an http(s) URL. */
+function UrlError({ field, value }: { field: Extract<PanelField, { kind: 'string' }>; value: string }) {
+  if (field.validate !== 'http-url' || value.trim() === '' || isHttpUrl(value)) return null;
+  return <span role="alert" className="muted">{tKey('grid.field.invalidUrl')}</span>;
 }
 
 const MAX_IMPORTED_FEEDS = 10;
@@ -387,6 +451,7 @@ function FieldRow({ field, value, config, onChange, connections }: { field: Pane
             spellCheck={false}
             onChange={(e) => onChange(e.target.value)}
           />
+          <UrlError field={field} value={typeof value === 'string' ? value : field.default} />
           {hint && <span className="muted">{hint}</span>}
         </label>
       );
@@ -422,6 +487,7 @@ function FieldRow({ field, value, config, onChange, connections }: { field: Pane
       );
     }
     case 'text':
+      if (field.list === 'columns' && field.columns?.length) return <ColumnsListField field={field} value={typeof value === 'string' ? value : field.default} config={config} hint={hint} onChange={onChange} />;
       if (field.list) return <LineListField field={field} value={typeof value === 'string' ? value : field.default} config={config} hint={hint} onChange={onChange} />;
       if (field.dated) return <DatedListField field={field} value={typeof value === 'string' ? value : field.default} hint={hint} onChange={onChange} />;
       return <TextField field={field} value={typeof value === 'string' ? value : field.default} config={config} hint={hint} onChange={onChange} />;
@@ -441,6 +507,27 @@ function FieldRow({ field, value, config, onChange, connections }: { field: Pane
   }
 }
 
+const PINNED_PAIR = 'EUR>BRL';
+
+/** The value of a `withPair` field: the stored pair and the listed ones, EUR>BRL first. */
+function pairValue(field: PanelField, config: PanelConfig): string | undefined {
+  if (field.kind !== 'text' || !field.withPair) return undefined;
+  const [b, q] = field.withPair;
+  const main = `${String(config[b] ?? '')}>${String(config[q] ?? '')}`;
+  const all = [main, ...parseTrack(typeof config[field.key] === 'string' ? (config[field.key] as string) : '', main).map((p) => `${p.base}>${p.quote}`)];
+  return (all.includes(PINNED_PAIR) ? [PINNED_PAIR, ...all.filter((x) => x !== PINNED_PAIR)] : all).join(', ');
+}
+
+/** `config` after the list of a `withPair` field became `list`: the shown pair stays while listed. */
+function pairChange(keys: readonly [string, string], key: string, config: PanelConfig, list: string): PanelConfig {
+  const [b, q] = keys;
+  const pairs = parseTrack(list, '').map((p) => `${p.base}>${p.quote}`);
+  const main = `${String(config[b] ?? '')}>${String(config[q] ?? '')}`;
+  const shown = pairs.includes(main) || pairs.length === 0 ? main : pairs[0]!;
+  const [base, quote] = shown.split('>');
+  return { ...config, [b]: base, [q]: quote, [key]: pairs.filter((p) => p !== shown).join(', ') };
+}
+
 /** A form generated from the fields of a panel kind. */
 export function ConfigForm({ fields, value, onChange }: { fields: readonly PanelField[]; value: PanelConfig; onChange: (value: PanelConfig) => void }) {
   const [list, setList] = useState<PublicConnection[]>([]);
@@ -458,7 +545,7 @@ export function ConfigForm({ fields, value, onChange }: { fields: readonly Panel
   return (
     <div className="grid-config-form">
       {fields.filter((f) => !f.hidden).map((f) => (
-        <FieldRow key={f.key} field={f} value={value[f.key]} config={value} onChange={(v) => onChange({ ...value, [f.key]: v })} connections={connections} />
+        <FieldRow key={f.key} field={f} value={pairValue(f, value) ?? value[f.key]} config={value} onChange={(v) => onChange(f.kind === 'text' && f.withPair && typeof v === 'string' ? pairChange(f.withPair, f.key, value, v) : { ...value, [f.key]: v })} connections={connections} />
       ))}
       {creating && (
         <ConnectionDialog

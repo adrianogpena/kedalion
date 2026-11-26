@@ -4,7 +4,7 @@ import { TICKET_PATTERN_SUGGEST } from '../github/pattern-suggest';
 import { IDLE_MINUTES } from './analysis';
 
 export const TIMESHEET_FIELDS: readonly PanelField[] = [
-  { key: 'roots', kind: 'text', label: 'dash.timesheet.roots', description: 'dash.timesheet.roots.hint', default: '', rows: 4, list: 'text' },
+  { key: 'roots', kind: 'text', label: 'dash.timesheet.roots', description: 'dash.timesheet.roots.hint', default: '', rows: 4, list: 'folder', anyFolder: true },
   { key: 'ticketPattern', kind: 'string', label: 'dash.timesheet.ticketPattern', description: 'dash.timesheet.ticketPattern.hint', default: DEFAULT_TICKET_PATTERN, maxLength: 100, suggest: TICKET_PATTERN_SUGGEST },
   { key: 'includeCopilot', kind: 'boolean', label: 'dash.timesheet.includeCopilot', default: true },
   { key: 'includeGit', kind: 'boolean', label: 'dash.timesheet.includeGit', default: true },

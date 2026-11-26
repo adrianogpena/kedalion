@@ -20,6 +20,15 @@ export interface FieldSuggest {
   params?: readonly string[];
 }
 
+/** One input of a `columns` row. */
+export interface FieldColumn {
+  /** i18n key of the column's label. */
+  label: string;
+  suggest?: FieldSuggest;
+  /** i18n key of the placeholder. */
+  placeholder?: string;
+}
+
 interface PanelFieldBase {
   key: string;
   /** i18n key of the label. */
@@ -35,10 +44,10 @@ interface PanelFieldBase {
 export type PanelField =
   | (PanelFieldBase & { kind: 'boolean'; default: boolean })
   | (PanelFieldBase & { kind: 'number'; default: number; min?: number; max?: number; /** Picks a number by name: a select of options whose `value` is the number as text; 0 (the default) is "none". */ suggest?: FieldSuggest })
-  | (PanelFieldBase & { kind: 'string'; default: string; placeholder?: string; maxLength?: number; /** Masks the input like a password. */ secret?: boolean; /** Offers values to pick from; any text can still be typed. */ suggest?: FieldSuggest })
+  | (PanelFieldBase & { kind: 'string'; default: string; placeholder?: string; maxLength?: number; /** Masks the input like a password. */ secret?: boolean; /** Offers values to pick from; any text can still be typed. */ suggest?: FieldSuggest; /** The form shows an error line when the value is not empty and not an http(s) URL; the value is kept. */ validate?: 'http-url' })
   | (PanelFieldBase & { kind: 'enum'; default: string | number; values: readonly (string | number)[]; /** i18n key prefix: `<prefix>.<value>` is the option text when it exists. */ optionLabel?: string })
   | (PanelFieldBase & { kind: 'multi'; default: string[]; values: readonly string[]; /** i18n key prefix: `<prefix>.<value>` is the option text when it exists. */ optionLabel?: string })
-  | (PanelFieldBase & { kind: 'text'; default: string; maxLength?: number; rows?: number; placeholder?: string; /** Shows an "Import OPML" button that appends the feed URLs of a chosen file. */ importOpml?: boolean; /** Edited as rows of a label and a date picker; stored as `YYYY-MM-DD | label` lines. */ dated?: boolean; /** Edited as one row per line (an input, or a folder picker for `folder`); stored as lines. `suggest` offers values for each row. */ list?: 'text' | 'url' | 'folder'; suggest?: FieldSuggest; /** A select above the text that replaces it with the chosen option's value. */ presets?: FieldSuggest })
+  | (PanelFieldBase & { kind: 'text'; default: string; /** With `list: 'columns'` of two currency columns: the list also holds the pair stored in these two keys (it is not repeated in this field's own value); that pair stays shown while it is in the list, else the first row takes over. EUR>BRL is listed first. */ withPair?: readonly [string, string]; maxLength?: number; rows?: number; placeholder?: string; /** Shows an "Import OPML" button that appends the feed URLs of a chosen file. */ importOpml?: boolean; /** Edited as rows of a label and a date picker; stored as `YYYY-MM-DD | label` lines. */ dated?: boolean; /** Edited as one row per line (an input, or a folder picker for `folder`); stored as lines. `suggest` offers values for each row. */ list?: 'text' | 'url' | 'folder' | 'columns'; suggest?: FieldSuggest; /** `list: 'columns'`: one input per column in each row; the cells of a row are stored joined by `join` (a space when absent) and the rows by `separator` (a new line when absent). */ columns?: readonly FieldColumn[]; join?: string; separator?: string; /** `list: 'folder'`: the picker browses any folder of the computer, not only the projects. */ anyFolder?: boolean; /** A select above the text that replaces it with the chosen option's value. */ presets?: FieldSuggest })
   | (PanelFieldBase & { kind: 'date'; default: '' })
   /** An absolute folder inside an Explorer project, chosen with a dialog that lists only the projects. */
   | (PanelFieldBase & { kind: 'folder'; default: '' })
