@@ -1,24 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { DEFAULT_JIRA_MAP, driftOf, parseJiraMap } from './drift';
+import { DEFAULT_JIRA_MAP, driftOf } from './drift';
 import { DEFAULT_STATUSES, type Ticket } from './model';
 
 const ticket = (status: string, extra: Partial<Ticket> = {}): Ticket => ({ id: 'a', key: 'X-1', description: '', status, autoMove: null, order: 0, ...extra });
-const map = parseJiraMap('');
-
-describe('parseJiraMap', () => {
-  test('empty gives the defaults', () => {
-    expect(map).toEqual(DEFAULT_JIRA_MAP);
-    expect(map['in test']).toBe('In Test');
-  });
-
-  test('overrides merge over defaults and bad lines are dropped', () => {
-    const m = parseJiraMap('Closed = Done\n\nnonsense\n = X\nY =\nCustom=In Review');
-    expect(m.closed).toBe('Done');
-    expect(m.custom).toBe('In Review');
-    expect(m.open).toBe('Open');
-    expect(Object.keys(m)).toHaveLength(Object.keys(DEFAULT_JIRA_MAP).length + 1);
-  });
-});
+const map = DEFAULT_JIRA_MAP;
 
 describe('driftOf', () => {
   test('ahead when Jira is further right', () => {

@@ -7,12 +7,12 @@ import '../catalog.server';
 import type { SourceContext } from '../../server';
 import { ticketsSource, ticketsStore } from './server';
 
-const config = { connection: '', statuses: 'Todo', keyPattern: '', jiraBaseUrl: '' };
+const config = { connection: '', keyPattern: '', jiraBaseUrl: '' };
 
 async function setup(key = 'ABC-1', notes?: string) {
   const dataDir = await mkdtemp(join(tmpdir(), 'tickets-data-'));
   const ticketsRoot = await mkdtemp(join(tmpdir(), 'tickets-root-'));
-  await ticketsStore(dataDir).update((s) => ({ ...s, tickets: [{ id: 't1', key, description: '', status: 'Todo', autoMove: null, order: 0, ...(notes ? { notes } : {}) }] }));
+  await ticketsStore(dataDir).update((s) => ({ ...s, tickets: [{ id: 't1', key, description: '', status: 'Open', autoMove: null, order: 0, ...(notes ? { notes } : {}) }] }));
   const ctx = { dataDir, ticketsRoot, signal: new AbortController().signal, projectRoots: async () => [{ id: 'kedalion-tickets', path: ticketsRoot }] } as unknown as SourceContext;
   const act = (name: string, payload: unknown) => ticketsSource.actions![name]!(payload, config as never, ctx) as Promise<any>;
   return { dataDir, ticketsRoot, act };

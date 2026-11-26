@@ -18,19 +18,6 @@ const DEFAULTS: [string[], string][] = [
 /** Jira status (lower-cased) -> expected board column. */
 export const DEFAULT_JIRA_MAP: JiraMap = Object.fromEntries(DEFAULTS.flatMap(([names, col]) => names.map((n) => [n.toLowerCase(), col])));
 
-/** One `Jira status = Column` per line; blank and bad lines dropped; merged over the defaults. */
-export function parseJiraMap(text: string): JiraMap {
-  const map: JiraMap = { ...DEFAULT_JIRA_MAP };
-  for (const line of (text ?? '').split(/\r?\n/)) {
-    const i = line.indexOf('=');
-    if (i < 0) continue;
-    const status = line.slice(0, i).trim().toLowerCase();
-    const column = line.slice(i + 1).trim();
-    if (status && column) map[status] = column;
-  }
-  return map;
-}
-
 /** How the card's column differs from the column its Jira status maps to, or null. */
 export function driftOf(ticket: Ticket, jiraStatus: string | undefined, statuses: string[], map: JiraMap): Drift | null {
   const status = (jiraStatus ?? '').trim();

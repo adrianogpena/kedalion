@@ -26,18 +26,49 @@ const DONE_LABELS = ['TSYS Validated', 'Merged'];
 
 export const jiraUrl = (base: string, key: string): string => (base.trim() ? `${base.trim().replace(/\/+$/, '')}/browse/${key}` : '');
 
+/** The Jira status shown as its own label ("Merged", "TSYS Validated"), or undefined. */
+export const doneLabelOf = (jiraStatus?: string): string | undefined => DONE_LABELS.find((s) => s.toLowerCase() === (jiraStatus ?? '').trim().toLowerCase());
+
+export type TicketMenuItems = ComponentProps<typeof ContextMenu>['items'];
+
+/** The right-click menu of a ticket, shared by every layout. */
+export function ticketMenuItems(p: {
+  ticket: Ticket;
+  url: string;
+  drift?: Drift | null;
+  autoMoveDefault: boolean;
+  onDetails(): void;
+  onMoveToExpected?(): void;
+  onMuteDrift?(): void;
+  onAutoMove(value: boolean): void;
+  onDelete(): void;
+}): TicketMenuItems {
+  const { ticket, url, drift, autoMoveDefault } = p;
+  const driftItems: TicketMenuItems = drift
+    ? [
+        'sep',
+        { id: 'drift-move', label: tKey('dash.tickets.drift.move', { column: drift.expected }), icon: drift.direction === 'ahead' ? 'chevron' : 'back', run: () => p.onMoveToExpected?.() },
+        { id: 'drift-mute', label: tKey('dash.tickets.drift.ignore'), icon: 'close', run: () => p.onMuteDrift?.() },
+      ]
+    : [];
+  return [
+    { id: 'details', label: tKey('dash.tickets.details'), icon: 'file-text', run: p.onDetails },
+    ...driftItems,
+    'sep',
+    { id: 'am-on', label: tKey('dash.tickets.autoMove.on'), radio: true, checked: (ticket.autoMove ?? autoMoveDefault) === true, run: () => p.onAutoMove(true) },
+    { id: 'am-off', label: tKey('dash.tickets.autoMove.off'), radio: true, checked: (ticket.autoMove ?? autoMoveDefault) === false, run: () => p.onAutoMove(false) },
+    'sep',
+    { id: 'copy', label: tKey('dash.tickets.copyKey'), icon: 'copy', run: () => void copyNotify(ticket.key) },
+    { id: 'open', label: tKey('dash.tickets.openJira'), icon: 'link', disabled: !url, run: () => window.open(url, '_blank', 'noreferrer') },
+    'sep',
+    { id: 'delete', label: tKey('dash.tickets.delete'), icon: 'trash', danger: true, run: p.onDelete },
+  ];
+}
+
 export function TicketCard({ ticket, selected, jiraBaseUrl, jiraStatus, drift, onMoveToExpected, onMuteDrift, onDelete, autoMoveDefault, onAutoMove, onDetails, onDragStart }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const url = jiraUrl(jiraBaseUrl, ticket.key);
-  const doneLabel = DONE_LABELS.find((s) => s.toLowerCase() === (jiraStatus ?? '').trim().toLowerCase());
-  const driftItems: ComponentProps<typeof ContextMenu>['items'] = drift
-    ? [
-        'sep',
-        { id: 'drift-move', label: tKey('dash.tickets.drift.move', { column: drift.expected }), icon: drift.direction === 'ahead' ? 'chevron' : 'back', run: () => onMoveToExpected?.() },
-        { id: 'drift-mute', label: tKey('dash.tickets.drift.ignore'), icon: 'close', run: () => onMuteDrift?.() },
-      ]
-    : [];
-
+  const doneLabel = doneLabelOf(jiraStatus);
   const open = (e: MouseEvent) => {
     e.preventDefault();
     setMenu({ x: e.clientX, y: e.clientY });
@@ -108,18 +139,7 @@ export function TicketCard({ ticket, selected, jiraBaseUrl, jiraStatus, drift, o
         <ContextMenu
           at={menu}
           onClose={() => setMenu(null)}
-          items={[
-            { id: 'details', label: tKey('dash.tickets.details'), icon: 'file-text', run: onDetails },
-            ...driftItems,
-            'sep',
-            { id: 'am-on', label: tKey('dash.tickets.autoMove.on'), radio: true, checked: (ticket.autoMove ?? autoMoveDefault) === true, run: () => onAutoMove(true) },
-            { id: 'am-off', label: tKey('dash.tickets.autoMove.off'), radio: true, checked: (ticket.autoMove ?? autoMoveDefault) === false, run: () => onAutoMove(false) },
-            'sep',
-            { id: 'copy', label: tKey('dash.tickets.copyKey'), icon: 'copy', run: () => void copyNotify(ticket.key) },
-            { id: 'open', label: tKey('dash.tickets.openJira'), icon: 'link', disabled: !url, run: () => window.open(url, '_blank', 'noreferrer') },
-            'sep',
-            { id: 'delete', label: tKey('dash.tickets.delete'), icon: 'trash', danger: true, run: onDelete },
-          ]}
+          items={ticketMenuItems({ ticket, url, drift, autoMoveDefault, onDetails, onMoveToExpected, onMuteDrift, onAutoMove, onDelete })}
         />
         </span>
       )}

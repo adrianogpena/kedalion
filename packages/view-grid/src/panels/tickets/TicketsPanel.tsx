@@ -2,19 +2,19 @@ import { useEffect, useState, type DragEvent } from 'react';
 import { tKey } from '../../i18n';
 import { type PanelSide } from '../../panel';
 import { runAction } from '../../source';
-import { driftOf, parseJiraMap } from './drift';
+import { DEFAULT_JIRA_MAP, driftOf } from './drift';
 import { columns, type Ticket } from './model';
-import { TicketCard } from './TicketCard';
+import { jiraUrl, TicketCard, ticketMenuItems } from './TicketCard';
+import { TicketCompactView, TicketLanesView, TicketListView, TicketProgressView, type TicketViewProps } from './TicketViews';
 import { boardTicketSide } from './TicketSide';
 import { UnlinkedList } from './UnlinkedList';
 import type { TicketsData } from './types';
 import './tickets.css';
 
 export interface TicketsConfig {
-  statuses: string;
   keyPattern: string;
-  jiraMap?: string;
   jiraBaseUrl: string;
+  layout?: string;
   [key: string]: unknown;
 }
 
@@ -67,8 +67,7 @@ export function TicketsPanel({ id, side, config, data, refresh }: Props) {
 
   const tickets = local ?? data.tickets;
   const cols = columns(tickets, data.statuses);
-  const jiraMap = parseJiraMap(config.jiraMap ?? '');
-  const driftFor = (t: Ticket) => driftOf(t, data.jira?.[t.key]?.status, data.statuses, jiraMap);
+  const driftFor = (t: Ticket) => driftOf(t, data.jira?.[t.key]?.status, data.statuses, DEFAULT_JIRA_MAP);
   const content = (t: Ticket) => boardTicketSide({ instanceId: id, ticket: t, data, config, side, onChanged: refresh });
   const toggle = (t: Ticket) => {
     if (!side) return;
@@ -77,9 +76,42 @@ export function TicketsPanel({ id, side, config, data, refresh }: Props) {
     else side.open(c);
   };
 
+  const viewProps: TicketViewProps = {
+    id,
+    tickets,
+    statuses: data.statuses,
+    data,
+    driftFor,
+    selected: (t) => !!side && side.isOpen(content(t).id),
+    onDetails: toggle,
+    move: (ticketId, status, index) => void act('move', { id: ticketId, status, index }),
+    menuFor: (t) => {
+      const drift = driftFor(t);
+      return ticketMenuItems({
+        ticket: t,
+        url: jiraUrl(config.jiraBaseUrl, t.key),
+        drift,
+        autoMoveDefault: config.autoMove !== false,
+        onDetails: () => toggle(t),
+        onMoveToExpected: () => drift && void act('move', { id: t.id, status: drift.expected, index: Number.MAX_SAFE_INTEGER }),
+        onMuteDrift: () => void act('set-jira-muted', { id: t.id, value: data.jira?.[t.key]?.status ?? '' }),
+        onAutoMove: (value) => void act('set-auto-move', { id: t.id, value }),
+        onDelete: () => void act('remove', { id: t.id }),
+      });
+    },
+  };
+  const layout = config.layout;
+  const view =
+    layout === 'list' ? <TicketListView {...viewProps} />
+    : layout === 'progress' ? <TicketProgressView {...viewProps} />
+    : layout === 'lanes' ? <TicketLanesView {...viewProps} />
+    : layout === 'compact' ? <TicketCompactView {...viewProps} />
+    : null;
+
   return (
     <div className="tickets">
       {error && <div className="tickets-error" role="alert">{error}</div>}
+      {view ?? (
       <div className="tickets-board">
         {cols.map((col) => (
           <section
@@ -138,6 +170,7 @@ export function TicketsPanel({ id, side, config, data, refresh }: Props) {
           </section>
         ))}
       </div>
+      )}
       {data.unlinked && (
         <UnlinkedList
           unlinked={data.unlinked}

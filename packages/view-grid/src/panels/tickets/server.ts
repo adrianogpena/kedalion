@@ -13,13 +13,12 @@ import { planAutoMoves } from './auto-move';
 import { infoFields, mapInfo, pcrOf, ticketEvents, type JiraInfo } from './jira-info';
 import { linkTickets } from './linker';
 import type { NoteTemplate } from './note-templates';
-import { add, extractKey, MAX_TICKETS, move, normPodId, parsePcr, parseStatuses, remove, update, type Ticket } from './model';
+import { add, DEFAULT_STATUSES, extractKey, MAX_TICKETS, move, normPodId, parsePcr, remove, update, type Ticket } from './model';
 import type { TicketsData } from './types';
 
 interface TicketsConfig {
   connection: string;
   jiraConnection?: string;
-  statuses: string;
   keyPattern: string;
   jiraBaseUrl: string;
   autoMove?: boolean;
@@ -311,7 +310,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
       Object.fromEntries(tickets.filter((t) => t.podLinks?.length).map((t) => [t.key, t.podLinks!])),
       Object.fromEntries(tickets.filter((t) => t.aliases?.length).map((t) => [t.key, t.aliases!])),
     );
-    const statuses = parseStatuses(config.statuses ?? '');
+    const statuses = [...DEFAULT_STATUSES];
     const ignoredNow = new Set(stored.ignored);
     const unlinked = allUnlinked.filter((u) => !ignoredNow.has(u.key));
     if (!prError && pods.length > 0 && stored.ignored.length) {
@@ -352,7 +351,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
       const p = payloadOf(payload);
       const key = extractKey(str(p.key, 200), config.keyPattern);
       if (!key) throw invalid('ticket-invalid-key', 'Not a ticket key.');
-      const status = parseStatuses(config.statuses ?? '')[0]!;
+      const status = DEFAULT_STATUSES[0]!;
       const description = str(p.description);
       let pcr = parsePcr(str(p.pcr, 20));
       if (!pcr && config.jiraConnection && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(key)) {

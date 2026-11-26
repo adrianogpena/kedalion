@@ -37,17 +37,9 @@ export const normPodId = (id: string): string => {
 };
 
 export const MAX_TICKETS = 300;
+/** The panel's `layout` values; `board` is the kanban. */
+export const TICKET_LAYOUTS = ['board', 'list', 'progress', 'lanes', 'compact'] as const;
 export const DEFAULT_STATUSES = ['Open', 'In Progress', 'In Review', 'In Test', 'Ready to Merge', 'Done'];
-
-/** One status per line; blank and duplicate lines dropped; the defaults when nothing is left. */
-export function parseStatuses(text: string): string[] {
-  const out: string[] = [];
-  for (const line of text.split(/\r?\n/)) {
-    const s = line.trim();
-    if (s && !out.some((o) => o.toLowerCase() === s.toLowerCase())) out.push(s);
-  }
-  return out.length ? out : [...DEFAULT_STATUSES];
-}
 
 /** The upper-cased ticket key at the start of `input`, or null. An invalid pattern falls back to the default. */
 export function extractKey(input: string, pattern: string = DEFAULT_TICKET_PATTERN): string | null {

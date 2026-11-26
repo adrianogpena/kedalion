@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { add, columns, extractKey, move, parsePcr, parseStatuses, remove, update, DEFAULT_STATUSES, type Ticket } from './model';
+import { add, columns, extractKey, move, parsePcr, remove, update, type Ticket } from './model';
 
 const build = (): Ticket[] => {
   let t: Ticket[] = [];
@@ -8,15 +8,6 @@ const build = (): Ticket[] => {
   t = add(t, 'A-3', 'Done', '', 'c');
   return t;
 };
-
-describe('parseStatuses', () => {
-  test('trims, drops blanks and duplicates', () => {
-    expect(parseStatuses(' Open \n\nopen\nDone\r\n')).toEqual(['Open', 'Done']);
-  });
-  test('defaults when empty', () => {
-    expect(parseStatuses('  \n')).toEqual(DEFAULT_STATUSES);
-  });
-});
 
 describe('extractKey', () => {
   test('upper-cases and anchors at the start', () => {
