@@ -4,6 +4,22 @@ import { PATHS, type IconName } from './icons';
 /** A panel's settings: field key to value (see `PanelField`, `validConfig`). */
 export type PanelConfig = Record<string, unknown>;
 
+/** Suggested values for a text input: fixed `options`, or the `options` list a server data source returns (`{ options: SuggestOption[] }`). */
+export interface SuggestOption {
+  value: string;
+  /** Shown next to the value; the value alone when absent. */
+  label?: string;
+}
+
+export interface FieldSuggest {
+  /** Fixed options. */
+  options?: readonly SuggestOption[];
+  /** Data source id; it is fetched with a config holding the `params` keys of the panel config. */
+  source?: string;
+  /** Keys of the panel config sent to `source` (e.g. the repo a branch list depends on). */
+  params?: readonly string[];
+}
+
 interface PanelFieldBase {
   key: string;
   /** i18n key of the label. */
@@ -19,10 +35,10 @@ interface PanelFieldBase {
 export type PanelField =
   | (PanelFieldBase & { kind: 'boolean'; default: boolean })
   | (PanelFieldBase & { kind: 'number'; default: number; min?: number; max?: number })
-  | (PanelFieldBase & { kind: 'string'; default: string; placeholder?: string; maxLength?: number; /** Masks the input like a password. */ secret?: boolean })
+  | (PanelFieldBase & { kind: 'string'; default: string; placeholder?: string; maxLength?: number; /** Masks the input like a password. */ secret?: boolean; /** Offers values to pick from; any text can still be typed. */ suggest?: FieldSuggest })
   | (PanelFieldBase & { kind: 'enum'; default: string | number; values: readonly (string | number)[]; /** i18n key prefix: `<prefix>.<value>` is the option text when it exists. */ optionLabel?: string })
   | (PanelFieldBase & { kind: 'multi'; default: string[]; values: readonly string[]; /** i18n key prefix: `<prefix>.<value>` is the option text when it exists. */ optionLabel?: string })
-  | (PanelFieldBase & { kind: 'text'; default: string; maxLength?: number; rows?: number; placeholder?: string; /** Shows an "Import OPML" button that appends the feed URLs of a chosen file. */ importOpml?: boolean; /** Edited as rows of a label and a date picker; stored as `YYYY-MM-DD | label` lines. */ dated?: boolean })
+  | (PanelFieldBase & { kind: 'text'; default: string; maxLength?: number; rows?: number; placeholder?: string; /** Shows an "Import OPML" button that appends the feed URLs of a chosen file. */ importOpml?: boolean; /** Edited as rows of a label and a date picker; stored as `YYYY-MM-DD | label` lines. */ dated?: boolean; /** Edited as one row per line (an input, or a folder picker for `folder`); stored as lines. `suggest` offers values for each row. */ list?: 'text' | 'url' | 'folder'; suggest?: FieldSuggest })
   | (PanelFieldBase & { kind: 'date'; default: '' })
   /** An absolute folder inside an Explorer project, chosen with a dialog that lists only the projects. */
   | (PanelFieldBase & { kind: 'folder'; default: '' })

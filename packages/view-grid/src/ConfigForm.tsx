@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
-import { Button, IconButton, labelList, MAX_TEXT_FIELD, Modal, OnOffField, validConfig, type PanelConfig, type PanelField } from '@kedalion/ui';
+import { Button, IconButton, labelList, MAX_TEXT_FIELD, Modal, OnOffField, validConfig, type FieldSuggest, type PanelConfig, type PanelField, type SuggestOption } from '@kedalion/ui';
 import { ConnectionDialog, listConnections, type ConnectionType, type PublicConnection } from './connections/ConnectionDialog';
-import { FolderField } from './FolderField';
+import { FolderField, ProjectFolderDialog } from './FolderField';
 import { tKey } from './i18n';
 import { fetchSource } from './source';
 import { opmlUrls } from './panels/feeds/opml';
@@ -24,6 +24,104 @@ function NumberInput({ field, value, onChange }: { field: Extract<PanelField, { 
         if (Number.isFinite(n)) onChange(n);
       }}
     />
+  );
+}
+
+/** The options of `suggest`: its fixed ones, or what its data source returns for the `params` of `config`. */
+function useSuggestions(suggest: FieldSuggest | undefined, config: PanelConfig): SuggestOption[] {
+  const [fetched, setFetched] = useState<SuggestOption[]>([]);
+  const source = suggest?.source;
+  const sent = Object.fromEntries((suggest?.params ?? []).map((k) => [k, config[k]]));
+  const sig = JSON.stringify(sent);
+  useEffect(() => {
+    if (!source) return;
+    const ctl = new AbortController();
+    fetchSource<{ options: SuggestOption[] }>(source, JSON.parse(sig), ctl.signal).then((r) => setFetched(r.options), () => setFetched([]));
+    return () => ctl.abort();
+  }, [source, sig]);
+  return [...(suggest?.options ?? []), ...fetched];
+}
+
+let datalistIds = 0;
+
+/** A `<datalist>` of `options` (hidden); `id` is the input's `list`. */
+function Datalist({ id, options }: { id: string; options: readonly SuggestOption[] }) {
+  return (
+    <datalist id={id}>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>{o.label && o.label !== o.value ? o.label : undefined}</option>
+      ))}
+    </datalist>
+  );
+}
+
+/** One row per line of a text field: an input (with optional suggestions), or folders chosen with the project dialog. */
+function LineListField({ field, value, config, hint, onChange }: { field: Extract<PanelField, { kind: 'text' }>; value: string; config: PanelConfig; hint?: string; onChange: (value: string) => void }) {
+  const nextId = useRef(0);
+  const listId = useRef(`grid-suggest-${datalistIds++}`);
+  const lines = (v: string) => v.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const [rows, setRows] = useState(() => lines(value).map((text) => ({ id: nextId.current++, text })));
+  const [picking, setPicking] = useState(false);
+  const options = useSuggestions(field.suggest, config);
+  const commit = (next: typeof rows) => {
+    setRows(next);
+    onChange(next.map((r) => r.text.trim()).filter(Boolean).join('\n'));
+  };
+  const folder = field.list === 'folder';
+  return (
+    <fieldset className="field">
+      <legend className="mono-label">{tKey(field.label)}</legend>
+      {options.length > 0 && <Datalist id={listId.current} options={options} />}
+      {rows.map((r) => (
+        <span key={r.id} className="grid-config-date">
+          <input
+            type={field.list === 'url' ? 'url' : undefined}
+            value={r.text}
+            readOnly={folder}
+            list={options.length > 0 ? listId.current : undefined}
+            placeholder={field.placeholder ? tKey(field.placeholder) : undefined}
+            aria-label={tKey(field.label)}
+            spellCheck={false}
+            onChange={(e) => commit(rows.map((x) => (x.id === r.id ? { ...x, text: e.target.value } : x)))}
+          />
+          <IconButton icon="close" label={tKey('grid.field.list.remove')} onClick={() => commit(rows.filter((x) => x.id !== r.id))} />
+        </span>
+      ))}
+      <span className="grid-config-import">
+        <Button onClick={() => (folder ? setPicking(true) : setRows([...rows, { id: nextId.current++, text: '' }]))}>{tKey(folder ? 'grid.field.list.addFolder' : 'grid.field.list.add')}</Button>
+      </span>
+      {hint && <span className="muted">{hint}</span>}
+      {picking && (
+        <ProjectFolderDialog
+          onPick={(path) => {
+            setPicking(false);
+            if (!rows.some((r) => r.text === path)) commit([...rows, { id: nextId.current++, text: path }]);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
+    </fieldset>
+  );
+}
+
+/** A single-line input that offers `suggest` values. */
+function SuggestInput({ field, value, config, hint, onChange }: { field: Extract<PanelField, { kind: 'string' }>; value: string; config: PanelConfig; hint?: string; onChange: (value: string) => void }) {
+  const listId = useRef(`grid-suggest-${datalistIds++}`);
+  const options = useSuggestions(field.suggest, config);
+  return (
+    <label className="field">
+      <span className="mono-label">{tKey(field.label)}</span>
+      <input
+        value={value}
+        list={options.length > 0 ? listId.current : undefined}
+        placeholder={field.placeholder ? tKey(field.placeholder) : undefined}
+        maxLength={field.maxLength}
+        spellCheck={false}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {options.length > 0 && <Datalist id={listId.current} options={options} />}
+      {hint && <span className="muted">{hint}</span>}
+    </label>
   );
 }
 
@@ -220,6 +318,7 @@ function FieldRow({ field, value, config, onChange, connections }: { field: Pane
         </label>
       );
     case 'string':
+      if (field.suggest) return <SuggestInput field={field} value={typeof value === 'string' ? value : field.default} config={config} hint={hint} onChange={onChange} />;
       return (
         <label className="field">
           <span className="mono-label">{tKey(field.label)}</span>
@@ -267,6 +366,7 @@ function FieldRow({ field, value, config, onChange, connections }: { field: Pane
       );
     }
     case 'text':
+      if (field.list) return <LineListField field={field} value={typeof value === 'string' ? value : field.default} config={config} hint={hint} onChange={onChange} />;
       if (field.dated) return <DatedListField field={field} value={typeof value === 'string' ? value : field.default} hint={hint} onChange={onChange} />;
       return <TextField field={field} value={typeof value === 'string' ? value : field.default} hint={hint} onChange={onChange} />;
     case 'date': {

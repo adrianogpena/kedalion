@@ -24,7 +24,7 @@ function absolute(root: string, rel: string): string {
 }
 
 /** Picks a folder of an Explorer project: nothing outside the projects can be reached. */
-function ProjectFolderDialog({ onPick, onClose }: { onPick(path: string): void; onClose(): void }) {
+export function ProjectFolderDialog({ onPick, onClose }: { onPick(path: string): void; onClose(): void }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [rel, setRel] = useState('');
