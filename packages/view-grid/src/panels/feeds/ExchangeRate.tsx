@@ -8,6 +8,7 @@ export interface FxConfig {
   quote: string;
   days: number;
   apiKey?: string;
+  track?: string;
   [key: string]: unknown;
 }
 

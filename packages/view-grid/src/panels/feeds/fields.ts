@@ -30,6 +30,7 @@ export const RSS_SOURCE_FIELDS: readonly PanelField[] = [RSS_FIELDS[0]!, RSS_FIE
 export const FX_FIELDS: readonly PanelField[] = [
   { key: 'base', kind: 'string', label: 'dash.feeds.fx.base', description: 'dash.feeds.fx.code.hint', default: 'EUR', maxLength: 3 },
   { key: 'quote', kind: 'string', label: 'dash.feeds.fx.quote', description: 'dash.feeds.fx.code.hint', default: 'BRL', maxLength: 3 },
+  { key: 'track', kind: 'string', label: 'dash.feeds.fx.track', description: 'dash.feeds.fx.track.hint', placeholder: 'dash.feeds.fx.track.placeholder', default: '', maxLength: 120 },
   { key: 'days', kind: 'enum', label: 'dash.feeds.fx.days', default: 30, values: [7, 30, 90], optionLabel: 'dash.feeds.fx.days' },
   { key: 'apiKey', kind: 'string', label: 'dash.feeds.fx.apiKey', description: 'dash.feeds.fx.apiKey.hint', default: '', maxLength: 64, secret: true },
 ];

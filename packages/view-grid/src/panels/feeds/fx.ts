@@ -25,6 +25,23 @@ export const currencyCode = (value: string, fallback: string): string => {
   return /^[A-Z]{3}$/.test(code) ? code : fallback;
 };
 
+/** The `BASE>QUOTE` pairs of a list like `USD>EUR, GBP>BRL` (also `/` or `-`), without invalid or repeated ones and without `skip`. */
+export function parseTrack(value: string | undefined, skip: string): { base: string; quote: string }[] {
+  const seen = new Set([skip]);
+  const out: { base: string; quote: string }[] = [];
+  for (const part of (value ?? '').split(/[,;\s]+/)) {
+    const m = /^([A-Za-z]{3})[>/-]([A-Za-z]{3})$/.exec(part);
+    if (!m) continue;
+    const base = m[1]!.toUpperCase();
+    const quote = m[2]!.toUpperCase();
+    const key = `${base}>${quote}`;
+    if (base === quote || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ base, quote });
+  }
+  return out;
+}
+
 /** The rates of a Frankfurter time series (`{ rates: { date: { QUOTE: n } } }`), oldest first. */
 export function mapSeries(raw: any, base: string, quote: string): FxData {
   const rates: Record<string, Record<string, unknown>> = raw?.rates && typeof raw.rates === 'object' ? raw.rates : {};

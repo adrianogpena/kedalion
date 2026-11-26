@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { currencyCode, mapSeries, mapTwelveData, startDate, summarize } from './fx';
+import { currencyCode, mapSeries, mapTwelveData, parseTrack, startDate, summarize } from './fx';
 
 describe('fx', () => {
+  test('parseTrack reads pairs, skips invalid, repeated and the shown pair', () => {
+    expect(parseTrack('usd>eur, GBP/BRL; bad, EUR>EUR, usd>eur, EUR>BRL', 'EUR>BRL')).toEqual([
+      { base: 'USD', quote: 'EUR' },
+      { base: 'GBP', quote: 'BRL' },
+    ]);
+    expect(parseTrack(undefined, 'EUR>BRL')).toEqual([]);
+  });
+
   test('series sorted by date, skips missing quotes', () => {
     const raw = { rates: { '2026-10-03': { BRL: 6.3 }, '2026-10-01': { BRL: 6 }, '2026-10-02': {} } };
     expect(mapSeries(raw, 'EUR', 'BRL')).toEqual({ base: 'EUR', quote: 'BRL', dates: ['2026-10-01', '2026-10-03'], values: [6, 6.3] });
