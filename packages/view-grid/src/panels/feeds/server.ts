@@ -42,6 +42,22 @@ export const weatherSource = defineSource<{ location: string; units: WeatherUnit
   },
 });
 
+export const weatherPlacesSource = defineSource<{ location: string }>({
+  id: 'weather-places',
+  fields: [WEATHER_SOURCE_FIELDS[0]!],
+  async fetch({ location }, { signal }) {
+    const q = typeof location === 'string' ? location.trim() : '';
+    if (q.length < 3) return { options: [] };
+    try {
+      const res = await sourceFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6`, { headers }, { signal });
+      const found: any[] = ((await res.json()) as any)?.results ?? [];
+      return { options: found.filter((f) => typeof f?.name === 'string').map((f) => ({ value: f.name as string, label: placeName(f) })) };
+    } catch {
+      return { options: [] };
+    }
+  },
+});
+
 async function loadFeed(url: string, signal: AbortSignal): Promise<Feed> {
   const res = await sourceFetch(url, { headers: { ...headers, accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' } }, { signal });
   const { text } = await readLimited(res, MAX_FEED_BYTES);
@@ -140,4 +156,4 @@ export const specs: GridPanelSpec[] = [
   { kind: 'rss', fields: fields.rss, allowMultiple: true },
   { kind: 'exchange-rate', fields: fields['exchange-rate'], allowMultiple: true },
 ];
-export const sources: DataSource<any>[] = [weatherSource, rssSource, fxSource];
+export const sources: DataSource<any>[] = [weatherSource, weatherPlacesSource, rssSource, fxSource];

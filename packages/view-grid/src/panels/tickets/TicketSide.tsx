@@ -19,7 +19,9 @@ export interface TicketSideInput {
   link?: TicketLink;
   jira?: JiraInfo;
   allPods: Pod[];
-  config: Record<string, unknown> & { jiraBaseUrl: string };
+  config: Record<string, unknown>;
+  /** The Jira connection's base URL (from the Tickets data); empty without one. */
+  jiraBaseUrl: string;
   onChanged(): void;
   onOpenPr(pr: TrackedPr): void;
   onOpenPod(pod: Pod): void;
@@ -38,15 +40,15 @@ export function boardTicketSide({ instanceId, ticket, data, config, side, onChan
   side?: PanelSide;
   onChanged(): void;
 }): SidePanelContent {
-  return ticketSideContent({ instanceId, ticket, link: data.links?.[ticket.key], jira: data.jira?.[ticket.key], allPods: data.pods ?? [], config, onChanged,
+  return ticketSideContent({ instanceId, ticket, link: data.links?.[ticket.key], jira: data.jira?.[ticket.key], allPods: data.pods ?? [], config, jiraBaseUrl: data.jiraBaseUrl ?? '', onChanged,
     onOpenPr: (pr) => side?.push(trackedPrSideContent({ instanceId, pr, config })),
     onOpenPod: (pod) => side?.push(podSideContent({ instanceId, pod, config: { clusters: `${pod.context} ${pod.namespace} *` } as PodsConfig })),
   });
 }
 
 /** What the Tickets panel opens in the Dashboard side panel for one ticket. */
-export function ticketSideContent({ instanceId, ticket, link, jira, allPods, config, onChanged, onOpenPr, onOpenPod }: TicketSideInput): SidePanelContent {
-  const url = jiraUrl(config.jiraBaseUrl, ticket.key);
+export function ticketSideContent({ instanceId, ticket, link, jira, allPods, config, jiraBaseUrl, onChanged, onOpenPr, onOpenPod }: TicketSideInput): SidePanelContent {
+  const url = jiraUrl(jiraBaseUrl, ticket.key);
   return {
     id: `${instanceId}:${ticket.id}`,
     title: ticket.key,

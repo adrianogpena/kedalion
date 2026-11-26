@@ -34,11 +34,11 @@ interface PanelFieldBase {
 
 export type PanelField =
   | (PanelFieldBase & { kind: 'boolean'; default: boolean })
-  | (PanelFieldBase & { kind: 'number'; default: number; min?: number; max?: number })
+  | (PanelFieldBase & { kind: 'number'; default: number; min?: number; max?: number; /** Picks a number by name: a select of options whose `value` is the number as text; 0 (the default) is "none". */ suggest?: FieldSuggest })
   | (PanelFieldBase & { kind: 'string'; default: string; placeholder?: string; maxLength?: number; /** Masks the input like a password. */ secret?: boolean; /** Offers values to pick from; any text can still be typed. */ suggest?: FieldSuggest })
   | (PanelFieldBase & { kind: 'enum'; default: string | number; values: readonly (string | number)[]; /** i18n key prefix: `<prefix>.<value>` is the option text when it exists. */ optionLabel?: string })
   | (PanelFieldBase & { kind: 'multi'; default: string[]; values: readonly string[]; /** i18n key prefix: `<prefix>.<value>` is the option text when it exists. */ optionLabel?: string })
-  | (PanelFieldBase & { kind: 'text'; default: string; maxLength?: number; rows?: number; placeholder?: string; /** Shows an "Import OPML" button that appends the feed URLs of a chosen file. */ importOpml?: boolean; /** Edited as rows of a label and a date picker; stored as `YYYY-MM-DD | label` lines. */ dated?: boolean; /** Edited as one row per line (an input, or a folder picker for `folder`); stored as lines. `suggest` offers values for each row. */ list?: 'text' | 'url' | 'folder'; suggest?: FieldSuggest })
+  | (PanelFieldBase & { kind: 'text'; default: string; maxLength?: number; rows?: number; placeholder?: string; /** Shows an "Import OPML" button that appends the feed URLs of a chosen file. */ importOpml?: boolean; /** Edited as rows of a label and a date picker; stored as `YYYY-MM-DD | label` lines. */ dated?: boolean; /** Edited as one row per line (an input, or a folder picker for `folder`); stored as lines. `suggest` offers values for each row. */ list?: 'text' | 'url' | 'folder'; suggest?: FieldSuggest; /** A select above the text that replaces it with the chosen option's value. */ presets?: FieldSuggest })
   | (PanelFieldBase & { kind: 'date'; default: '' })
   /** An absolute folder inside an Explorer project, chosen with a dialog that lists only the projects. */
   | (PanelFieldBase & { kind: 'folder'; default: '' })

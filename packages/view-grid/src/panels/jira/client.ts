@@ -192,6 +192,12 @@ export async function agile(conn: ResolvedConnection, path: string, signal: Abor
   return json(await sourceFetch(`${trimBase(conn)}/rest/agile/1.0${path}`, { headers: jiraHeaders(conn) }, { signal }));
 }
 
+/** `GET /rest/api/2<path>`, for lists that are not issues (favourite filters). */
+export async function apiGet(conn: ResolvedConnection, path: string, signal: AbortSignal): Promise<unknown> {
+  const res = await sourceFetch(`${trimBase(conn)}/rest/api/2${path}`, { headers: jiraHeaders(conn) }, { signal });
+  return res.json();
+}
+
 const fieldCache = new Map<string, Promise<FieldIds>>();
 
 /** `promise`, rejected early when `signal` aborts (the promise itself keeps running). */

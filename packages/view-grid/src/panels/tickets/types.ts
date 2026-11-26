@@ -34,6 +34,8 @@ export interface TicketsData {
   pods?: Pod[];
   /** Jira info per ticket key; empty without a Jira connection or when the fetch failed. */
   jira?: Record<string, JiraInfo>;
+  /** Base URL of the first Jira connection; empty without one. */
+  jiraBaseUrl?: string;
   /** The PR fetch failed: links carry no PRs. */
   prError?: boolean;
 }

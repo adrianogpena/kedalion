@@ -4,7 +4,7 @@ import { createJsonStore, type JsonStore } from '../../json-store';
 import { graphql, rest } from './client';
 import { mapLimit } from './limit';
 import { parseTrackedPrRef, toTrackedPr, type PrNode, type PrRef, type TrackedPr } from './tracked';
-import { ACTIONS_SOURCE_FIELDS, LABELS_SOURCE_FIELDS, TRACKED_SOURCE_FIELDS, fields,ISSUE_SOURCE_FIELDS, NOTIFICATIONS_SOURCE_FIELDS, OVERVIEW_SOURCE_FIELDS, PR_SOURCE_FIELDS, PR_QUERY_SOURCE_FIELDS, RELEASES_FIELDS } from './fields';
+import { ACTIONS_SOURCE_FIELDS, LABELS_SOURCE_FIELDS, REPOS_SOURCE_FIELDS, REPO_PARAM_FIELDS, TRACKED_SOURCE_FIELDS, fields,ISSUE_SOURCE_FIELDS, NOTIFICATIONS_SOURCE_FIELDS, OVERVIEW_SOURCE_FIELDS, PR_SOURCE_FIELDS, PR_QUERY_SOURCE_FIELDS, RELEASES_FIELDS } from './fields';
 import { notifyChanges, notifyScope } from '../../notify-changes';
 import { latestSettledRuns, mapNotifications, mapReleases, mapRepoStats, mapRuns, parseRepo, runsPath, type RepoResponse } from './more';
 import { buildQuery, mapIssues, mapPullRequests, nextRefreshMs, PR_REFRESH_MS, type Node as PrNodeFull, type PrItem, type RequiredChecks, type SearchResponse } from './map';
@@ -560,7 +560,42 @@ export const githubLabelsSource = defineSource<{ [key: string]: unknown }>({
   fields: LABELS_SOURCE_FIELDS,
   async fetch(_config, ctx) {
     const conn = await ctx.connection('github');
-    return { labels: await fetchPrLabels(conn, ctx.signal) };
+    const labels = await fetchPrLabels(conn, ctx.signal);
+    return { labels, options: labels.map((value) => ({ value })) };
+  },
+});
+
+export const githubReposSource = defineSource<{ [key: string]: unknown }>({
+  id: 'github-repos',
+  fields: REPOS_SOURCE_FIELDS,
+  async fetch(_config, ctx) {
+    const conn = await ctx.connection('github');
+    const raw = await rest<{ full_name?: string }[]>(conn, '/user/repos?per_page=100&sort=pushed', ctx.signal);
+    return { options: raw.flatMap((r) => (r.full_name ? [{ value: r.full_name }] : [])) };
+  },
+});
+
+export const githubBranchesSource = defineSource<{ repo: string }>({
+  id: 'github-branches',
+  fields: REPO_PARAM_FIELDS,
+  async fetch(config, ctx) {
+    const repo = parseRepo(config.repo ?? '');
+    if (!repo) return { options: [] };
+    const conn = await ctx.connection('github');
+    const raw = await rest<{ name?: string }[]>(conn, `/repos/${repo}/branches?per_page=100`, ctx.signal);
+    return { options: raw.flatMap((b) => (b.name ? [{ value: b.name }] : [])) };
+  },
+});
+
+export const githubWorkflowsSource = defineSource<{ repo: string }>({
+  id: 'github-workflows',
+  fields: REPO_PARAM_FIELDS,
+  async fetch(config, ctx) {
+    const repo = parseRepo(config.repo ?? '');
+    if (!repo) return { options: [] };
+    const conn = await ctx.connection('github');
+    const raw = await rest<{ workflows?: { name?: string; path?: string }[] }>(conn, `/repos/${repo}/actions/workflows?per_page=100`, ctx.signal);
+    return { options: (raw.workflows ?? []).flatMap((w) => (w.path ? [{ value: w.path.split('/').pop() ?? w.path, label: w.name }] : [])) };
   },
 });
 
@@ -585,4 +620,7 @@ export const sources: DataSource<any>[] = [
   githubOverviewSource,
   githubTrackedSource,
   githubLabelsSource,
+  githubReposSource,
+  githubBranchesSource,
+  githubWorkflowsSource,
 ];

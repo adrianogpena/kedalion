@@ -13,7 +13,6 @@ import './tickets.css';
 
 export interface TicketsConfig {
   keyPattern: string;
-  jiraBaseUrl: string;
   layout?: string;
   [key: string]: unknown;
 }
@@ -89,7 +88,7 @@ export function TicketsPanel({ id, side, config, data, refresh }: Props) {
       const drift = driftFor(t);
       return ticketMenuItems({
         ticket: t,
-        url: jiraUrl(config.jiraBaseUrl, t.key),
+        url: jiraUrl(data.jiraBaseUrl ?? '', t.key),
         drift,
         autoMoveDefault: config.autoMove !== false,
         onDetails: () => toggle(t),
@@ -154,7 +153,7 @@ export function TicketsPanel({ id, side, config, data, refresh }: Props) {
                   onMoveToExpected={() => drift && void act('move', { id: t.id, status: drift.expected, index: Number.MAX_SAFE_INTEGER })}
                   onMuteDrift={() => void act('set-jira-muted', { id: t.id, value: data.jira?.[t.key]?.status ?? '' })}
                   selected={!!side && side.isOpen(content(t).id)}
-                  jiraBaseUrl={config.jiraBaseUrl}
+                  jiraBaseUrl={data.jiraBaseUrl ?? ''}
                   onDelete={() => void act('remove', { id: t.id })}
                   autoMoveDefault={config.autoMove !== false}
                   onAutoMove={(value) => void act('set-auto-move', { id: t.id, value })}

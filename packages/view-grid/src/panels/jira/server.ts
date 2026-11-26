@@ -1,8 +1,8 @@
 import { invalid } from '@kedalion/server-core';
 import { notifyChanges, notifyScope } from '../../notify-changes';
 import { defineSource, SourceError, type DataSource, type GridPanelSpec, type SourceContext } from '../../server';
-import { agile, count, fieldIds, search } from './client';
-import { BOARD_FIELDS, COUNT_FIELDS, fields, ISSUES_FIELDS } from './fields';
+import { agile, apiGet, count, fieldIds, search } from './client';
+import { BOARD_FIELDS, COUNT_FIELDS, fields, ISSUES_FIELDS, LIST_SOURCE_FIELDS } from './fields';
 import { infoFields, mapInfo, type JiraInfo } from '../tickets/jira-info';
 import { breakdown, mapIssue, mapSprint, requestFields, type JiraIssue, type SprintData, type Slice } from './map';
 
@@ -113,9 +113,29 @@ const sprintSource = defineSource<{ boardId: number; columns: string[]; notify: 
   },
 });
 
+const filtersSource = defineSource<{ [key: string]: unknown }>({
+  id: 'jira-filters',
+  fields: LIST_SOURCE_FIELDS,
+  async fetch(_config, ctx) {
+    const conn = await ctx.connection('jira');
+    const raw = (await apiGet(conn, '/filter/favourite', ctx.signal)) as { id?: string | number; name?: string }[];
+    return { options: (Array.isArray(raw) ? raw : []).flatMap((f) => (f.id !== undefined ? [{ value: `filter = ${f.id}`, label: f.name ?? String(f.id) }] : [])) };
+  },
+});
+
+const boardsSource = defineSource<{ [key: string]: unknown }>({
+  id: 'jira-boards',
+  fields: LIST_SOURCE_FIELDS,
+  async fetch(_config, ctx) {
+    const conn = await ctx.connection('jira');
+    const res = await agile(conn, '/board?maxResults=100', ctx.signal);
+    return { options: ((res.values ?? []) as { id?: number; name?: string }[]).flatMap((b) => (b.id ? [{ value: String(b.id), label: b.name ?? String(b.id) }] : [])) };
+  },
+});
+
 export const specs: GridPanelSpec[] = [
   { kind: 'jira-issues', fields: fields['jira-issues'], allowMultiple: true },
   { kind: 'jira-count', fields: fields['jira-count'], allowMultiple: true },
   { kind: 'jira-sprint', fields: fields['jira-sprint'], allowMultiple: true },
 ];
-export const sources: DataSource<any>[] = [issuesSource, countSource, sprintSource];
+export const sources: DataSource<any>[] = [issuesSource, countSource, sprintSource, filtersSource, boardsSource];

@@ -30,7 +30,7 @@ export const fields: Record<string, readonly PanelField[]> = {
     notifyField(true),
   ],
   'json-metric': [
-    { key: 'url', kind: 'string', label: 'dash.misc.json.url', default: '', maxLength: 200, placeholder: 'https://' },
+    { key: 'url', kind: 'string', label: 'dash.misc.json.url', description: 'dash.misc.json.url.hint', default: '', maxLength: 200, placeholder: 'https://' },
     { key: 'path', kind: 'string', label: 'dash.misc.json.path', description: 'dash.misc.json.path.hint', default: '', maxLength: 200, placeholder: 'data.items.0.count' },
     { key: 'label', kind: 'string', label: 'dash.misc.json.label', default: '', maxLength: 60 },
     { key: 'unit', kind: 'string', label: 'dash.misc.json.unit', default: '', maxLength: 20 },

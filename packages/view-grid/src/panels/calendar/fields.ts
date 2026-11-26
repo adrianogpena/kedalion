@@ -16,7 +16,7 @@ export const CALENDAR_FIELDS: readonly PanelField[] = [
   icsUrl,
   { key: 'upcoming', kind: 'number', label: 'dash.calendar.upcoming', description: 'dash.calendar.upcoming.hint', default: 5, min: 0, max: 20 },
   ...sprintFields,
-  { key: 'markedDates', kind: 'text', label: 'dash.calendar.markedDates', description: 'dash.calendar.datedLines.hint', default: '', rows: 4, placeholder: 'dash.calendar.datedLines.placeholder' },
+  { key: 'markedDates', kind: 'text', label: 'dash.calendar.markedDates', description: 'dash.calendar.datedLines.hint', default: '', dated: true },
 ];
 
 export const SPRINT_FIELDS: readonly PanelField[] = [

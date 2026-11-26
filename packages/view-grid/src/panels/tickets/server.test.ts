@@ -7,7 +7,7 @@ import '../catalog.server';
 import type { SourceContext } from '../../server';
 import { ticketsSource, ticketsStore } from './server';
 
-const config = { keyPattern: '', jiraBaseUrl: '' };
+const config = { keyPattern: '' };
 
 async function setup(key = 'ABC-1', notes?: string) {
   const dataDir = await mkdtemp(join(tmpdir(), 'tickets-data-'));

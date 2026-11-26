@@ -68,6 +68,16 @@ function LineListField({ field, value, config, hint, onChange }: { field: Extrac
     onChange(next.map((r) => r.text.trim()).filter(Boolean).join('\n'));
   };
   const folder = field.list === 'folder';
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [status, setStatus] = useState('');
+  const importOpml = async (file: File) => {
+    const found = opmlUrls(await file.text());
+    const have = rows.map((r) => r.text.trim()).filter(Boolean);
+    const added = found.filter((u) => !have.includes(u)).slice(0, Math.max(0, MAX_IMPORTED_FEEDS - have.length));
+    if (found.length === 0) return setStatus(tKey('grid.field.importOpml.none'));
+    if (added.length > 0) commit([...rows.filter((r) => r.text.trim()), ...added.map((text) => ({ id: nextId.current++, text }))]);
+    setStatus(tKey('grid.field.importOpml.done', { added: added.length, found: found.length }));
+  };
   return (
     <fieldset className="field">
       <legend className="mono-label">{tKey(field.label)}</legend>
@@ -89,6 +99,23 @@ function LineListField({ field, value, config, hint, onChange }: { field: Extrac
       ))}
       <span className="grid-config-import">
         <Button onClick={() => (folder ? setPicking(true) : setRows([...rows, { id: nextId.current++, text: '' }]))}>{tKey(folder ? 'grid.field.list.addFolder' : 'grid.field.list.add')}</Button>
+        {field.importOpml && (
+          <>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".opml,.xml,text/xml,application/xml"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void importOpml(file);
+              }}
+            />
+            <Button onClick={() => fileInput.current?.click()}>{tKey('grid.field.importOpml')}</Button>
+            {status && <span className="muted">{status}</span>}
+          </>
+        )}
       </span>
       {hint && <span className="muted">{hint}</span>}
       {picking && (
@@ -164,8 +191,28 @@ function DatedListField({ field, value, hint, onChange }: { field: Extract<Panel
   );
 }
 
-function TextField({ field, value, hint, onChange }: { field: Extract<PanelField, { kind: 'text' }>; value: string; hint?: string; onChange: (value: string) => void }) {
+/** A select of the numbers in `suggest` (value = number as text, label = name); 0 is "none". A saved number not in the list stays selectable. */
+function NumberPick({ field, value, config, hint, onChange }: { field: Extract<PanelField, { kind: 'number' }>; value: number; config: PanelConfig; hint?: string; onChange: (value: number) => void }) {
+  const options = useSuggestions(field.suggest, config);
+  const known = value === 0 || options.some((o) => Number(o.value) === value);
+  return (
+    <label className="field">
+      <span className="mono-label">{tKey(field.label)}</span>
+      <select value={String(value)} onChange={(e) => onChange(Number(e.target.value))}>
+        <option value="0">{tKey('grid.field.pick.none')}</option>
+        {!known && <option value={String(value)}>{String(value)}</option>}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label ?? o.value}</option>
+        ))}
+      </select>
+      {hint && <span className="muted">{hint}</span>}
+    </label>
+  );
+}
+
+function TextField({ field, value, config, hint, onChange }: { field: Extract<PanelField, { kind: 'text' }>; value: string; config: PanelConfig; hint?: string; onChange: (value: string) => void }) {
   const [status, setStatus] = useState('');
+  const presets = useSuggestions(field.presets, config);
   const fileInput = useRef<HTMLInputElement>(null);
   const importOpml = async (file: File) => {
     const found = opmlUrls(await file.text());
@@ -179,6 +226,14 @@ function TextField({ field, value, hint, onChange }: { field: Extract<PanelField
     <div className="field">
       <label className="field">
         <span className="mono-label">{tKey(field.label)}</span>
+        {presets.length > 0 && (
+          <select value="" aria-label={tKey('grid.field.preset')} onChange={(e) => e.target.value && onChange(e.target.value)}>
+            <option value="">{tKey('grid.field.preset')}</option>
+            {presets.map((o) => (
+              <option key={o.value} value={o.value}>{o.label ?? o.value}</option>
+            ))}
+          </select>
+        )}
         <textarea
           value={value}
           rows={field.rows ?? 4}
@@ -310,6 +365,7 @@ function FieldRow({ field, value, config, onChange, connections }: { field: Pane
     case 'boolean':
       return <OnOffField label={tKey(field.label)} hint={hint} value={value === true} onChange={onChange} />;
     case 'number':
+      if (field.suggest) return <NumberPick field={field} value={typeof value === 'number' ? value : field.default} config={config} hint={hint} onChange={onChange} />;
       return (
         <label className="field">
           <span className="mono-label">{tKey(field.label)}</span>
@@ -368,7 +424,7 @@ function FieldRow({ field, value, config, onChange, connections }: { field: Pane
     case 'text':
       if (field.list) return <LineListField field={field} value={typeof value === 'string' ? value : field.default} config={config} hint={hint} onChange={onChange} />;
       if (field.dated) return <DatedListField field={field} value={typeof value === 'string' ? value : field.default} hint={hint} onChange={onChange} />;
-      return <TextField field={field} value={typeof value === 'string' ? value : field.default} hint={hint} onChange={onChange} />;
+      return <TextField field={field} value={typeof value === 'string' ? value : field.default} config={config} hint={hint} onChange={onChange} />;
     case 'date': {
       const date = typeof value === 'string' ? value : field.default;
       return (

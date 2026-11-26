@@ -28,7 +28,6 @@ async function optionalConnection(ctx: SourceContext, type: 'github' | 'jira'): 
 
 interface TicketsConfig {
   keyPattern: string;
-  jiraBaseUrl: string;
   autoMove?: boolean;
   readyLabel?: string;
   notify?: boolean;
@@ -270,6 +269,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
     let jiraError = false;
     let githubSet = false;
     let jiraSet = false;
+    let jiraBaseUrl = '';
     const loadPrs = async (): Promise<TrackedPr[]> => {
       try {
         const conn = await optionalConnection(ctx, 'github');
@@ -284,6 +284,12 @@ export const ticketsSource = defineSource<TicketsConfig>({
     };
     const loadJira = async (): Promise<Record<string, JiraInfo>> => {
       const jira: Record<string, JiraInfo> = {};
+      try {
+        const conn = await optionalConnection(ctx, 'jira');
+        jiraBaseUrl = conn?.baseUrl.trim().replace(/\/+$/, '') ?? '';
+      } catch {
+        jiraBaseUrl = '';
+      }
       if (tickets.length) {
         try {
           const conn = await optionalConnection(ctx, 'jira');
@@ -347,7 +353,7 @@ export const ticketsSource = defineSource<TicketsConfig>({
         tickets = saved.tickets;
       }
     }
-    return { statuses, tickets, links, unlinked, ignored: stored.ignored.filter((k) => allUnlinked.some((u) => u.key === k)), pods, jira, ...(prError ? { prError } : {}) };
+    return { statuses, tickets, links, unlinked, ignored: stored.ignored.filter((k) => allUnlinked.some((u) => u.key === k)), pods, jira, jiraBaseUrl, ...(prError ? { prError } : {}) };
   },
   actions: {
     async pr(payload, config, ctx) {

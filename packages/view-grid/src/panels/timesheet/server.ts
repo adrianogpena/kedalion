@@ -2,6 +2,7 @@ import { defineSource, type DataSource, type GridPanelSpec } from '../../server'
 import { IDLE_MINUTES, localDay, splitRoots, type DayTable } from './analysis';
 import { collectWeek } from './collect';
 import { TIMESHEET_FIELDS } from './fields';
+import { gitEmailSource } from './git-email';
 
 export interface TimesheetConfig {
   roots: string;
@@ -43,4 +44,4 @@ const timesheet = defineSource<TimesheetConfig>({
 
 export const specs: GridPanelSpec[] = [{ kind: 'timesheet', fields: TIMESHEET_FIELDS, allowMultiple: false }];
 
-export const sources: DataSource<any>[] = [timesheet];
+export const sources: DataSource<any>[] = [timesheet, gitEmailSource];
